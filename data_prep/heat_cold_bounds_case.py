@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Validate and expand heat wave / freeze bounding boxes.
 
 Reads heat_wave and freeze cases from base_temp_events.yaml (which uses
@@ -78,9 +77,10 @@ def _apply_consecutive_filter(
 
     Args:
         mask: Boolean array of shape (time, lat, lon).
-        min_days: Minimum run length required to qualify as an event.
+        min_days: Minimum run length required to qualify as an
+            event. Default is 3 (MIN_CONSECUTIVE_DAYS).
         max_grace_days: Maximum gap length to bridge after the
-            minimum run is established.
+            minimum run is established. Default is 1.
 
     Returns:
         Boolean array of the same shape with only qualifying runs
@@ -285,11 +285,13 @@ def process_event(
     Args:
         single_case: The individual case to process; must have a
             CenteredRegion location.
-        out_dir: Directory in which plots are saved.
-        quantile: Climatology quantile. Defaults to 0.85 for
-            heat_wave, 0.15 for freeze.
+        out_dir: Directory in which plots are saved. Default is
+            pathlib.Path(".").
+        quantile: Climatology quantile. Default is None, which
+            resolves to 0.85 for heat_wave or 0.15 for freeze.
         op_str: Comparison operator string (e.g. ">", ">=", "<",
-            "<="). Defaults to ">" for heat_wave, "<" for freeze.
+            "<="). Default is None, which resolves to ">" for
+            heat_wave or "<" for freeze.
 
     Returns:
         A dict with keys event_type, start_date, end_date,

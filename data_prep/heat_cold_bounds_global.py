@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Detect heat waves and cold snaps globally from ERA5 reanalysis.
 
 Scans ERA5 2m temperature over an input date range and identifies
@@ -65,12 +64,15 @@ def get_climatology_thresholds(
 
     Args:
         q_hw: Lower-bound quantile for heat wave detection.
+            Default is 0.85.
         q_fz: Upper-bound quantile for freeze detection.
+            Default is 0.15.
         q_hw_upper: Upper-bound quantile for heat waves. When set,
             only days where temp > q_hw AND temp < q_hw_upper are
-            flagged.
+            flagged. Default is None.
         q_fz_lower: Lower-bound quantile for freezes. When set, only
-            days where temp < q_fz AND temp > q_fz_lower are flagged.
+            days where temp < q_fz AND temp > q_fz_lower are
+            flagged. Default is None.
 
     Returns:
         A tuple of (clim_hw, clim_fz, clim_hw_upper, clim_fz_lower).
@@ -140,11 +142,13 @@ def build_exceedance_masks(
             (dayofyear, hour).
         land_mask: Boolean DataArray (True = land) matching t2m grid.
         op_hw: Comparison operator string for heat waves.
+            Default is ">".
         op_fz: Comparison operator string for freezes.
+            Default is "<".
         clim_hw_upper: Optional upper-bound climatology for heat
-            waves (exclusive cap).
+            waves (exclusive cap). Default is None.
         clim_fz_lower: Optional lower-bound climatology for freezes
-            (exclusive floor).
+            (exclusive floor). Default is None.
 
     Returns:
         A tuple (hw, fz) of daily boolean DataArrays masked to land,
@@ -200,9 +204,10 @@ def apply_consecutive_filter(
 
     Args:
         mask: Boolean array of shape (time, lat, lon).
-        min_days: Minimum run length required to qualify as an event.
+        min_days: Minimum run length required to qualify as an
+            event. Default is 3 (MIN_CONSECUTIVE_DAYS).
         max_grace_days: Maximum gap length to bridge after the
-            minimum run is established.
+            minimum run is established. Default is 1.
 
     Returns:
         Boolean array of the same shape with only qualifying runs
@@ -488,7 +493,8 @@ def events_to_dataframe(
     Args:
         events: Raw event dicts from ``detect_events``.
         min_gridpoints: Drop events whose peak spatial extent (in
-            grid points) is below this threshold.
+            grid points) is below this threshold. Default is 500
+            (MIN_GRIDPOINTS).
 
     Returns:
         DataFrame with columns label, event_type, start_date,
