@@ -13,7 +13,7 @@ tropical cyclones, and atmospheric rivers:
 import extremeweatherbench as ewb
 
 eval_objects = ewb.defaults.get_brightband_evaluation_objects()
-cases = ewb.cases.load_all_cases()
+cases = ewb.cases.load_ewb_events_yaml_into_case_list()
 
 runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=cases, 
@@ -62,7 +62,7 @@ ewb.regions.BoundingBoxRegion(...)
 
 # Cases
 ewb.cases.IndividualCase
-ewb.cases.load_all_cases()
+ewb.cases.load_ewb_events_yaml_into_case_list()
 
 # Defaults (pre-built targets, forecasts, and helpers)
 ewb.defaults.era5_heatwave_target
@@ -152,7 +152,7 @@ There can be multiple `EvaluationObjects` which are used for an evaluation run.
 Plugging these all in:
 
 ```python
-case_yaml = ewb.cases.load_all_cases()
+case_yaml = ewb.cases.load_ewb_events_yaml_into_case_list()
 
 ewb_instance = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=case_yaml,
@@ -164,7 +164,7 @@ outputs.to_csv('your_file_name.csv')
 ```
 
 Where the EWB default events YAML file is loaded in using
-`ewb.cases.load_all_cases()`, then applied to an instance
+`ewb.cases.load_ewb_events_yaml_into_case_list()`, then applied to an instance
 of `ewb.evaluate.ExtremeWeatherBench` along with the `EvaluationObject` list.
 Finally, we run the evaluation with the `.run()` method, where defaults are
 typically sufficient to run with a small to moderate-sized virtual machine.

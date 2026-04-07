@@ -165,7 +165,7 @@ def load_individual_cases_from_yaml(
 def load_ewb_events_yaml_into_case_list() -> list[IndividualCase]:
     """Loads the EWB events yaml file into a list of IndividualCase objects."""
     logger.warning(
-        "load_ewb_events_yaml_into_case_list is deprecated. Use load_all_cases instead."
+        "load_ewb_events_yaml_into_case_list is deprecated. Use load_ewb_events_yaml_into_case_list instead."
     )
     import extremeweatherbench.data
 
@@ -177,19 +177,7 @@ def load_ewb_events_yaml_into_case_list() -> list[IndividualCase]:
 
     return load_individual_cases(yaml_event_case)
 
-
-def load_all_cases() -> list[IndividualCase]:
-    """Loads the EWB events yaml file into a list of IndividualCase objects."""
-    import extremeweatherbench.data
-
-    events_yaml_file = importlib.resources.files(extremeweatherbench.data).joinpath(
-        "events.yaml"
-    )
-    with importlib.resources.as_file(events_yaml_file) as file:
-        yaml_event_case = read_incoming_yaml(file)
-
-    return load_individual_cases(yaml_event_case)
-
+load_cases = load_ewb_events_yaml_into_case_list
 
 def read_incoming_yaml(input_pth: Union[str, pathlib.Path]):
     """Read events yaml from data into a dictionary.

@@ -38,7 +38,7 @@ evaluation_objects = [
 
 # Load case data from the default events.yaml
 # Users can also define their own cases_dict structure
-cases_list = ewb.cases.load_all_cases()
+cases_list = ewb.cases.load_ewb_events_yaml_into_case_list()
 
 # Alternatively, users could define custom cases like this:
 # cases_list = [

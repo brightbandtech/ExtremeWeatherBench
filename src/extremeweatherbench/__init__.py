@@ -6,7 +6,7 @@
     ewb.inputs.ERA5(...)
     ewb.inputs.ZarrForecast(...)
     ewb.metrics.MeanAbsoluteError(...)
-    ewb.cases.load_all_cases()
+    ewb.cases.load_ewb_events_yaml_into_case_list()
 """
 
 from importlib.metadata import version

@@ -1017,7 +1017,7 @@ def main():
     parallel = True
 
     # Load atmospheric river events from the events.yaml file
-    events_yaml = cases.load_all_cases()
+    events_yaml = cases.load_ewb_events_yaml_into_case_list()
     ar_events = [n for n in events_yaml if n.event_type == "atmospheric_river"]
     logger.info("Found %s atmospheric river events in events.yaml", len(ar_events))
 

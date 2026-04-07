@@ -353,7 +353,7 @@ def plot_event_bounds(
 
 def load_case(case_id_number: int) -> cases.IndividualCase:
     """Load a single case from events.yaml by case_id_number."""
-    all_cases = cases.load_all_cases()
+    all_cases = cases.load_ewb_events_yaml_into_case_list()
     for c in all_cases:
         if c.case_id_number == case_id_number:
             return c

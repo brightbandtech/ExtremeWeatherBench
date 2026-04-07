@@ -172,7 +172,7 @@ def cli_runner(
 def _load_default_cases():
     """Load default case data for default evaluation objects."""
 
-    return cases.load_all_cases()
+    return cases.load_ewb_events_yaml_into_case_list()
 
 
 def _load_config_file(config_path: str) -> tuple:

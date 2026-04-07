@@ -8,7 +8,7 @@ logger.setLevel(logging.INFO)
 
 
 # Load the case collection from the YAML file
-case_yaml = ewb.cases.load_all_cases()
+case_yaml = ewb.cases.load_ewb_events_yaml_into_case_list()
 
 # Select single case (TC Ida)
 case_list = [n for n in case_yaml if n.case_id_number == 220]
