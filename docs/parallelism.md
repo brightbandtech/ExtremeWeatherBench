@@ -20,7 +20,7 @@ In experimentation with varying configurations, it was found `loky` was the most
 ```python
 ...
 # Load events yaml
-case_yaml = cases.load_ewb_cases()
+case_yaml = cases.load_all_cases()
 
 # Get default EvaluationObjects
 evaluation_objects = defaults.get_brightband_evaluation_objects()

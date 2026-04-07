@@ -9,7 +9,7 @@ logger.setLevel(logging.INFO)
 
 # Load case data from the default events.yaml
 # Users can also define their own cases_dict structure
-case_yaml = ewb.cases.load_ewb_cases()
+case_yaml = ewb.cases.load_all_cases()
 
 # Define targets
 # ERA5 target

@@ -541,7 +541,7 @@ def update_cases_with_storm_bounds(storm_bounds, all_storms_df):
     """
     logger.info("Updating cases with storm bounds...")
 
-    cases_all = ewb.cases.load_ewb_cases()
+    cases_all = ewb.cases.load_all_cases()
     cases_new = cases_all.copy()
 
     # Update the yaml cases with storm bounds from IBTrACS data

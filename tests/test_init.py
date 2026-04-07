@@ -199,9 +199,9 @@ class TestTopLevelImports:
 
     def test_load_cases(self):
         """Test that load_cases is accessible via the cases submodule."""
-        from extremeweatherbench.cases import load_ewb_cases
+        from extremeweatherbench.cases import load_all_cases
 
-        assert load_ewb_cases is not None
+        assert load_all_cases is not None
 
 
 class TestSubmoduleAccess:

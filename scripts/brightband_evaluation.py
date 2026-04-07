@@ -24,7 +24,7 @@ logger = configure_logger()
 
 if __name__ == "__main__":
     # Load events yaml
-    case_yaml = cases.load_ewb_cases()
+    case_yaml = cases.load_all_cases()
 
     # Initialize ExtremeWeatherBench
     ewb = evaluate.ExtremeWeatherBench(

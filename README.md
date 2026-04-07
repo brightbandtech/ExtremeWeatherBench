@@ -88,7 +88,7 @@ heatwave_evaluation_list = [
     ),
 ]
 # Load in the EWB default list of event cases
-case_metadata = ewb.cases.load_ewb_cases()
+case_metadata = ewb.cases.load_all_cases()
 
 # Create the evaluation class, with cases and evaluation objects declared
 ewb_instance = ewb.evaluate.ExtremeWeatherBench(
