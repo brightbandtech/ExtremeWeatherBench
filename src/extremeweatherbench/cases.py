@@ -177,7 +177,9 @@ def load_ewb_events_yaml_into_case_list() -> list[IndividualCase]:
 
     return load_individual_cases(yaml_event_case)
 
+
 load_cases = load_ewb_events_yaml_into_case_list
+
 
 def read_incoming_yaml(input_pth: Union[str, pathlib.Path]):
     """Read events yaml from data into a dictionary.

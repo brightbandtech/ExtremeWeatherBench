@@ -1,12 +1,12 @@
 """ExtremeWeatherBench: A benchmarking framework for extreme weather forecasts.
 
-    import extremeweatherbench as ewb
+import extremeweatherbench as ewb
 
-    ewb.evaluate.ExtremeWeatherBench(case_metadata=..., evaluation_objects=...)
-    ewb.inputs.ERA5(...)
-    ewb.inputs.ZarrForecast(...)
-    ewb.metrics.MeanAbsoluteError(...)
-    ewb.cases.load_cases()
+ewb.evaluate.ExtremeWeatherBench(case_metadata=..., evaluation_objects=...)
+ewb.inputs.ERA5(...)
+ewb.inputs.ZarrForecast(...)
+ewb.metrics.MeanAbsoluteError(...)
+ewb.cases.load_cases()
 """
 
 from importlib.metadata import version
