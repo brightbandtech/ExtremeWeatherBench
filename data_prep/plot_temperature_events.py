@@ -16,9 +16,10 @@ CLI usage:
 
 import argparse
 import logging
+import operator as op_module
 import pathlib
 import time as time_module
-from typing import Literal, cast
+from typing import Callable, Literal, cast
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -41,11 +42,52 @@ logger = logging.getLogger(__name__)
 
 MIN_CONSECUTIVE_DAYS = 3
 
+_OP_MAP: dict[str, Callable] = {
+    ">": op_module.gt,
+    ">=": op_module.ge,
+    "<": op_module.lt,
+    "<=": op_module.le,
+    "==": op_module.eq,
+}
+
+VALID_QUANTILES = [0.10, 0.15, 0.25, 0.50, 0.75, 0.85, 0.90]
+
+
+def resolve_op(op_str: str) -> Callable:
+    """Convert a string operator to a callable.
+
+    Args:
+        op_str: One of ">", ">=", "<", "<=", "==".
+
+    Returns:
+        The corresponding operator callable.
+
+    Raises:
+        ValueError: If op_str is not a recognised operator.
+    """
+    if op_str not in _OP_MAP:
+        raise ValueError(
+            f"Unknown operator {op_str!r}; "
+            f"choose from {list(_OP_MAP)}"
+        )
+    return _OP_MAP[op_str]
+
+
 # ── shared ERA5 utilities ─────────────────────────────────────────────
 
 
 def detect_time_dim(obj: xr.Dataset | xr.DataArray) -> str:
-    """Return the name of the time dimension."""
+    """Return the name of the time dimension.
+
+    Args:
+        obj: An xarray Dataset or DataArray.
+
+    Returns:
+        The name of the first matching time dimension.
+
+    Raises:
+        ValueError: If no recognised time dimension is found.
+    """
     for name in ("valid_time", "time"):
         if name in obj.dims:
             return name
@@ -57,6 +99,13 @@ def open_era5_t2m(start_date: str, end_date: str) -> xr.DataArray:
 
     Selects 6-hourly timesteps (0/6/12/18 UTC) to match the
     climatology base and sorts latitude to ascending order.
+
+    Args:
+        start_date: Inclusive start date string (YYYY-MM-DD).
+        end_date: Inclusive end date string (YYYY-MM-DD).
+
+    Returns:
+        Lazy DataArray of 2m temperature with ascending latitude.
     """
     ds = xr.open_zarr(
         inputs.ARCO_ERA5_FULL_URI,
@@ -80,6 +129,15 @@ def _align_climatology(
 
     Computes the climatology into memory (366 x lat x lon) to avoid
     dask chunk multiplication, then indexes by dayofyear via numpy.
+
+    Args:
+        clim: Climatology DataArray indexed by dayofyear.
+        daily: Daily ERA5 DataArray to align against.
+        tdim: Name of the time dimension in daily.
+
+    Returns:
+        DataArray with the same shape as daily, containing the
+        climatology value for each timestep's day-of-year.
     """
     clim_vals = clim.compute().values
     clim_doy = clim.dayofyear.values
@@ -119,12 +177,27 @@ _BOX_EDGE_ALPHA = 0.85
 
 
 def _to_plot_lon(lon: float) -> float:
-    """Wrap 0-360 longitude to -180..180 for PlateCarree."""
+    """Wrap 0-360 longitude to -180..180 for PlateCarree.
+
+    Args:
+        lon: Longitude in 0-360 degrees.
+
+    Returns:
+        Longitude in -180..180 degrees.
+    """
     return lon - 360.0 if lon > 180.0 else lon
 
 
 def max_consecutive_days(mask_3d: np.ndarray) -> np.ndarray:
-    """Max consecutive True days per grid point along axis 0."""
+    """Compute max consecutive True days per grid point.
+
+    Args:
+        mask_3d: Boolean array of shape (time, lat, lon).
+
+    Returns:
+        Int32 array of shape (lat, lon) with the maximum number of
+        consecutive True values along axis 0 for each grid point.
+    """
     nt, nlat, nlon = mask_3d.shape
     flat = mask_3d.reshape(nt, -1).astype(np.int8)
     result = np.zeros(flat.shape[1], dtype=np.int32)
@@ -140,7 +213,11 @@ def max_consecutive_days(mask_3d: np.ndarray) -> np.ndarray:
 
 
 def _add_map_features(ax) -> None:
-    """Add standard cartopy features to an axis."""
+    """Add standard cartopy features to an axis.
+
+    Args:
+        ax: A cartopy GeoAxes instance.
+    """
     ax.coastlines(linewidth=0.5, zorder=10)
     ax.add_feature(
         cfeature.BORDERS,
@@ -187,7 +264,7 @@ def plot_consecutive_map(
         title: Two-line figure title (left-aligned).
         output_path: Destination PNG file path.
         extent: (lon_min, lon_max, lat_min, lat_max) in -180..180.
-            Derived from lats/lons when None.
+            Derived from lats/lons when None. Default is None.
     """
     plot_data = consec.astype(float)
     plot_data[consec < MIN_CONSECUTIVE_DAYS] = np.nan
@@ -258,6 +335,14 @@ def plot_event_bounds(
     """Draw bounding boxes for all events on a global Robinson map.
 
     Saves a PNG alongside the CSV with the same stem.
+
+    Args:
+        df: DataFrame with columns event_type, longitude_min,
+            longitude_max, latitude_min, latitude_max.
+        csv_path: Path to the output CSV; the PNG is saved with the
+            same stem.
+        title: Figure title. Default is "Detected Heat Wave and
+            Cold Snap Events".
     """
     if df.empty:
         logger.warning("No events to plot -- skipping bounds plot.")
@@ -352,7 +437,17 @@ def plot_event_bounds(
 
 
 def load_case(case_id_number: int) -> cases.IndividualCase:
-    """Load a single case from events.yaml by case_id_number."""
+    """Load a single case from events.yaml by case_id_number.
+
+    Args:
+        case_id_number: Integer identifier for the case.
+
+    Returns:
+        The matching IndividualCase object.
+
+    Raises:
+        ValueError: If no case with the given ID exists.
+    """
     all_cases = cases.load_ewb_events_yaml_into_case_list()
     for c in all_cases:
         if c.case_id_number == case_id_number:
@@ -372,13 +467,33 @@ def load_case(case_id_number: int) -> cases.IndividualCase:
 
 def compute_consecutive_field(
     single_case: cases.IndividualCase,
+    quantile: float | None = None,
+    op_str: str | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return (consecutive_days, lats, lons) for a case.
 
-    Works for both heat_wave (daily max > 85th pct) and
-    cold_snap (daily min < 15th pct) event types.
+    Args:
+        single_case: The case to compute the consecutive field for.
+        quantile: Climatology quantile. Default is None, which
+            resolves to 0.85 for heat_wave or 0.15 for
+            freeze/cold_snap.
+        op_str: Comparison operator string (e.g. ">", ">=",
+            "<", "<="). Default is None, which resolves to ">"
+            for heat_wave or "<" for freeze.
+
+    Returns:
+        A tuple of (consec, lats, lons) where consec is an int32
+        array of shape (lat, lon) containing max consecutive event
+        days, lats is the 1-D latitude array, and lons is the 1-D
+        longitude array (0-360).
     """
     is_heatwave = single_case.event_type == "heat_wave"
+    if quantile is None:
+        quantile = 0.85 if is_heatwave else 0.15
+    if op_str is None:
+        op_str = ">" if is_heatwave else "<"
+    cmp = resolve_op(op_str)
+
     start = str(single_case.start_date.date())
     end = str(single_case.end_date.date())
     bounds = single_case.location.as_geopandas().total_bounds
@@ -399,36 +514,47 @@ def compute_consecutive_field(
 
     tdim = detect_time_dim(t2m)
 
-    if is_heatwave:
-        logger.info("Loading 85th-percentile climatology...")
-        daily = t2m.resample({tdim: "1D"}).max()
-        clim = defaults.get_climatology(0.85).max(dim="hour").sortby("latitude")
-    else:
-        logger.info("Loading 15th-percentile climatology...")
-        daily = t2m.resample({tdim: "1D"}).min()
-        clim = defaults.get_climatology(0.15).min(dim="hour").sortby("latitude")
+    logger.info(
+        "Loading q=%.2f climatology (op=%s)...",
+        quantile, op_str,
+    )
+    clim = defaults.get_climatology(quantile).sortby("latitude")
 
     clim = clim.sel(
-        latitude=daily.latitude,
-        longitude=daily.longitude,
+        latitude=t2m.latitude,
+        longitude=t2m.longitude,
         method="nearest",
     )
-    clim_aligned = _align_climatology(clim, daily, tdim)
+
+    doy = t2m[tdim].dt.dayofyear
+    hour = t2m[tdim].dt.hour
+    max_clim_doy = int(clim.dayofyear.max())
+    doy_capped = doy.clip(max=max_clim_doy)
+
+    clim_aligned = clim.sel(
+        dayofyear=doy_capped,
+        hour=hour,
+    )
+
+    logger.info("Computing 6-hourly exceedance...")
+    exc_6h = cmp(t2m, clim_aligned)
+
+    daily_all_pass = (
+        exc_6h.resample({tdim: "1D"}).min().astype(bool)
+    )
 
     logger.info("Building land mask...")
     land = regionmask.defined_regions.natural_earth_v5_0_0.land_110
-    land_mask = land.mask(daily.longitude, daily.latitude) == 0
+    land_mask = land.mask(
+        daily_all_pass.longitude, daily_all_pass.latitude
+    ) == 0
 
-    logger.info("Computing exceedance mask...")
-    if is_heatwave:
-        exc = (daily > clim_aligned) & land_mask
-    else:
-        exc = (daily < clim_aligned) & land_mask
+    exc = daily_all_pass & land_mask
     mask_np = exc.compute().values.astype(bool)
 
     logger.info("Computing max consecutive days...")
     consec = max_consecutive_days(mask_np)
-    return consec, daily.latitude.values, daily.longitude.values
+    return consec, daily_all_pass.latitude.values, daily_all_pass.longitude.values
 
 
 # ── CLI ───────────────────────────────────────────────────────────────
@@ -459,6 +585,25 @@ def main() -> None:
             "(default: case_N_consecutive_{heatwave|cold_snap}_days.png)"
         ),
     )
+    parser.add_argument(
+        "--quantile",
+        type=float,
+        default=None,
+        help=(
+            "Climatology quantile "
+            f"(one of {VALID_QUANTILES}; "
+            "default: 0.85 for heat_wave, 0.15 for freeze)"
+        ),
+    )
+    parser.add_argument(
+        "--operator",
+        default=None,
+        help=(
+            "Comparison operator string "
+            "(>, >=, <, <=, ==; "
+            "default: > for heat_wave, < for freeze)"
+        ),
+    )
     args = parser.parse_args()
 
     t0 = time_module.time()
@@ -476,7 +621,11 @@ def main() -> None:
             single_case.event_type,
         )
 
-    consec, lats, lons = compute_consecutive_field(single_case)
+    consec, lats, lons = compute_consecutive_field(
+        single_case,
+        quantile=args.quantile,
+        op_str=args.operator,
+    )
 
     kind = "Heat Wave" if single_case.event_type == "heat_wave" else "Cold Snap"
     start_str = str(single_case.start_date.date())

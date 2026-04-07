@@ -29,11 +29,12 @@ import scipy.ndimage as ndimage
 import xarray as xr
 from dask.distributed import Client, LocalCluster
 from plot_temperature_events import (
-    _align_climatology,
+    VALID_QUANTILES,
     detect_time_dim,
     max_consecutive_days,
     open_era5_t2m,
     plot_consecutive_map,
+    resolve_op,
 )
 
 from extremeweatherbench import defaults
@@ -49,26 +50,62 @@ AREA_DECLINE_FRACTION = 0.5
 MIN_GRIDPOINTS = 500
 
 
-def get_daily_climatology_thresholds() -> Tuple[xr.DataArray, xr.DataArray]:
-    """Derive daily thresholds from 6-hourly percentile climatology.
+def get_climatology_thresholds(
+    q_hw: float = 0.85,
+    q_fz: float = 0.15,
+    q_hw_upper: Optional[float] = None,
+    q_fz_lower: Optional[float] = None,
+) -> Tuple[
+    xr.DataArray,
+    xr.DataArray,
+    Optional[xr.DataArray],
+    Optional[xr.DataArray],
+]:
+    """Return percentile climatology DataArrays for heat/freeze detection.
 
-    Returns the max-over-hours of the 85th percentile (heat wave
-    threshold) and min-over-hours of the 15th percentile (cold snap
-    threshold), each indexed by dayofyear.
+    Args:
+        q_hw: Lower-bound quantile for heat wave detection.
+        q_fz: Upper-bound quantile for freeze detection.
+        q_hw_upper: Upper-bound quantile for heat waves. When set,
+            only days where temp > q_hw AND temp < q_hw_upper are
+            flagged.
+        q_fz_lower: Lower-bound quantile for freezes. When set, only
+            days where temp < q_fz AND temp > q_fz_lower are flagged.
+
+    Returns:
+        A tuple of (clim_hw, clim_fz, clim_hw_upper, clim_fz_lower).
+        The last two elements are None when the corresponding optional
+        quantile argument is not supplied.
     """
-    clim_85 = defaults.get_climatology(0.85)
-    clim_15 = defaults.get_climatology(0.15)
-    return (
-        clim_85.max(dim="hour").sortby("latitude"),
-        clim_15.min(dim="hour").sortby("latitude"),
+    clim_hw = defaults.get_climatology(q_hw).sortby("latitude")
+    clim_fz = defaults.get_climatology(q_fz).sortby("latitude")
+    clim_hw_upper = (
+        defaults.get_climatology(q_hw_upper).sortby("latitude")
+        if q_hw_upper is not None
+        else None
     )
+    clim_fz_lower = (
+        defaults.get_climatology(q_fz_lower).sortby("latitude")
+        if q_fz_lower is not None
+        else None
+    )
+    return clim_hw, clim_fz, clim_hw_upper, clim_fz_lower
 
 
 def build_land_mask(
     lons: xr.DataArray,
     lats: xr.DataArray,
 ) -> xr.DataArray:
-    """Boolean land mask (True = land) for the given grid."""
+    """Build a boolean land mask (True = land) for the given grid.
+
+    Args:
+        lons: 1-D DataArray of longitudes.
+        lats: 1-D DataArray of latitudes.
+
+    Returns:
+        Boolean DataArray of the same shape as the meshgrid of lons
+        and lats, where True indicates a land grid point.
+    """
     land = regionmask.defined_regions.natural_earth_v5_0_0.land_110
     mask = land.mask(lons, lats)
     return mask == 0
@@ -76,61 +113,141 @@ def build_land_mask(
 
 def build_exceedance_masks(
     t2m: xr.DataArray,
-    clim_daily_max: xr.DataArray,
-    clim_daily_min: xr.DataArray,
+    clim_hw: xr.DataArray,
+    clim_fz: xr.DataArray,
     land_mask: xr.DataArray,
+    op_hw: str = ">",
+    op_fz: str = "<",
+    clim_hw_upper: Optional[xr.DataArray] = None,
+    clim_fz_lower: Optional[xr.DataArray] = None,
 ) -> Tuple[xr.DataArray, xr.DataArray]:
-    """Build lazy boolean masks for heat wave / cold snap exceedance.
+    """Build daily exceedance masks from 6-hourly temperature data.
 
-    Daily max/min aggregation stays in the dask graph. The
-    climatology is loaded into memory once (small) and then
-    broadcast against the lazy daily arrays to avoid chunk
-    multiplication warnings.
+    Each 6-hourly timestep is compared to its matching
+    (dayofyear, hour) climatology. A day passes only if all four
+    6-hourly timesteps exceed the threshold.
+
+    When clim_hw_upper is provided, heat-wave days must also satisfy
+    temp < upper bound on every 6-hourly step. When clim_fz_lower is
+    provided, freeze days must also satisfy temp > lower bound on
+    every 6-hourly step.
+
+    Args:
+        t2m: 6-hourly 2m temperature DataArray.
+        clim_hw: Heat-wave lower-bound climatology indexed by
+            (dayofyear, hour).
+        clim_fz: Freeze upper-bound climatology indexed by
+            (dayofyear, hour).
+        land_mask: Boolean DataArray (True = land) matching t2m grid.
+        op_hw: Comparison operator string for heat waves.
+        op_fz: Comparison operator string for freezes.
+        clim_hw_upper: Optional upper-bound climatology for heat
+            waves (exclusive cap).
+        clim_fz_lower: Optional lower-bound climatology for freezes
+            (exclusive floor).
+
+    Returns:
+        A tuple (hw, fz) of daily boolean DataArrays masked to land,
+        where True indicates an exceedance day.
     """
+    cmp_hw = resolve_op(op_hw)
+    cmp_fz = resolve_op(op_fz)
     tdim = detect_time_dim(t2m)
 
-    daily_max = t2m.resample({tdim: "1D"}).max()
-    daily_min = t2m.resample({tdim: "1D"}).min()
+    doy = t2m[tdim].dt.dayofyear
+    hour = t2m[tdim].dt.hour
+    max_clim_doy = int(clim_hw.dayofyear.max())
+    doy_capped = doy.clip(max=max_clim_doy)
 
-    clim_max_aligned = _align_climatology(
-        clim_daily_max,
-        daily_max,
-        tdim,
-    )
-    clim_min_aligned = _align_climatology(
-        clim_daily_min,
-        daily_min,
-        tdim,
-    )
+    clim_hw_aligned = clim_hw.sel(
+        dayofyear=doy_capped, hour=hour,
+    ).reindex_like(t2m, method="nearest")
+    clim_fz_aligned = clim_fz.sel(
+        dayofyear=doy_capped, hour=hour,
+    ).reindex_like(t2m, method="nearest")
 
-    hw = (daily_max > clim_max_aligned) & land_mask
-    fz = (daily_min < clim_min_aligned) & land_mask
+    hw_6h = cmp_hw(t2m, clim_hw_aligned)
+    fz_6h = cmp_fz(t2m, clim_fz_aligned)
+
+    if clim_hw_upper is not None:
+        clim_hw_upper_aligned = clim_hw_upper.sel(
+            dayofyear=doy_capped, hour=hour,
+        ).reindex_like(t2m, method="nearest")
+        hw_6h = hw_6h & (t2m < clim_hw_upper_aligned)
+
+    if clim_fz_lower is not None:
+        clim_fz_lower_aligned = clim_fz_lower.sel(
+            dayofyear=doy_capped, hour=hour,
+        ).reindex_like(t2m, method="nearest")
+        fz_6h = fz_6h & (t2m > clim_fz_lower_aligned)
+
+    hw = hw_6h.resample({tdim: "1D"}).min().astype(bool) & land_mask
+    fz = fz_6h.resample({tdim: "1D"}).min().astype(bool) & land_mask
     return hw, fz
 
 
 def apply_consecutive_filter(
     mask: np.ndarray,
     min_days: int = MIN_CONSECUTIVE_DAYS,
+    max_grace_days: int = 1,
 ) -> np.ndarray:
-    """Keep only grid points in runs of ``min_days``+ True days.
+    """Keep runs of ``min_days``+ True days along axis 0.
 
-    Binary erosion removes runs shorter than ``min_days``;
-    dilation restores surviving runs to their original extent.
-    Operates only along axis 0 (time).
+    After ``min_days`` strict consecutive True days are established,
+    gaps of up to ``max_grace_days`` are bridged so the event can
+    continue. Runs that never reach ``min_days`` strict consecutive
+    True days are discarded.
+
+    Args:
+        mask: Boolean array of shape (time, lat, lon).
+        min_days: Minimum run length required to qualify as an event.
+        max_grace_days: Maximum gap length to bridge after the
+            minimum run is established.
+
+    Returns:
+        Boolean array of the same shape with only qualifying runs
+        retained.
     """
     struct = np.zeros((min_days, 1, 1), dtype=bool)
     struct[:, 0, 0] = True
-    eroded = ndimage.binary_erosion(
-        mask,
-        structure=struct,
-        border_value=False,
+
+    strict = (
+        ndimage.binary_dilation(
+            ndimage.binary_erosion(
+                mask, structure=struct, border_value=False,
+            ),
+            structure=struct, border_value=False,
+        )
+        & mask
     )
-    dilated = ndimage.binary_dilation(
-        eroded,
-        structure=struct,
-        border_value=False,
+
+    if max_grace_days <= 0:
+        return strict
+
+    close_k = np.zeros((2 * max_grace_days + 1, 1, 1), dtype=bool)
+    close_k[:, 0, 0] = True
+    filled = ndimage.binary_closing(
+        mask, structure=close_k, border_value=False,
     )
-    return dilated & mask
+
+    filled_runs = (
+        ndimage.binary_dilation(
+            ndimage.binary_erosion(
+                filled, structure=struct, border_value=False,
+            ),
+            structure=struct, border_value=False,
+        )
+        & filled
+    )
+
+    lbl_struct = np.zeros((3, 3, 3), dtype=int)
+    lbl_struct[0, 1, 1] = 1
+    lbl_struct[1, 1, 1] = 1
+    lbl_struct[2, 1, 1] = 1
+    labels, _ = ndimage.label(filled_runs, structure=lbl_struct)
+
+    valid = np.unique(labels[strict & (labels > 0)])
+    return np.isin(labels, valid) & filled_runs
 
 
 @nb.njit(cache=True)
@@ -140,11 +257,20 @@ def _count_overlaps_nb(
     n_a: int,
     n_b: int,
 ) -> np.ndarray:
-    """Pixel-count overlap matrix between two consecutive-day label grids.
+    """Compute a pixel-count overlap matrix between two label grids.
 
-    Returns int32 (n_a, n_b) where result[i, j] is the number of
-    pixels where labels_a == i+1 and labels_b == j+1. Single-pass
-    JIT loop avoids the per-blob numpy scan in the Python tracker.
+    A single-pass JIT loop avoids the per-blob numpy scan in the
+    Python tracker.
+
+    Args:
+        labels_a: Integer label array for day t (shape lat x lon).
+        labels_b: Integer label array for day t+1 (shape lat x lon).
+        n_a: Number of blobs in labels_a.
+        n_b: Number of blobs in labels_b.
+
+    Returns:
+        Int32 array of shape (n_a, n_b) where element [i, j] is the
+        number of pixels where labels_a == i+1 and labels_b == j+1.
     """
     mat = np.zeros((n_a, n_b), dtype=np.int32)
     rows, cols = labels_a.shape
@@ -164,10 +290,23 @@ def _resolve_event(
     events: Dict[int, Dict],
     cur_map: Dict[int, int],
 ) -> Optional[int]:
-    """Find and merge events from the previous day for blob oid.
+    """Find and merge prior-day events overlapping with blob oid.
 
-    Uses a precomputed overlap matrix row instead of scanning the
+    Uses a precomputed overlap matrix column instead of scanning the
     full prev_labels array per blob.
+
+    Args:
+        oid: Current-day blob label (1-indexed).
+        overlap_mat: Pixel-count overlap matrix from
+            _count_overlaps_nb, or None if no previous day.
+        prev_map: Mapping from previous-day blob label to event ID.
+        events: Mutable dict of all live events keyed by event ID.
+        cur_map: Mutable mapping from current-day blob label to event
+            ID; updated in-place when events are merged.
+
+    Returns:
+        The surviving event ID after merging, or None if no overlap
+        with a prior-day event was found.
     """
     if overlap_mat is None:
         return None
@@ -198,7 +337,13 @@ def _terminate_declined_events(
     events: Dict[int, Dict],
     cur_map: Dict[int, int],
 ) -> None:
-    """Terminate events absent today or below 50% of peak."""
+    """Mark events as done if absent today or below 50% of peak area.
+
+    Args:
+        events: Mutable dict of all live events keyed by event ID.
+        cur_map: Mapping from current-day blob label to event ID;
+            used to determine which events are still active today.
+    """
     active = set(cur_map.values())
     for eid, ev in events.items():
         if ev["done"]:
@@ -225,6 +370,19 @@ def detect_events(
 
     An event's bounding box is the union of all its daily extents.
     Events terminate when their active area drops below 50% of peak.
+
+    Args:
+        filtered_mask: Boolean array of shape (time, lat, lon) with
+            consecutive-day filtering already applied.
+        dates: 1-D array of date labels aligned with axis 0.
+        lats: 1-D latitude array aligned with axis 1.
+        lons: 1-D longitude array aligned with axis 2.
+        event_type: Label string stored in each returned event dict
+            (e.g. "heat_wave" or "cold_snap").
+
+    Returns:
+        List of event dicts with keys type, start, end, lat_min,
+        lat_max, lon_min, lon_max, peak, area, done.
     """
     n_days = filtered_mask.shape[0]
     events: Dict[int, Dict] = {}
@@ -329,9 +487,14 @@ def events_to_dataframe(
 
     Args:
         events: Raw event dicts from ``detect_events``.
-        min_gridpoints: Drop events whose peak spatial extent
-            (in grid points) is below this threshold. Defaults
-            to the module-level ``MIN_GRIDPOINTS`` constant.
+        min_gridpoints: Drop events whose peak spatial extent (in
+            grid points) is below this threshold.
+
+    Returns:
+        DataFrame with columns label, event_type, start_date,
+        end_date, latitude_min, latitude_max, longitude_min,
+        longitude_max, sorted by start_date. Events below
+        min_gridpoints are excluded.
     """
     columns = [
         "label",
@@ -400,6 +563,54 @@ def main():
         default=4,
         help="Number of dask workers",
     )
+    parser.add_argument(
+        "--quantile-hw",
+        type=float,
+        default=0.85,
+        help=(
+            "Climatology quantile for heat waves "
+            f"({VALID_QUANTILES}; default: 0.85)"
+        ),
+    )
+    parser.add_argument(
+        "--quantile-fz",
+        type=float,
+        default=0.15,
+        help=(
+            "Climatology quantile for freezes "
+            f"({VALID_QUANTILES}; default: 0.15)"
+        ),
+    )
+    parser.add_argument(
+        "--quantile-hw-upper",
+        type=float,
+        default=None,
+        help=(
+            "Upper-bound quantile for heat waves; days must be "
+            "> --quantile-hw AND < this value "
+            f"({VALID_QUANTILES}; default: None)"
+        ),
+    )
+    parser.add_argument(
+        "--quantile-fz-lower",
+        type=float,
+        default=None,
+        help=(
+            "Lower-bound quantile for freezes; days must be "
+            "< --quantile-fz AND > this value "
+            f"({VALID_QUANTILES}; default: None)"
+        ),
+    )
+    parser.add_argument(
+        "--operator-hw",
+        default=">",
+        help="Comparison operator for heat waves (default: >)",
+    )
+    parser.add_argument(
+        "--operator-fz",
+        default="<",
+        help="Comparison operator for freezes (default: <)",
+    )
     args = parser.parse_args()
 
     wall_start = time_module.time()
@@ -420,7 +631,14 @@ def main():
     logger.info("  sizes=%s", dict(t2m.sizes))
 
     logger.info("Loading climatology thresholds...")
-    clim_max, clim_min = get_daily_climatology_thresholds()
+    clim_hw, clim_fz, clim_hw_upper, clim_fz_lower = (
+        get_climatology_thresholds(
+            q_hw=args.quantile_hw,
+            q_fz=args.quantile_fz,
+            q_hw_upper=args.quantile_hw_upper,
+            q_fz_lower=args.quantile_fz_lower,
+        )
+    )
 
     logger.info("Building land mask...")
     land_mask = build_land_mask(t2m.longitude, t2m.latitude)
@@ -428,9 +646,13 @@ def main():
     logger.info("Building exceedance masks (lazy)...")
     hw_lazy, fz_lazy = build_exceedance_masks(
         t2m,
-        clim_max,
-        clim_min,
+        clim_hw,
+        clim_fz,
         land_mask,
+        op_hw=args.operator_hw,
+        op_fz=args.operator_fz,
+        clim_hw_upper=clim_hw_upper,
+        clim_fz_lower=clim_fz_lower,
     )
 
     tdim = detect_time_dim(hw_lazy)
