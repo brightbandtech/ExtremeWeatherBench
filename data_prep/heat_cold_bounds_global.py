@@ -1,17 +1,30 @@
-"""Detect heat waves and cold snaps globally from ERA5 reanalysis.
+"""Detect temperature exceedance events globally from ERA5 reanalysis.
 
 Scans ERA5 2m temperature over an input date range and identifies
-heat wave (daily max > 85th percentile for 3+ consecutive days)
-and cold snap (daily min < 15th percentile for 3+ consecutive days)
-events globally over land.
+events where the daily temperature falls within a user-specified
+climatology quantile band for 3+ consecutive days, over land.
 
-Bounding boxes represent the maximum spatial extent of each event.
-Events terminate when area drops below 50% of their peak area.
+At least one of --quantile-lower or --quantile-upper must be given.
+Both can be combined to define a band (e.g. 50th–85th percentile).
+
+Bounding boxes are first derived from blob tracking, then expanded
+using the same edge-validity logic as heat_cold_bounds_case.py:
+each edge grows by 1 degree while >= 50% of its land points are
+active on the peak-footprint day.  Events terminate when their
+active area drops below 50% of peak.
 
 Usage:
+    # Anything above the 85th percentile (heat wave)
     python heat_cold_bounds_global.py \\
         --start-date 2023-06-01 --end-date 2023-09-01 \\
-        --output heat_cold_global.csv --n-workers 4
+        --quantile-lower 0.85 --operator-lower ">=" \\
+        --event-type heat_wave --output heat_cold_global.csv
+
+    # Band between 50th and 85th (moderate heat)
+    python heat_cold_bounds_global.py \\
+        --start-date 2023-06-01 --end-date 2023-09-01 \\
+        --quantile-lower 0.50 --quantile-upper 0.85 \\
+        --event-type heat_wave --output heat_cold_global.csv
 """
 
 import argparse
@@ -19,6 +32,8 @@ import logging
 import pathlib
 import time as time_module
 from typing import Dict, List, Optional, Tuple
+
+import joblib
 
 import numba as nb
 import numpy as np
@@ -47,54 +62,73 @@ logger = logging.getLogger(__name__)
 MIN_CONSECUTIVE_DAYS = 3
 AREA_DECLINE_FRACTION = 0.5
 MIN_GRIDPOINTS = 500
+MIN_AREA_KM2 = 200_000.0
 EXPANSION_DEGREES = 1
 MAX_SPATIAL_ITERATIONS = 20
 EDGE_VALIDITY_THRESHOLD = 0.5
 
 
-def get_climatology_thresholds(
-    q_hw: float = 0.85,
-    q_fz: float = 0.15,
-    q_hw_upper: Optional[float] = None,
-    q_fz_lower: Optional[float] = None,
-) -> Tuple[
-    xr.DataArray,
-    xr.DataArray,
-    Optional[xr.DataArray],
-    Optional[xr.DataArray],
-]:
-    """Return percentile climatology DataArrays for heat/freeze detection.
+def compute_grid_cell_area(
+    lats: np.ndarray,
+    lons: np.ndarray,
+) -> np.ndarray:
+    """Return a 2-D (lat, lon) array of grid-cell areas in km².
+
+    Uses the spherical-Earth approximation:
+        area = R² × Δlat_rad × Δlon_rad × cos(lat)
 
     Args:
-        q_hw: Lower-bound quantile for heat wave detection.
-            Default is 0.85.
-        q_fz: Upper-bound quantile for freeze detection.
-            Default is 0.15.
-        q_hw_upper: Upper-bound quantile for heat waves. When set,
-            only days where temp > q_hw AND temp < q_hw_upper are
-            flagged. Default is None.
-        q_fz_lower: Lower-bound quantile for freezes. When set, only
-            days where temp < q_fz AND temp > q_fz_lower are
-            flagged. Default is None.
+        lats: 1-D latitude array in degrees.
+        lons: 1-D longitude array in degrees; used only for shape.
 
     Returns:
-        A tuple of (clim_hw, clim_fz, clim_hw_upper, clim_fz_lower).
-        The last two elements are None when the corresponding optional
-        quantile argument is not supplied.
+        Float64 array of shape (len(lats), len(lons)) with each
+        cell's surface area in km².
     """
-    clim_hw = defaults.get_climatology(q_hw).sortby("latitude")
-    clim_fz = defaults.get_climatology(q_fz).sortby("latitude")
-    clim_hw_upper = (
-        defaults.get_climatology(q_hw_upper).sortby("latitude")
-        if q_hw_upper is not None
+    R_KM = 6371.0
+    dlat = float(np.abs(np.diff(lats[:2]))[0]) if len(lats) > 1 else 0.25
+    dlon = float(np.abs(np.diff(lons[:2]))[0]) if len(lons) > 1 else 0.25
+    cell_km2 = R_KM**2 * np.deg2rad(dlat) * np.deg2rad(dlon) * np.cos(np.deg2rad(lats))
+    return np.outer(cell_km2, np.ones(len(lons)))
+
+
+def get_climatology_bounds(
+    q_lower: Optional[float] = None,
+    q_upper: Optional[float] = None,
+) -> Tuple[Optional[xr.DataArray], Optional[xr.DataArray]]:
+    """Return climatology DataArrays for the lower and/or upper bound.
+
+    At least one of q_lower or q_upper must be provided. Each returned
+    DataArray is indexed by (dayofyear, hour) and sorted by latitude.
+
+    Args:
+        q_lower: Quantile for the lower bound (e.g. 0.50 means temp
+            must exceed the 50th-percentile climatology). None skips
+            the lower-bound check.
+        q_upper: Quantile for the upper bound (e.g. 0.85 means temp
+            must not exceed the 85th-percentile climatology). None
+            skips the upper-bound check.
+
+    Returns:
+        Tuple (clim_lower, clim_upper); either element may be None
+        when the corresponding quantile argument is not supplied.
+
+    Raises:
+        ValueError: If both q_lower and q_upper are None.
+    """
+    if q_lower is None and q_upper is None:
+        raise ValueError("At least one of q_lower or q_upper must be set.")
+    clim_lower = (
+        defaults.get_climatology(q_lower).sortby("latitude")
+        if q_lower is not None
         else None
     )
-    clim_fz_lower = (
-        defaults.get_climatology(q_fz_lower).sortby("latitude")
-        if q_fz_lower is not None
+    clim_upper = (
+        defaults.get_climatology(q_upper).sortby("latitude")
+        if q_upper is not None
         else None
     )
-    return clim_hw, clim_fz, clim_hw_upper, clim_fz_lower
+    return clim_lower, clim_upper
 
 
 def build_land_mask(
@@ -277,85 +311,63 @@ def expand_event_bounds(
     return event
 
 
-def build_exceedance_masks(
+def build_exceedance_mask(
     t2m: xr.DataArray,
-    clim_hw: xr.DataArray,
-    clim_fz: xr.DataArray,
+    clim_lower: Optional[xr.DataArray],
+    clim_upper: Optional[xr.DataArray],
     land_mask: xr.DataArray,
-    op_hw: str = ">",
-    op_fz: str = "<",
-    clim_hw_upper: Optional[xr.DataArray] = None,
-    clim_fz_lower: Optional[xr.DataArray] = None,
-) -> Tuple[xr.DataArray, xr.DataArray]:
-    """Build daily exceedance masks from 6-hourly temperature data.
+    op_lower: str = ">",
+    op_upper: str = "<",
+) -> xr.DataArray:
+    """Build a daily exceedance mask from 6-hourly temperature data.
 
-    Each 6-hourly timestep is compared to its matching
-    (dayofyear, hour) climatology. A day passes only if all four
-    6-hourly timesteps exceed the threshold.
+    Each 6-hourly timestep must satisfy all provided bounds. A day
+    passes only when every 6-hourly step satisfies every active bound.
+    The result is further masked to land points.
 
-    When clim_hw_upper is provided, heat-wave days must also satisfy
-    temp < upper bound on every 6-hourly step. When clim_fz_lower is
-    provided, freeze days must also satisfy temp > lower bound on
-    every 6-hourly step.
+    At least one of clim_lower or clim_upper must be provided.
 
     Args:
         t2m: 6-hourly 2m temperature DataArray.
-        clim_hw: Heat-wave lower-bound climatology indexed by
-            (dayofyear, hour).
-        clim_fz: Freeze upper-bound climatology indexed by
-            (dayofyear, hour).
+        clim_lower: Climatology for the lower bound, indexed by
+            (dayofyear, hour). None skips this bound.
+        clim_upper: Climatology for the upper bound, indexed by
+            (dayofyear, hour). None skips this bound.
         land_mask: Boolean DataArray (True = land) matching t2m grid.
-        op_hw: Comparison operator string for heat waves.
+        op_lower: Comparison operator for the lower bound.
             Default is ">".
-        op_fz: Comparison operator string for freezes.
+        op_upper: Comparison operator for the upper bound.
             Default is "<".
-        clim_hw_upper: Optional upper-bound climatology for heat
-            waves (exclusive cap). Default is None.
-        clim_fz_lower: Optional lower-bound climatology for freezes
-            (exclusive floor). Default is None.
 
     Returns:
-        A tuple (hw, fz) of daily boolean DataArrays masked to land,
-        where True indicates an exceedance day.
+        Daily boolean DataArray masked to land where True indicates
+        every 6-hourly step satisfied all active bounds.
     """
-    cmp_hw = resolve_op(op_hw)
-    cmp_fz = resolve_op(op_fz)
     tdim = detect_time_dim(t2m)
-
     doy = t2m[tdim].dt.dayofyear
     hour = t2m[tdim].dt.hour
-    max_clim_doy = int(clim_hw.dayofyear.max())
+    ref = clim_lower if clim_lower is not None else clim_upper
+    assert ref is not None
+    max_clim_doy = int(ref.dayofyear.max())
     doy_capped = doy.clip(max=max_clim_doy)
 
-    clim_hw_aligned = clim_hw.sel(
-        dayofyear=doy_capped,
-        hour=hour,
-    ).reindex_like(t2m, method="nearest")
-    clim_fz_aligned = clim_fz.sel(
-        dayofyear=doy_capped,
-        hour=hour,
-    ).reindex_like(t2m, method="nearest")
+    mask_6h = xr.ones_like(t2m, dtype=bool)
 
-    hw_6h = cmp_hw(t2m, clim_hw_aligned)
-    fz_6h = cmp_fz(t2m, clim_fz_aligned)
+    if clim_lower is not None:
+        cmp = resolve_op(op_lower)
+        aligned = clim_lower.sel(dayofyear=doy_capped, hour=hour).reindex_like(
+            t2m, method="nearest"
+        )
+        mask_6h = mask_6h & cmp(t2m, aligned)
 
-    if clim_hw_upper is not None:
-        clim_hw_upper_aligned = clim_hw_upper.sel(
-            dayofyear=doy_capped,
-            hour=hour,
-        ).reindex_like(t2m, method="nearest")
-        hw_6h = hw_6h & (t2m < clim_hw_upper_aligned)
+    if clim_upper is not None:
+        cmp = resolve_op(op_upper)
+        aligned = clim_upper.sel(dayofyear=doy_capped, hour=hour).reindex_like(
+            t2m, method="nearest"
+        )
+        mask_6h = mask_6h & cmp(t2m, aligned)
 
-    if clim_fz_lower is not None:
-        clim_fz_lower_aligned = clim_fz_lower.sel(
-            dayofyear=doy_capped,
-            hour=hour,
-        ).reindex_like(t2m, method="nearest")
-        fz_6h = fz_6h & (t2m > clim_fz_lower_aligned)
-
-    hw = hw_6h.resample({tdim: "1D"}).min().astype(bool) & land_mask
-    fz = fz_6h.resample({tdim: "1D"}).min().astype(bool) & land_mask
-    return hw, fz
+    return mask_6h.resample({tdim: "1D"}).min().astype(bool) & land_mask
 
 
 def apply_consecutive_filter(
@@ -507,6 +519,7 @@ def _resolve_event(
         tgt["lon_min"] = min(tgt["lon_min"], merged["lon_min"])
         tgt["lon_max"] = max(tgt["lon_max"], merged["lon_max"])
         tgt["peak"] = max(tgt["peak"], merged["peak"])
+        tgt["peak_area_km2"] = max(tgt["peak_area_km2"], merged["peak_area_km2"])
         tgt["start"] = min(tgt["start"], merged["start"])
         for k, v in list(cur_map.items()):
             if v == other:
@@ -541,6 +554,7 @@ def detect_events(
     lats: np.ndarray,
     lons: np.ndarray,
     event_type: str,
+    area_grid: Optional[np.ndarray] = None,
 ) -> List[Dict]:
     """Track spatiotemporal events from a filtered boolean mask.
 
@@ -560,10 +574,12 @@ def detect_events(
         lons: 1-D longitude array aligned with axis 2.
         event_type: Label string stored in each returned event dict
             (e.g. "heat_wave" or "cold_snap").
+        area_grid: Optional 2-D array (lat, lon) of grid-cell areas
+            in km². When provided, peak_area_km2 is tracked per event.
 
     Returns:
         List of event dicts with keys type, start, end, lat_min,
-        lat_max, lon_min, lon_max, peak, area, done.
+        lat_max, lon_min, lon_max, peak, peak_area_km2, area, done.
     """
     n_days = filtered_mask.shape[0]
     events: Dict[int, Dict] = {}
@@ -601,6 +617,9 @@ def detect_events(
             om = labels == oid
             area = int(om.sum())
             li, lo = np.where(om)
+            blob_area_km2 = (
+                float(area_grid[li, lo].sum()) if area_grid is not None else 0.0
+            )
 
             eid = _resolve_event(
                 oid,
@@ -622,12 +641,14 @@ def detect_events(
                     "lon_min": float(lons[lo].min()),
                     "lon_max": float(lons[lo].max()),
                     "peak": area,
+                    "peak_area_km2": blob_area_km2,
                     "area": area,
                     "done": False,
                 }
             else:
                 ev = events[eid]
                 ev["end"] = dates[di]
+                ev["peak_area_km2"] = max(ev["peak_area_km2"], blob_area_km2)
                 ev["lat_min"] = min(
                     ev["lat_min"],
                     float(lats[li].min()),
@@ -663,20 +684,22 @@ def detect_events(
 def events_to_dataframe(
     events: List[Dict],
     min_gridpoints: int = MIN_GRIDPOINTS,
+    min_area_km2: float = MIN_AREA_KM2,
 ) -> pd.DataFrame:
     """Convert event dicts to a labelled DataFrame.
 
     Args:
         events: Raw event dicts from ``detect_events``.
-        min_gridpoints: Drop events whose peak spatial extent (in
-            grid points) is below this threshold. Default is 500
-            (MIN_GRIDPOINTS).
+        min_gridpoints: Drop events whose peak grid-point count is
+            below this threshold. Default is 500 (MIN_GRIDPOINTS).
+        min_area_km2: Drop events whose peak area (km²) is below
+            this threshold. Default is 200 000 (MIN_AREA_KM2).
 
     Returns:
         DataFrame with columns label, event_type, start_date,
         end_date, latitude_min, latitude_max, longitude_min,
-        longitude_max, sorted by start_date. Events below
-        min_gridpoints are excluded.
+        longitude_max, max_consecutive_days, sorted by start_date.
+        Events below either threshold are excluded.
     """
     columns = [
         "label",
@@ -693,11 +716,16 @@ def events_to_dataframe(
         return pd.DataFrame(columns=columns)
 
     n_before = len(events)
-    events = [e for e in events if e["peak"] >= min_gridpoints]
+    events = [
+        e
+        for e in events
+        if e["peak"] >= min_gridpoints and e.get("peak_area_km2", 0.0) >= min_area_km2
+    ]
     logger.info(
-        "  Filtered %d events below %d gridpoints; %d remain",
+        "  Filtered %d events (< %d pts or < %.0f km²); %d remain",
         n_before - len(events),
         min_gridpoints,
+        min_area_km2,
         len(events),
     )
 
@@ -724,7 +752,7 @@ def events_to_dataframe(
 
 def main():
     parser = argparse.ArgumentParser(
-        description=("Detect heat waves and cold snaps globally from ERA5."),
+        description=("Detect temperature exceedance events globally from ERA5."),
     )
     parser.add_argument(
         "--start-date",
@@ -738,7 +766,7 @@ def main():
     )
     parser.add_argument(
         "--output",
-        default="heat_cold_global.csv",
+        default="events_global.csv",
         help="Output CSV path",
     )
     parser.add_argument(
@@ -748,62 +776,73 @@ def main():
         help="Number of dask workers",
     )
     parser.add_argument(
-        "--quantile-hw",
-        type=float,
-        default=0.85,
-        help=(
-            f"Climatology quantile for heat waves ({VALID_QUANTILES}; default: 0.85)"
-        ),
-    )
-    parser.add_argument(
-        "--quantile-fz",
-        type=float,
-        default=0.15,
-        help=(f"Climatology quantile for freezes ({VALID_QUANTILES}; default: 0.15)"),
-    )
-    parser.add_argument(
-        "--quantile-hw-upper",
+        "--quantile-lower",
         type=float,
         default=None,
         help=(
-            "Upper-bound quantile for heat waves; days must be "
-            "> --quantile-hw AND < this value "
-            f"({VALID_QUANTILES}; default: None)"
+            f"Lower-bound climatology quantile ({VALID_QUANTILES}). "
+            "Days where temp op_lower clim_lower are candidates. "
+            "At least one of --quantile-lower or --quantile-upper "
+            "is required."
         ),
     )
     parser.add_argument(
-        "--quantile-fz-lower",
-        type=float,
-        default=None,
-        help=(
-            "Lower-bound quantile for freezes; days must be "
-            "< --quantile-fz AND > this value "
-            f"({VALID_QUANTILES}; default: None)"
-        ),
-    )
-    parser.add_argument(
-        "--operator-hw",
+        "--operator-lower",
         default=">",
-        help="Comparison operator for heat waves (default: >)",
+        help=("Comparison operator applied to the lower bound (default: >)"),
     )
     parser.add_argument(
-        "--operator-fz",
+        "--quantile-upper",
+        type=float,
+        default=None,
+        help=(
+            f"Upper-bound climatology quantile ({VALID_QUANTILES}). "
+            "Days where temp op_upper clim_upper are candidates. "
+            "Combine with --quantile-lower to define a band."
+        ),
+    )
+    parser.add_argument(
+        "--operator-upper",
         default="<",
-        help="Comparison operator for freezes (default: <)",
+        help=("Comparison operator applied to the upper bound (default: <)"),
     )
     parser.add_argument(
         "--lat-min",
         type=float,
         default=-90.0,
-        help=("Minimum latitude to include in detection. Default is -90.0"),
+        help="Minimum latitude to include in detection. Default -90.0",
     )
     parser.add_argument(
         "--lat-max",
         type=float,
         default=90.0,
-        help=("Maximum latitude to include in detection. Default is 90.0"),
+        help="Maximum latitude to include in detection. Default 90.0",
     )
     args = parser.parse_args()
+
+    if args.quantile_lower is None and args.quantile_upper is None:
+        parser.error(
+            "At least one of --quantile-lower or --quantile-upper must be provided."
+        )
+
+    # Derive event_type label and plot colour from the quantiles.
+    # Format: "q{lower}+" / "q{upper}-" / "q{lower}-q{upper}"
+    ql, qu = args.quantile_lower, args.quantile_upper
+    if ql is not None and qu is not None:
+        event_type = f"q{ql:.2f}-q{qu:.2f}"
+    elif ql is not None:
+        event_type = f"q{ql:.2f}+"
+    else:
+        event_type = f"q{qu:.2f}-"
+    # Infer warm vs cold for the plot colourmap:
+    # warm when the lower bound is above the median (high percentile),
+    # cold when the upper bound is below the median (low percentile).
+    if ql is not None and ql >= 0.5:
+        plot_event_type = "heat_wave"
+    elif qu is not None and qu <= 0.5:
+        plot_event_type = "cold_snap"
+    else:
+        plot_event_type = "heat_wave"
 
     wall_start = time_module.time()
     client = Client(
@@ -829,127 +868,91 @@ def main():
         )
     logger.info("  sizes=%s", dict(t2m.sizes))
 
-    logger.info("Loading climatology thresholds...")
-    clim_hw, clim_fz, clim_hw_upper, clim_fz_lower = get_climatology_thresholds(
-        q_hw=args.quantile_hw,
-        q_fz=args.quantile_fz,
-        q_hw_upper=args.quantile_hw_upper,
-        q_fz_lower=args.quantile_fz_lower,
+    logger.info(
+        "Loading climatology bounds (lower=%s, upper=%s)...",
+        args.quantile_lower,
+        args.quantile_upper,
+    )
+    clim_lower, clim_upper = get_climatology_bounds(
+        q_lower=args.quantile_lower,
+        q_upper=args.quantile_upper,
     )
 
-    logger.info("Building land mask...")
+    logger.info("Building land mask and grid-cell area array...")
     land_mask = build_land_mask(t2m.longitude, t2m.latitude)
     land_mask_np = land_mask.values.astype(bool)
+    area_grid = compute_grid_cell_area(t2m.latitude.values, t2m.longitude.values)
 
-    logger.info("Building exceedance masks (lazy)...")
-    hw_lazy, fz_lazy = build_exceedance_masks(
+    logger.info("Building exceedance mask (lazy)...")
+    exc_lazy = build_exceedance_mask(
         t2m,
-        clim_hw,
-        clim_fz,
+        clim_lower,
+        clim_upper,
         land_mask,
-        op_hw=args.operator_hw,
-        op_fz=args.operator_fz,
-        clim_hw_upper=clim_hw_upper,
-        clim_fz_lower=clim_fz_lower,
+        op_lower=args.operator_lower,
+        op_upper=args.operator_upper,
     )
 
-    tdim = detect_time_dim(hw_lazy)
+    tdim = detect_time_dim(exc_lazy)
 
-    logger.info("Computing heat wave mask...")
+    logger.info("Computing exceedance mask...")
     t0 = time_module.time()
-    hw_da = hw_lazy.compute()
+    exc_da = exc_lazy.compute()
     logger.info("  done in %.1f s", time_module.time() - t0)
 
-    logger.info("Computing cold snap mask...")
-    t0 = time_module.time()
-    fz_da = fz_lazy.compute()
-    logger.info("  done in %.1f s", time_module.time() - t0)
-
-    dates = hw_da[tdim].values
-    lats = hw_da.latitude.values
-    lons = hw_da.longitude.values
-    hw_np = hw_da.values.astype(bool)
-    fz_np = fz_da.values.astype(bool)
-    del hw_da, fz_da
+    dates = exc_da[tdim].values
+    lats = exc_da.latitude.values
+    lons = exc_da.longitude.values
+    exc_np = exc_da.values.astype(bool)
+    del exc_da
 
     logger.info(
         "Applying %d-day consecutive filter...",
         MIN_CONSECUTIVE_DAYS,
     )
-    hw_filt = apply_consecutive_filter(hw_np)
-    fz_filt = apply_consecutive_filter(fz_np)
+    exc_filt = apply_consecutive_filter(exc_np)
     logger.info(
-        "  HW: %d -> %d True cells",
-        hw_np.sum(),
-        hw_filt.sum(),
+        "  %d -> %d True cells",
+        exc_np.sum(),
+        exc_filt.sum(),
     )
-    logger.info(
-        "  FZ: %d -> %d True cells",
-        fz_np.sum(),
-        fz_filt.sum(),
-    )
-    del hw_np, fz_np
+    del exc_np
 
-    logger.info("Detecting heat wave events...")
-    hw_ev = detect_events(
-        hw_filt,
-        dates,
-        lats,
-        lons,
-        "heat_wave",
-    )
-    logger.info("  %d events", len(hw_ev))
-
-    logger.info("Detecting cold snap events...")
-    fz_ev = detect_events(
-        fz_filt,
-        dates,
-        lats,
-        lons,
-        "cold_snap",
-    )
-    logger.info("  %d events", len(fz_ev))
+    logger.info("Detecting events...")
+    t0 = time_module.time()
+    events = detect_events(exc_filt, dates, lats, lons, event_type, area_grid=area_grid)
+    logger.info("  %d events (%.1f s)", len(events), time_module.time() - t0)
 
     logger.info(
-        "Expanding event bounds (case-script spatial logic, %d-deg steps)...",
+        "Expanding event bounds (%d-deg steps)...",
         EXPANSION_DEGREES,
     )
     t0 = time_module.time()
-    hw_ev = [
-        expand_event_bounds(ev, hw_filt, dates, lats, lons, land_mask_np)
-        for ev in hw_ev
-    ]
-    fz_ev = [
-        expand_event_bounds(ev, fz_filt, dates, lats, lons, land_mask_np)
-        for ev in fz_ev
-    ]
+    events = joblib.Parallel(n_jobs=-1, prefer="threads")(
+        joblib.delayed(expand_event_bounds)(
+            ev, exc_filt, dates, lats, lons, land_mask_np
+        )
+        for ev in events
+    )
     logger.info("  done in %.1f s", time_module.time() - t0)
 
-    logger.info("Computing max-consecutive-days fields for plots...")
+    logger.info("Computing max-consecutive-days plot...")
     stem = str(pathlib.Path(args.output).with_suffix(""))
-    hw_consec = max_consecutive_days(hw_filt)
+    consec = max_consecutive_days(exc_filt)
     plot_consecutive_map(
-        hw_consec,
+        consec,
         lats,
         lons,
-        "heat_wave",
-        title=(f"Consecutive Heatwave Days\n{args.start_date} to {args.end_date}"),
-        output_path=f"{stem}_heatwave.png",
+        plot_event_type,
+        title=(
+            f"Consecutive Exceedance Days ({event_type})"
+            f"\n{args.start_date} to {args.end_date}"
+        ),
+        output_path=f"{stem}_consec.png",
     )
-    del hw_consec, hw_filt
+    del consec, exc_filt
 
-    fz_consec = max_consecutive_days(fz_filt)
-    plot_consecutive_map(
-        fz_consec,
-        lats,
-        lons,
-        "cold_snap",
-        title=(f"Consecutive Cold Snap Days\n{args.start_date} to {args.end_date}"),
-        output_path=f"{stem}_cold_snap.png",
-    )
-    del fz_consec, fz_filt
-
-    df = events_to_dataframe(hw_ev + fz_ev)
+    df = events_to_dataframe(events)
     df.to_csv(args.output, index=False)
 
     elapsed = time_module.time() - wall_start

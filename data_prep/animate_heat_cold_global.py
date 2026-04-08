@@ -25,9 +25,9 @@ from dask.distributed import Client, LocalCluster
 
 from heat_cold_bounds_global import (
     apply_consecutive_filter,
-    build_exceedance_masks,
+    build_exceedance_mask,
     build_land_mask,
-    get_climatology_thresholds,
+    get_climatology_bounds,
 )
 from plot_temperature_events import (
     _add_map_features,
@@ -111,9 +111,7 @@ def animate_exceedance(
 
     def _update(di: int):
         mesh.set_array(filt_mask[di].astype(float).ravel())
-        title.set_text(
-            f"{kind} Exceedance \u2014 {str(dates[di])[:10]}"
-        )
+        title.set_text(f"{kind} Exceedance \u2014 {str(dates[di])[:10]}")
         if di % 10 == 0:
             logger.info(
                 "  Rendering frame %d / %d  (%s)",
@@ -186,13 +184,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.output_heat is None:
-        args.output_heat = (
-            f"heat_exceedance_{args.start_date}_{args.end_date}.gif"
-        )
+        args.output_heat = f"heat_exceedance_{args.start_date}_{args.end_date}.gif"
     if args.output_cold is None:
-        args.output_cold = (
-            f"cold_exceedance_{args.start_date}_{args.end_date}.gif"
-        )
+        args.output_cold = f"cold_exceedance_{args.start_date}_{args.end_date}.gif"
 
     wall_start = time_module.time()
     client = Client(LocalCluster(n_workers=args.n_workers))
@@ -203,15 +197,15 @@ def main() -> None:
     logger.info("  sizes=%s", dict(t2m.sizes))
 
     logger.info("Loading climatology thresholds...")
-    clim_hw, clim_fz, _, _ = get_climatology_thresholds()
+    clim_hw, _ = get_climatology_bounds(q_lower=0.85)
+    _, clim_fz = get_climatology_bounds(q_upper=0.15)
 
     logger.info("Building land mask...")
     land_mask = build_land_mask(t2m.longitude, t2m.latitude)
 
     logger.info("Building exceedance masks (lazy)...")
-    hw_lazy, fz_lazy = build_exceedance_masks(
-        t2m, clim_hw, clim_fz, land_mask
-    )
+    hw_lazy = build_exceedance_mask(t2m, clim_hw, None, land_mask)
+    fz_lazy = build_exceedance_mask(t2m, None, clim_fz, land_mask)
 
     tdim = detect_time_dim(hw_lazy)
 
