@@ -617,6 +617,24 @@ def main():
         default="<",
         help="Comparison operator for freezes (default: <)",
     )
+    parser.add_argument(
+        "--lat-min",
+        type=float,
+        default=-90.0,
+        help=(
+            "Minimum latitude to include in detection. "
+            "Default is -90.0"
+        ),
+    )
+    parser.add_argument(
+        "--lat-max",
+        type=float,
+        default=90.0,
+        help=(
+            "Maximum latitude to include in detection. "
+            "Default is 90.0"
+        ),
+    )
     args = parser.parse_args()
 
     wall_start = time_module.time()
@@ -634,6 +652,13 @@ def main():
 
     logger.info("Opening ERA5 data...")
     t2m = open_era5_t2m(args.start_date, args.end_date)
+    if args.lat_min != -90.0 or args.lat_max != 90.0:
+        t2m = t2m.sel(latitude=slice(args.lat_min, args.lat_max))
+        logger.info(
+            "  Latitude filtered to [%.1f, %.1f]",
+            args.lat_min,
+            args.lat_max,
+        )
     logger.info("  sizes=%s", dict(t2m.sizes))
 
     logger.info("Loading climatology thresholds...")
