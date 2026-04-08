@@ -7,13 +7,13 @@ a global Robinson projection.
 Usage:
     python animate_heat_cold_global.py \\
         --start-date 2020-01-01 --end-date 2020-03-01 \\
-        --fps 4 --n-workers 4
+        --fps 4 --n-workers 4 --quantile-lower 0.85 --quantile-upper 0.15
+        --output events_global.gif
 """
 
 import argparse
 import logging
 import time as time_module
-from typing import Literal
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -22,7 +22,6 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 from dask.distributed import Client, LocalCluster
-
 from heat_cold_bounds_global import (
     apply_consecutive_filter,
     build_exceedance_mask,
@@ -41,8 +40,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-_HW_COLOR = "#d73027"
-_FZ_COLOR = "#4575b4"
+_EVENT_COLOR = "#d73027"
 
 
 def animate_exceedance(
@@ -50,15 +48,15 @@ def animate_exceedance(
     dates: np.ndarray,
     lats: np.ndarray,
     lons: np.ndarray,
-    event_type: Literal["heat_wave", "cold_snap"],
+    lower_quantile: float | None,
+    upper_quantile: float | None,
     output_path: str,
     fps: int = 4,
 ) -> None:
     """Save an animated GIF of the daily filtered exceedance mask.
 
     Each frame shows one day's exceedance footprint on a global
-    Robinson projection. Active grid points are colored red (heat
-    wave) or blue (cold snap); inactive land and ocean are rendered
+    Robinson projection. Active grid points are colored red; inactive land and ocean are rendered
     in whitesmoke and light blue respectively.
 
     Args:
@@ -68,22 +66,21 @@ def animate_exceedance(
             filt_mask.
         lats: 1-D latitude array (ascending).
         lons: 1-D longitude array (0-360 degrees).
-        event_type: ``"heat_wave"`` or ``"cold_snap"``.
+        lower_quantile: Lower quantile for the event.
+        upper_quantile: Upper quantile for the event.
         output_path: Destination ``.gif`` file path.
         fps: Frames per second for the output GIF. Default 4.
     """
-    is_hw = event_type == "heat_wave"
-    color = _HW_COLOR if is_hw else _FZ_COLOR
-    kind = "Heat Wave" if is_hw else "Cold Snap"
     n_days = filt_mask.shape[0]
 
-    rgba = mcolors.to_rgba(color)
+    rgba = mcolors.to_rgba(_EVENT_COLOR)
     cmap = mcolors.ListedColormap(["none", rgba])
 
     fig, ax = plt.subplots(
         subplot_kw={"projection": ccrs.Robinson()},
-        figsize=(14, 7),
+        figsize=(12, 5.5),
     )
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.93, bottom=0.01)
     ax.set_global()
     ax.add_feature(cfeature.OCEAN, facecolor="lightblue", zorder=0)
     ax.add_feature(cfeature.LAND, facecolor="whitesmoke", zorder=0)
@@ -101,17 +98,22 @@ def animate_exceedance(
         shading="auto",
         zorder=1,
     )
-
+    if lower_quantile is not None and upper_quantile is not None:
+        kind = f"p{lower_quantile:.2f}-p{upper_quantile:.2f}"
+    elif lower_quantile is not None:
+        kind = f"p{lower_quantile:.2f}+"
+    else:
+        kind = f"p{upper_quantile:.2f}-"
     date_str = str(dates[0])[:10]
     title = ax.set_title(
-        f"{kind} Exceedance \u2014 {date_str}",
+        f"{kind} {date_str}",
         loc="left",
         fontsize=13,
     )
 
     def _update(di: int):
         mesh.set_array(filt_mask[di].astype(float).ravel())
-        title.set_text(f"{kind} Exceedance \u2014 {str(dates[di])[:10]}")
+        title.set_text(f"{kind} {str(dates[di])[:10]}")
         if di % 10 == 0:
             logger.info(
                 "  Rendering frame %d / %d  (%s)",
@@ -139,7 +141,7 @@ def animate_exceedance(
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Animate daily heat-wave and cold-snap exceedance masks "
+            "Animate daily exceedance masks "
             "from ERA5 reanalysis."
         ),
     )
@@ -154,22 +156,6 @@ def main() -> None:
         help="End date YYYY-MM-DD",
     )
     parser.add_argument(
-        "--output-heat",
-        default=None,
-        help=(
-            "Output GIF path for heat wave animation "
-            "(default: heat_exceedance_<start>_<end>.gif)"
-        ),
-    )
-    parser.add_argument(
-        "--output-cold",
-        default=None,
-        help=(
-            "Output GIF path for cold snap animation "
-            "(default: cold_exceedance_<start>_<end>.gif)"
-        ),
-    )
-    parser.add_argument(
         "--fps",
         type=int,
         default=4,
@@ -181,12 +167,24 @@ def main() -> None:
         default=4,
         help="Number of dask workers (default: 4)",
     )
+    parser.add_argument(
+        "--quantile-lower",
+        type=float,
+        default=None,
+        help="Lower quantile for the event",
+    )
+    parser.add_argument(
+        "--quantile-upper",
+        type=float,
+        default=None,
+        help="Upper quantile for the event",
+    )
+    parser.add_argument(
+        "--output",
+        default="events_global.gif",
+        help="Output GIF path",
+    )
     args = parser.parse_args()
-
-    if args.output_heat is None:
-        args.output_heat = f"heat_exceedance_{args.start_date}_{args.end_date}.gif"
-    if args.output_cold is None:
-        args.output_cold = f"cold_exceedance_{args.start_date}_{args.end_date}.gif"
 
     wall_start = time_module.time()
     client = Client(LocalCluster(n_workers=args.n_workers))
@@ -197,69 +195,46 @@ def main() -> None:
     logger.info("  sizes=%s", dict(t2m.sizes))
 
     logger.info("Loading climatology thresholds...")
-    clim_hw, _ = get_climatology_bounds(q_lower=0.85)
-    _, clim_fz = get_climatology_bounds(q_upper=0.15)
+    clim_lower, clim_upper = get_climatology_bounds(q_lower=args.quantile_lower, q_upper=args.quantile_upper)
 
     logger.info("Building land mask...")
     land_mask = build_land_mask(t2m.longitude, t2m.latitude)
 
     logger.info("Building exceedance masks (lazy)...")
-    hw_lazy = build_exceedance_mask(t2m, clim_hw, None, land_mask)
-    fz_lazy = build_exceedance_mask(t2m, None, clim_fz, land_mask)
+    event_lazy = build_exceedance_mask(t2m, clim_lower=clim_lower, clim_upper=clim_upper, land_mask=land_mask)
 
-    tdim = detect_time_dim(hw_lazy)
+    tdim = detect_time_dim(event_lazy)
 
-    logger.info("Computing heat wave mask...")
+    logger.info("Computing event mask...")
     t0 = time_module.time()
-    hw_da = hw_lazy.compute()
+    event_da = event_lazy.compute()
     logger.info("  done in %.1f s", time_module.time() - t0)
 
-    logger.info("Computing cold snap mask...")
-    t0 = time_module.time()
-    fz_da = fz_lazy.compute()
-    logger.info("  done in %.1f s", time_module.time() - t0)
-
-    dates = hw_da[tdim].values
-    lats = hw_da.latitude.values
-    lons = hw_da.longitude.values
-    hw_np = hw_da.values.astype(bool)
-    fz_np = fz_da.values.astype(bool)
-    del hw_da, fz_da
+    dates = event_da[tdim].values
+    lats = event_da.latitude.values
+    lons = event_da.longitude.values
+    event_np = event_da.values.astype(bool)
+    del event_da
 
     logger.info("Applying 3-day consecutive filter...")
-    hw_filt = apply_consecutive_filter(hw_np)
-    fz_filt = apply_consecutive_filter(fz_np)
+    event_filt = apply_consecutive_filter(event_np)
     logger.info(
         "  HW active cells: %d -> %d",
-        hw_np.sum(),
-        hw_filt.sum(),
+        event_np.sum(),
+        event_filt.sum(),
     )
-    logger.info(
-        "  FZ active cells: %d -> %d",
-        fz_np.sum(),
-        fz_filt.sum(),
-    )
-    del hw_np, fz_np
+    del event_np
 
     animate_exceedance(
-        hw_filt,
+        event_filt,
         dates,
         lats,
         lons,
-        "heat_wave",
-        args.output_heat,
+        lower_quantile=args.quantile_lower,
+        upper_quantile=args.quantile_upper,
+        output_path=args.output,
         fps=args.fps,
     )
-    animate_exceedance(
-        fz_filt,
-        dates,
-        lats,
-        lons,
-        "cold_snap",
-        args.output_cold,
-        fps=args.fps,
-    )
-
     client.close()
     logger.info("Done in %.1f s", time_module.time() - wall_start)
 
