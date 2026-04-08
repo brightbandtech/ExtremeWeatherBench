@@ -47,6 +47,9 @@ logger = logging.getLogger(__name__)
 MIN_CONSECUTIVE_DAYS = 3
 AREA_DECLINE_FRACTION = 0.5
 MIN_GRIDPOINTS = 500
+EXPANSION_DEGREES = 1
+MAX_SPATIAL_ITERATIONS = 20
+EDGE_VALIDITY_THRESHOLD = 0.5
 
 
 def get_climatology_thresholds(
@@ -111,6 +114,167 @@ def build_land_mask(
     land = regionmask.defined_regions.natural_earth_v5_0_0.land_110
     mask = land.mask(lons, lats)
     return mask == 0
+
+
+def _edge_valid_fraction(
+    mask_2d: np.ndarray,
+    land_2d: np.ndarray,
+    edge: str,
+    band_pts: int,
+) -> float:
+    """Return the fraction of land grid points on an edge that are active.
+
+    Ocean/masked points are excluded from both numerator and denominator
+    so coastal edges are not penalised.
+
+    Args:
+        mask_2d: 2-D boolean activity array (lat, lon).
+        land_2d: 2-D boolean land mask (lat, lon); True = land.
+        edge: One of "north", "south", "east", "west".
+        band_pts: Width of the edge strip in grid points.
+
+    Returns:
+        Fraction in [0, 1] of land points in the strip that are active,
+        or 0.0 if the strip contains no land points.
+
+    Raises:
+        ValueError: If edge is not one of the recognised values.
+    """
+    if edge == "north":
+        strip = mask_2d[-band_pts:, :]
+        land_strip = land_2d[-band_pts:, :]
+    elif edge == "south":
+        strip = mask_2d[:band_pts, :]
+        land_strip = land_2d[:band_pts, :]
+    elif edge == "west":
+        strip = mask_2d[:, :band_pts]
+        land_strip = land_2d[:, :band_pts]
+    elif edge == "east":
+        strip = mask_2d[:, -band_pts:]
+        land_strip = land_2d[:, -band_pts:]
+    else:
+        raise ValueError(f"Unknown edge: {edge}")
+    n_land = int(land_strip.sum())
+    if n_land == 0:
+        return 0.0
+    return float((strip & land_strip).sum()) / n_land
+
+
+def expand_event_bounds(
+    event: Dict,
+    filt_mask: np.ndarray,
+    dates: np.ndarray,
+    lats: np.ndarray,
+    lons: np.ndarray,
+    land_mask_np: np.ndarray,
+) -> Dict:
+    """Expand a detected event's bounding box using case-script logic.
+
+    Starting from the blob-tracked bounding box, expands each edge
+    outward while >= EDGE_VALIDITY_THRESHOLD of land points on that
+    edge are active on the peak-footprint day. Also computes and stores
+    max_consecutive_days within the expanded region.
+
+    The expansion matches the spatial-growth algorithm used in
+    heat_cold_bounds_case.py: 1-degree steps, ocean-heavy edges
+    disabled upfront, convergence when all active edges drop below 50%.
+
+    Args:
+        event: Event dict from detect_events (keys: start, end,
+            lat_min, lat_max, lon_min, lon_max).
+        filt_mask: Boolean array (time, lat, lon) with consecutive-day
+            filtering already applied, aligned with dates/lats/lons.
+        dates: 1-D datetime64 array of daily timestamps (axis 0).
+        lats: 1-D latitude array (axis 1).
+        lons: 1-D longitude array (axis 2).
+        land_mask_np: 2-D boolean array (lat, lon); True = land.
+
+    Returns:
+        The same event dict with updated lat_min/lat_max/lon_min/
+        lon_max and a new max_consecutive_days key.
+    """
+    grid_res = float(np.abs(np.diff(lats[:2]))[0]) if len(lats) > 1 else 0.25
+    band_pts = max(1, int(round(EXPANSION_DEGREES / grid_res)))
+
+    start_date = np.datetime64(event["start"])
+    end_date = np.datetime64(event["end"])
+    t_mask = (dates >= start_date) & (dates <= end_date)
+    ev_filt = filt_mask[t_mask]
+
+    if ev_filt.shape[0] == 0:
+        event["max_consecutive_days"] = 0
+        return event
+
+    def _lat_idx(val: float) -> int:
+        return int(np.argmin(np.abs(lats - val)))
+
+    def _lon_idx(val: float) -> int:
+        return int(np.argmin(np.abs(lons - val)))
+
+    idx_s0 = _lat_idx(event["lat_min"])
+    idx_n0 = _lat_idx(event["lat_max"])
+    idx_w0 = _lon_idx(event["lon_min"])
+    idx_e0 = _lon_idx(event["lon_max"])
+
+    daily_counts = ev_filt.sum(axis=(1, 2))
+    max_count = daily_counts.max()
+    tied_days = np.where(daily_counts == max_count)[0]
+    n_tied = len(tied_days)
+    if n_tied <= 2:
+        peak_day = int(tied_days[-1]) if n_tied == 2 else int(tied_days[0])
+    else:
+        peak_day = int(tied_days[(n_tied - 1) // 2])
+    peak_mask = ev_filt[peak_day]
+
+    idx_s, idx_n, idx_w, idx_e = idx_s0, idx_n0, idx_w0, idx_e0
+
+    init_region_land = land_mask_np[idx_s0 : idx_n0 + 1, idx_w0 : idx_e0 + 1]
+    edges_active: Dict[str, bool] = {}
+    for edge in ("north", "south", "east", "west"):
+        if edge == "north":
+            strip = init_region_land[-band_pts:, :]
+        elif edge == "south":
+            strip = init_region_land[:band_pts, :]
+        elif edge == "west":
+            strip = init_region_land[:, :band_pts]
+        else:
+            strip = init_region_land[:, -band_pts:]
+        land_frac = strip.sum() / max(strip.size, 1)
+        edges_active[edge] = bool(land_frac >= 0.25)
+
+    for _ in range(MAX_SPATIAL_ITERATIONS):
+        region = peak_mask[idx_s : idx_n + 1, idx_w : idx_e + 1]
+        land_region = land_mask_np[idx_s : idx_n + 1, idx_w : idx_e + 1]
+
+        all_done = True
+        for edge in list(edges_active.keys()):
+            if not edges_active[edge]:
+                continue
+            frac = _edge_valid_fraction(region, land_region, edge, band_pts)
+            if frac < EDGE_VALIDITY_THRESHOLD:
+                edges_active[edge] = False
+            else:
+                all_done = False
+                if edge == "north":
+                    idx_n = min(len(lats) - 1, idx_n + band_pts)
+                elif edge == "south":
+                    idx_s = max(0, idx_s - band_pts)
+                elif edge == "east":
+                    idx_e = min(len(lons) - 1, idx_e + band_pts)
+                elif edge == "west":
+                    idx_w = max(0, idx_w - band_pts)
+
+        if all_done:
+            break
+
+    fin_filt = ev_filt[:, idx_s : idx_n + 1, idx_w : idx_e + 1]
+    consec = max_consecutive_days(fin_filt)
+    event["lat_min"] = float(lats[idx_s])
+    event["lat_max"] = float(lats[idx_n])
+    event["lon_min"] = float(lons[idx_w])
+    event["lon_max"] = float(lons[idx_e])
+    event["max_consecutive_days"] = int(consec.max()) if consec.size > 0 else 0
+    return event
 
 
 def build_exceedance_masks(
@@ -523,6 +687,7 @@ def events_to_dataframe(
         "latitude_max",
         "longitude_min",
         "longitude_max",
+        "max_consecutive_days",
     ]
     if not events:
         return pd.DataFrame(columns=columns)
@@ -548,6 +713,7 @@ def events_to_dataframe(
             "latitude_max": e["lat_max"],
             "longitude_min": e["lon_min"],
             "longitude_max": e["lon_max"],
+            "max_consecutive_days": e.get("max_consecutive_days", 0),
         }
         for e in events
     ]
@@ -673,6 +839,7 @@ def main():
 
     logger.info("Building land mask...")
     land_mask = build_land_mask(t2m.longitude, t2m.latitude)
+    land_mask_np = land_mask.values.astype(bool)
 
     logger.info("Building exceedance masks (lazy)...")
     hw_lazy, fz_lazy = build_exceedance_masks(
@@ -742,6 +909,21 @@ def main():
         "cold_snap",
     )
     logger.info("  %d events", len(fz_ev))
+
+    logger.info(
+        "Expanding event bounds (case-script spatial logic, %d-deg steps)...",
+        EXPANSION_DEGREES,
+    )
+    t0 = time_module.time()
+    hw_ev = [
+        expand_event_bounds(ev, hw_filt, dates, lats, lons, land_mask_np)
+        for ev in hw_ev
+    ]
+    fz_ev = [
+        expand_event_bounds(ev, fz_filt, dates, lats, lons, land_mask_np)
+        for ev in fz_ev
+    ]
+    logger.info("  done in %.1f s", time_module.time() - t0)
 
     logger.info("Computing max-consecutive-days fields for plots...")
     stem = str(pathlib.Path(args.output).with_suffix(""))
