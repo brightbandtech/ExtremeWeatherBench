@@ -66,10 +66,7 @@ def resolve_op(op_str: str) -> Callable:
         ValueError: If op_str is not a recognised operator.
     """
     if op_str not in _OP_MAP:
-        raise ValueError(
-            f"Unknown operator {op_str!r}; "
-            f"choose from {list(_OP_MAP)}"
-        )
+        raise ValueError(f"Unknown operator {op_str!r}; choose from {list(_OP_MAP)}")
     return _OP_MAP[op_str]
 
 
@@ -516,7 +513,8 @@ def compute_consecutive_field(
 
     logger.info(
         "Loading q=%.2f climatology (op=%s)...",
-        quantile, op_str,
+        quantile,
+        op_str,
     )
     clim = defaults.get_climatology(quantile).sortby("latitude")
 
@@ -539,15 +537,11 @@ def compute_consecutive_field(
     logger.info("Computing 6-hourly exceedance...")
     exc_6h = cmp(t2m, clim_aligned)
 
-    daily_all_pass = (
-        exc_6h.resample({tdim: "1D"}).min().astype(bool)
-    )
+    daily_all_pass = exc_6h.resample({tdim: "1D"}).min().astype(bool)
 
     logger.info("Building land mask...")
     land = regionmask.defined_regions.natural_earth_v5_0_0.land_110
-    land_mask = land.mask(
-        daily_all_pass.longitude, daily_all_pass.latitude
-    ) == 0
+    land_mask = land.mask(daily_all_pass.longitude, daily_all_pass.latitude) == 0
 
     exc = daily_all_pass & land_mask
     mask_np = exc.compute().values.astype(bool)

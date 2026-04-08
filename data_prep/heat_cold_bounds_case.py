@@ -23,7 +23,7 @@ import importlib
 import logging
 import pathlib
 import time as time_module
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional, cast
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -93,9 +93,12 @@ def _apply_consecutive_filter(
     strict = (
         ndimage.binary_dilation(
             ndimage.binary_erosion(
-                mask, structure=struct, border_value=False,
+                mask,
+                structure=struct,
+                border_value=False,
             ),
-            structure=struct, border_value=False,
+            structure=struct,
+            border_value=False,
         )
         & mask
     )
@@ -107,16 +110,21 @@ def _apply_consecutive_filter(
     close_k = np.zeros((2 * max_grace_days + 1, 1, 1), dtype=bool)
     close_k[:, 0, 0] = True
     filled = ndimage.binary_closing(
-        mask, structure=close_k, border_value=False,
+        mask,
+        structure=close_k,
+        border_value=False,
     )
 
     # Runs of min_days+ in the gap-filled mask
     filled_runs = (
         ndimage.binary_dilation(
             ndimage.binary_erosion(
-                filled, structure=struct, border_value=False,
+                filled,
+                structure=struct,
+                border_value=False,
             ),
-            structure=struct, border_value=False,
+            structure=struct,
+            border_value=False,
         )
         & filled
     )
@@ -345,9 +353,8 @@ def process_event(
 
     # Time range and spatial pre-fetch extent
     start_date = pd.Timestamp(single_case.start_date) - pd.Timedelta(days=3)
-    end_date = (
-        pd.Timestamp(single_case.end_date)
-        + pd.Timedelta(days=TEMPORAL_LOAD_BUFFER_DAYS)
+    end_date = pd.Timestamp(single_case.end_date) + pd.Timedelta(
+        days=TEMPORAL_LOAD_BUFFER_DAYS
     )
 
     pot_lat_min = max(
@@ -427,9 +434,7 @@ def process_event(
 
     exc_6h = cmp(t2m, clim_aligned)
 
-    daily_all_pass = (
-        exc_6h.resample({tdim: "1D"}).min().astype(bool)
-    )
+    daily_all_pass = exc_6h.resample({tdim: "1D"}).min().astype(bool)
 
     land_reg = regionmask.defined_regions.natural_earth_v5_0_0.land_110
     land_mask = (
@@ -447,9 +452,7 @@ def process_event(
 
     all_lats = daily_all_pass.latitude.values
     all_lons = daily_all_pass.longitude.values
-    grid_res = (
-        np.abs(np.diff(all_lats[:2]))[0] if len(all_lats) > 1 else 0.25
-    )
+    grid_res = np.abs(np.diff(all_lats[:2]))[0] if len(all_lats) > 1 else 0.25
     band_pts = max(1, int(round(EXPANSION_DEGREES / grid_res)))
 
     def _lat_idx(val: float) -> int:
@@ -497,17 +500,14 @@ def process_event(
             slice(idx_w0, idx_e0 + 1),
         )
         currently_active = (
-            mask_np[t][box_sl]
-            & mask_np[t - 1][box_sl]
-            & mask_np[t - 2][box_sl]
+            mask_np[t][box_sl] & mask_np[t - 1][box_sl] & mask_np[t - 2][box_sl]
         )
         active_land = int((currently_active & box_land).sum())
         frac = active_land / n_land_pts
 
         if t == 2 and frac < EDGE_VALIDITY_THRESHOLD:
             logger.warning(
-                "  Day 3: only %.1f%% of land points have"
-                " 3 consecutive days (< 50%%)",
+                "  Day 3: only %.1f%% of land points have 3 consecutive days (< 50%%)",
                 frac * 100,
             )
 
@@ -515,8 +515,7 @@ def process_event(
             if frac >= EDGE_VALIDITY_THRESHOLD:
                 established = True
                 logger.info(
-                    "  Event established at day %d"
-                    " (%.1f%% of land points active)",
+                    "  Event established at day %d (%.1f%% of land points active)",
                     t,
                     frac * 100,
                 )
@@ -524,8 +523,7 @@ def process_event(
             if frac < EDGE_VALIDITY_THRESHOLD:
                 final_t = t + 1
                 logger.info(
-                    "  Temporal stop at day %d"
-                    " (%.1f%% < 50%% of land points)",
+                    "  Temporal stop at day %d (%.1f%% < 50%% of land points)",
                     t,
                     frac * 100,
                 )
@@ -539,8 +537,7 @@ def process_event(
 
     if not established:
         logger.warning(
-            "  Case %d: event never reached 50%% of land"
-            " points — using all %d days",
+            "  Case %d: event never reached 50%% of land points — using all %d days",
             single_case.case_id_number,
             final_t,
         )
@@ -567,8 +564,7 @@ def process_event(
         peak_day = int(tied_days[(n_tied - 1) // 2])
     peak_mask = filtered[peak_day]
     logger.info(
-        "  Peak footprint on day %d (%d active grid points,"
-        " %d tied days)",
+        "  Peak footprint on day %d (%d active grid points, %d tied days)",
         peak_day,
         int(max_count),
         n_tied,
@@ -581,9 +577,7 @@ def process_event(
 
     # Pre-check: disable edges that are >= 95% ocean
     # in the initial box (prevents expansion through water).
-    init_region_land = land_mask_np[
-        idx_s0 : idx_n0 + 1, idx_w0 : idx_e0 + 1
-    ]
+    init_region_land = land_mask_np[idx_s0 : idx_n0 + 1, idx_w0 : idx_e0 + 1]
     edges_active = {}
     for edge in ("north", "south", "east", "west"):
         if edge == "north":
@@ -598,8 +592,7 @@ def process_event(
         edges_active[edge] = land_frac >= 0.25
         if not edges_active[edge]:
             logger.info(
-                "  %s edge disabled (%.1f%% land"
-                " in initial box)",
+                "  %s edge disabled (%.1f%% land in initial box)",
                 edge.capitalize(),
                 land_frac * 100,
             )
@@ -608,9 +601,7 @@ def process_event(
     for iteration in range(MAX_ITERATIONS):
         n_iter = iteration + 1
         region = peak_mask[idx_s : idx_n + 1, idx_w : idx_e + 1]
-        land_region = land_mask_np[
-            idx_s : idx_n + 1, idx_w : idx_e + 1
-        ]
+        land_region = land_mask_np[idx_s : idx_n + 1, idx_w : idx_e + 1]
 
         all_done = True
         for edge in list(edges_active.keys()):
@@ -629,13 +620,15 @@ def process_event(
                 all_done = False
                 if edge == "north":
                     idx_n = min(
-                        len(all_lats) - 1, idx_n + band_pts,
+                        len(all_lats) - 1,
+                        idx_n + band_pts,
                     )
                 elif edge == "south":
                     idx_s = max(0, idx_s - band_pts)
                 elif edge == "east":
                     idx_e = min(
-                        len(all_lons) - 1, idx_e + band_pts,
+                        len(all_lons) - 1,
+                        idx_e + band_pts,
                     )
                 elif edge == "west":
                     idx_w = max(0, idx_w - band_pts)
@@ -656,9 +649,7 @@ def process_event(
     fin_lons = all_lons[idx_w : idx_e + 1]
     fin_filtered = filtered[:, idx_s : idx_n + 1, idx_w : idx_e + 1]
     consec = max_consecutive_days(fin_filtered)
-    peak_gridpoints = int(
-        (consec >= MIN_CONSECUTIVE_DAYS).sum()
-    )
+    peak_gridpoints = int((consec >= MIN_CONSECUTIVE_DAYS).sum())
 
     result = {
         "case_id": single_case.case_id_number,
@@ -678,8 +669,7 @@ def process_event(
         "_peak_gridpoints": peak_gridpoints,
     }
     logger.info(
-        "  Final bounds: lat [%.2f, %.2f], lon [%.2f, %.2f]"
-        " (%d days, %d iterations)",
+        "  Final bounds: lat [%.2f, %.2f], lon [%.2f, %.2f] (%d days, %d iterations)",
         result["latitude_min"],
         result["latitude_max"],
         result["longitude_min"],
@@ -691,14 +681,12 @@ def process_event(
     kind = "heatwave" if is_heatwave else "freeze"
     start = result["start_date"][:10]
     end = result["end_date"][:10]
-    out_png = str(
-        out_dir / f"case_{result['case_id']}_consecutive_{kind}_days.png"
-    )
+    out_png = str(out_dir / f"case_{result['case_id']}_consecutive_{kind}_days.png")
     plot_consecutive_map(
         consec,
         fin_lats,
         fin_lons,
-        single_case.event_type,
+        cast(Literal["heat_wave", "cold_snap"], single_case.event_type),
         title=(
             f"Consecutive {kind.capitalize()} Days"
             f" — {result['title']}\n{start} to {end}"
@@ -714,10 +702,7 @@ def process_event(
         result["longitude_min"],
         result["longitude_max"],
     )
-    peak_png = str(
-        out_dir
-        / f"case_{result['case_id']}_peak_day_{kind}.png"
-    )
+    peak_png = str(out_dir / f"case_{result['case_id']}_peak_day_{kind}.png")
     plot_peak_day_with_bounds(
         peak_mask,
         all_lats,
@@ -726,8 +711,7 @@ def process_event(
         final_box,
         single_case.event_type,
         title=(
-            f"Peak Footprint (day {peak_day})"
-            f" — {result['title']}\n{start} to {end}"
+            f"Peak Footprint (day {peak_day}) — {result['title']}\n{start} to {end}"
         ),
         output_path=peak_png,
     )
@@ -808,13 +792,9 @@ def write_bounds_to_yaml(
             entries are ignored).
         yaml_path: Path to the events.yaml file to update in-place.
     """
-    result_map = {
-        r["case_id"]: r for r in results if r is not None
-    }
+    result_map = {r["case_id"]: r for r in results if r is not None}
     if not result_map:
-        logger.warning(
-            "write_bounds_to_yaml: no valid results, skipping."
-        )
+        logger.warning("write_bounds_to_yaml: no valid results, skipping.")
         return
 
     yaml = YAML(typ="rt")
@@ -921,12 +901,11 @@ def main():
 
     old_cases = _load_base_temp_events()
     hw_fz = [
-        e for e in old_cases
+        e
+        for e in old_cases
         if e.event_type in ("heat_wave", "freeze")
-        and (args.case_min is None
-             or e.case_id_number >= args.case_min)
-        and (args.case_max is None
-             or e.case_id_number <= args.case_max)
+        and (args.case_min is None or e.case_id_number >= args.case_min)
+        and (args.case_max is None or e.case_id_number <= args.case_max)
     ]
     logger.info(
         "Found %d heat_wave / freeze events in base_temp_events.yaml",
@@ -937,7 +916,8 @@ def main():
 
     results = joblib.Parallel(n_jobs=args.n_workers)(
         joblib.delayed(process_event)(
-            c, out_dir,
+            c,
+            out_dir,
             quantile=args.quantile,
             op_str=args.operator,
         )

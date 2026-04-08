@@ -164,10 +164,12 @@ def build_exceedance_masks(
     doy_capped = doy.clip(max=max_clim_doy)
 
     clim_hw_aligned = clim_hw.sel(
-        dayofyear=doy_capped, hour=hour,
+        dayofyear=doy_capped,
+        hour=hour,
     ).reindex_like(t2m, method="nearest")
     clim_fz_aligned = clim_fz.sel(
-        dayofyear=doy_capped, hour=hour,
+        dayofyear=doy_capped,
+        hour=hour,
     ).reindex_like(t2m, method="nearest")
 
     hw_6h = cmp_hw(t2m, clim_hw_aligned)
@@ -175,13 +177,15 @@ def build_exceedance_masks(
 
     if clim_hw_upper is not None:
         clim_hw_upper_aligned = clim_hw_upper.sel(
-            dayofyear=doy_capped, hour=hour,
+            dayofyear=doy_capped,
+            hour=hour,
         ).reindex_like(t2m, method="nearest")
         hw_6h = hw_6h & (t2m < clim_hw_upper_aligned)
 
     if clim_fz_lower is not None:
         clim_fz_lower_aligned = clim_fz_lower.sel(
-            dayofyear=doy_capped, hour=hour,
+            dayofyear=doy_capped,
+            hour=hour,
         ).reindex_like(t2m, method="nearest")
         fz_6h = fz_6h & (t2m > clim_fz_lower_aligned)
 
@@ -219,9 +223,12 @@ def apply_consecutive_filter(
     strict = (
         ndimage.binary_dilation(
             ndimage.binary_erosion(
-                mask, structure=struct, border_value=False,
+                mask,
+                structure=struct,
+                border_value=False,
             ),
-            structure=struct, border_value=False,
+            structure=struct,
+            border_value=False,
         )
         & mask
     )
@@ -232,15 +239,20 @@ def apply_consecutive_filter(
     close_k = np.zeros((2 * max_grace_days + 1, 1, 1), dtype=bool)
     close_k[:, 0, 0] = True
     filled = ndimage.binary_closing(
-        mask, structure=close_k, border_value=False,
+        mask,
+        structure=close_k,
+        border_value=False,
     )
 
     filled_runs = (
         ndimage.binary_dilation(
             ndimage.binary_erosion(
-                filled, structure=struct, border_value=False,
+                filled,
+                structure=struct,
+                border_value=False,
             ),
-            structure=struct, border_value=False,
+            structure=struct,
+            border_value=False,
         )
         & filled
     )
@@ -574,18 +586,14 @@ def main():
         type=float,
         default=0.85,
         help=(
-            "Climatology quantile for heat waves "
-            f"({VALID_QUANTILES}; default: 0.85)"
+            f"Climatology quantile for heat waves ({VALID_QUANTILES}; default: 0.85)"
         ),
     )
     parser.add_argument(
         "--quantile-fz",
         type=float,
         default=0.15,
-        help=(
-            "Climatology quantile for freezes "
-            f"({VALID_QUANTILES}; default: 0.15)"
-        ),
+        help=(f"Climatology quantile for freezes ({VALID_QUANTILES}; default: 0.15)"),
     )
     parser.add_argument(
         "--quantile-hw-upper",
@@ -621,19 +629,13 @@ def main():
         "--lat-min",
         type=float,
         default=-90.0,
-        help=(
-            "Minimum latitude to include in detection. "
-            "Default is -90.0"
-        ),
+        help=("Minimum latitude to include in detection. Default is -90.0"),
     )
     parser.add_argument(
         "--lat-max",
         type=float,
         default=90.0,
-        help=(
-            "Maximum latitude to include in detection. "
-            "Default is 90.0"
-        ),
+        help=("Maximum latitude to include in detection. Default is 90.0"),
     )
     args = parser.parse_args()
 
@@ -662,13 +664,11 @@ def main():
     logger.info("  sizes=%s", dict(t2m.sizes))
 
     logger.info("Loading climatology thresholds...")
-    clim_hw, clim_fz, clim_hw_upper, clim_fz_lower = (
-        get_climatology_thresholds(
-            q_hw=args.quantile_hw,
-            q_fz=args.quantile_fz,
-            q_hw_upper=args.quantile_hw_upper,
-            q_fz_lower=args.quantile_fz_lower,
-        )
+    clim_hw, clim_fz, clim_hw_upper, clim_fz_lower = get_climatology_thresholds(
+        q_hw=args.quantile_hw,
+        q_fz=args.quantile_fz,
+        q_hw_upper=args.quantile_hw_upper,
+        q_fz_lower=args.quantile_fz_lower,
     )
 
     logger.info("Building land mask...")
