@@ -15,13 +15,13 @@ active area drops below 50% of peak.
 
 Usage:
     # Anything above the 85th percentile (heat wave)
-    python heat_cold_bounds_global.py \\
+    python temperature_bounds_global.py \\
         --start-date 2023-06-01 --end-date 2023-09-01 \\
         --quantile-lower 0.85 --operator-lower ">=" \\
         --event-type heat_wave --output heat_cold_global.csv
 
     # Band between 50th and 85th (moderate heat)
-    python heat_cold_bounds_global.py \\
+    python temperature_bounds_global.py \\
         --start-date 2023-06-01 --end-date 2023-09-01 \\
         --quantile-lower 0.50 --quantile-upper 0.85 \\
         --event-type heat_wave --output heat_cold_global.csv

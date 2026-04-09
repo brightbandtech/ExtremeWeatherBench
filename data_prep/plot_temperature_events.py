@@ -4,7 +4,7 @@
 Handles both event types from a single entry point. The event type
 is auto-detected from events.yaml; no flag required.
 
-Exported functions used by heat_cold_bounds_global.py and
+Exported functions used by temperature_bounds_global.py and
 heat_cold_bounds_case.py:
     max_consecutive_days  -- compute field from boolean mask
     plot_consecutive_map  -- pcolormesh map (Reds/Blues, discrete)
