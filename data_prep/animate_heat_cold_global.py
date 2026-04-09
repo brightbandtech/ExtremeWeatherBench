@@ -140,10 +140,7 @@ def animate_exceedance(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description=(
-            "Animate daily exceedance masks "
-            "from ERA5 reanalysis."
-        ),
+        description=("Animate daily exceedance masks from ERA5 reanalysis."),
     )
     parser.add_argument(
         "--start-date",
@@ -195,13 +192,17 @@ def main() -> None:
     logger.info("  sizes=%s", dict(t2m.sizes))
 
     logger.info("Loading climatology thresholds...")
-    clim_lower, clim_upper = get_climatology_bounds(q_lower=args.quantile_lower, q_upper=args.quantile_upper)
+    clim_lower, clim_upper = get_climatology_bounds(
+        q_lower=args.quantile_lower, q_upper=args.quantile_upper
+    )
 
     logger.info("Building land mask...")
     land_mask = build_land_mask(t2m.longitude, t2m.latitude)
 
     logger.info("Building exceedance masks (lazy)...")
-    event_lazy = build_exceedance_mask(t2m, clim_lower=clim_lower, clim_upper=clim_upper, land_mask=land_mask)
+    event_lazy = build_exceedance_mask(
+        t2m, clim_lower=clim_lower, clim_upper=clim_upper, land_mask=land_mask
+    )
 
     tdim = detect_time_dim(event_lazy)
 
