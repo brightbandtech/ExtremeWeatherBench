@@ -34,7 +34,6 @@ import time as time_module
 from typing import Dict, List, Optional, Tuple
 
 import joblib
-
 import numba as nb
 import numpy as np
 import pandas as pd
@@ -62,7 +61,7 @@ logger = logging.getLogger(__name__)
 MIN_CONSECUTIVE_DAYS = 3
 AREA_DECLINE_FRACTION = 0.5
 MIN_GRIDPOINTS = 500
-MIN_AREA_KM2 = 200_000.0
+MIN_AREA_KM2 = 200000.0
 EXPANSION_DEGREES = 1
 MAX_SPATIAL_ITERATIONS = 20
 EDGE_VALIDITY_THRESHOLD = 0.5
