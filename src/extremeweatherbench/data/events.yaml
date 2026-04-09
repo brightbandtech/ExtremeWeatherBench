@@ -1878,7 +1878,7 @@
     type: bounded_region
     parameters:
       latitude_min: 10.5
-      latitude_max: 28.3
+      latitude_max: 32.0
       longitude_min: 177.9
       longitude_max: 231.5
   event_type: tropical_cyclone
@@ -1892,7 +1892,7 @@
       latitude_min: 10.9
       latitude_max: 19.9
       longitude_min: 105.0
-      longitude_max: 139.8
+      longitude_max: 143.0
   event_type: tropical_cyclone
 - case_id_number: 159
   title: Prapiroon (Butchoy)
@@ -1901,10 +1901,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 12.1
+      latitude_min: 5.7
       latitude_max: 24.0
       longitude_min: 104.3
-      longitude_max: 120.2
+      longitude_max: 131.7
   event_type: tropical_cyclone
 - case_id_number: 160
   title: Gaemi (Carina)
@@ -1915,7 +1915,7 @@
     parameters:
       latitude_min: 9.4
       latitude_max: 32.0
-      longitude_min: 110.6
+      longitude_min: 106.7
       longitude_max: 135.5
   event_type: tropical_cyclone
 - case_id_number: 161
@@ -1928,7 +1928,7 @@
       latitude_min: 13.8
       latitude_max: 37.8
       longitude_min: 127.7
-      longitude_max: 146.3
+      longitude_max: 149.7
   event_type: tropical_cyclone
 - case_id_number: 162
   title: Yagi (Enteng)
@@ -1937,10 +1937,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 9.9
+      latitude_min: 6.8
       latitude_max: 23.8
-      longitude_min: 101.8
-      longitude_max: 128.7
+      longitude_min: 98.7
+      longitude_max: 138.8
   event_type: tropical_cyclone
 - case_id_number: 163
   title: Bebinca (Ferdie)
@@ -1988,7 +1988,7 @@
       latitude_min: 18.8
       latitude_max: 26.1
       longitude_min: 59.0
-      longitude_max: 70.7
+      longitude_max: 79.3
   event_type: tropical_cyclone
 - case_id_number: 167
   title: Kirrily
@@ -2009,7 +2009,7 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: -26.5
+      latitude_min: -35.5
       latitude_max: -11.1
       longitude_min: 50.8
       longitude_max: 68.1
@@ -2023,8 +2023,8 @@
     parameters:
       latitude_min: -31.3
       latitude_max: -18.5
-      longitude_min: 38.2
-      longitude_max: 59.9
+      longitude_min: 32.9
+      longitude_max: 69.9
   event_type: tropical_cyclone
 - case_id_number: 170
   title: Franklin
@@ -2216,7 +2216,7 @@
       latitude_min: 21.1
       latitude_max: 50.0
       longitude_min: 132.3
-      longitude_max: 152.0
+      longitude_max: 156.3
   event_type: tropical_cyclone
 - case_id_number: 186
   title: Saola (Goring)
@@ -2777,9 +2777,9 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: -24.7
+      latitude_min: -31.0
       latitude_max: -9.3
-      longitude_min: 28.8
+      longitude_min: 20.4
       longitude_max: 88.1
   event_type: tropical_cyclone
 - case_id_number: 233
@@ -3029,7 +3029,7 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 16.6
+      latitude_min: 11.6
       latitude_max: 26.4
       longitude_min: 86.0
       longitude_max: 92.8
