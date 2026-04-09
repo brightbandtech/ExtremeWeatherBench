@@ -1430,6 +1430,13 @@ def _calculate_event_duration(
     instead so that total hours are accumulated per unique
     preserve_dims value.
 
+    For the init_time case the predecessor lookup shifts both
+    valid_time and lead_time by the same temporal distance
+    (expected_gap) so that the predecessor cell belongs to the
+    same forecast run.  The number of lead_time index steps is
+    expected_gap / lead_time_step (e.g. 4 for a daily target
+    on a 6 h lead_time grid).
+
     Args:
         mask: Boolean (or NaN-filled bool) DataArray with a
             valid_time dimension.
@@ -1445,7 +1452,25 @@ def _calculate_event_duration(
     vt = mask.valid_time.values
     gaps = np.concatenate([[False], (vt[1:] - vt[:-1]) == expected_gap])
     is_expected_gap = xr.DataArray(gaps, dims=["valid_time"], coords={"valid_time": vt})
-    mask_prev = mask.shift(valid_time=1, fill_value=False)
+    # When init_time is only a coordinate (not a dim) and lead_time is a dim,
+    # consecutive timesteps within one forecast run follow the diagonal of the
+    # (valid_time, lead_time) grid.  Shifting along valid_time alone always
+    # lands on NaN-filled cells (sparse outer-join grid), so shift both axes.
+    # The number of lead_time index steps must equal expected_gap in time so
+    # that the predecessor cell has the same init_time (vt - lead = const).
+    # For daily targets aligned to a 6 h lead_time grid this is 24h/6h = 4.
+    if "lead_time" in mask.dims and preserve_dims not in mask.dims:
+        lt_step = np.unique(np.diff(mask.lead_time.values))
+        n_lead_steps = (
+            max(1, int(expected_gap / lt_step[0]))
+            if len(lt_step) == 1 and lt_step[0] > np.timedelta64(0)
+            else 1
+        )
+        mask_prev = mask.shift(
+            {"valid_time": 1, "lead_time": n_lead_steps}, fill_value=False
+        )
+    else:
+        mask_prev = mask.shift(valid_time=1, fill_value=False)
     consecutive_pairs = mask & mask_prev & is_expected_gap
     hours = consecutive_pairs * time_resolution_hours
     if preserve_dims in hours.dims:
