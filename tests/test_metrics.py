@@ -1062,8 +1062,8 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
-        # Should be 1.0: forecast mask all 1s, target mask all 0s
-        assert np.isclose(result.values[0], 1.0)
+        # 9 consecutive 6 h intervals → 54 h; target = 0 h → ME = 54 h
+        assert np.isclose(result.values[0], 54.0)
 
     def test_me_0_5_half_forecast_exceeds(self):
         """Test MeanError= 0.5 when half forecast exceeds, all target below."""
@@ -1079,8 +1079,8 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
-        # Should be 0.5: forecast mask: 5 ones, 5 zeros; target: all zeros
-        assert np.isclose(result.values[0], 0.5)
+        # 4 consecutive 6 h intervals → 24 h; target = 0 h → ME = 24 h
+        assert np.isclose(result.values[0], 24.0)
 
     def test_me_neg_1_0_all_target_exceeds(self):
         """Test MeanError= -1.0 when all forecast below, all target exceeds."""
@@ -1095,8 +1095,8 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
-        # Should be -1.0: forecast mask all 0s, target mask all 1s
-        assert np.isclose(result.values[0], -1.0)
+        # forecast = 0 h; target = 9 intervals × 6 h = 54 h → ME = -54 h
+        assert np.isclose(result.values[0], -54.0)
 
     def test_me_0_0_forecast_equals_target(self):
         """Test MeanError= 0.0 when forecast equals target."""
@@ -1128,8 +1128,8 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
-        # Should be 0.3: forecast mask: 3 ones, 7 zeros; target: all zeros
-        assert np.isclose(result.values[0], 0.3)
+        # 2 consecutive 6 h intervals → 12 h; target = 0 h → ME = 12 h
+        assert np.isclose(result.values[0], 12.0)
 
     def test_me_with_lead_time_dimension(self):
         """Test MeanErrorwith forecast having lead_time dimension.
@@ -1201,16 +1201,20 @@ class TestDurationMeanError:
         # Expected pattern: [1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 4, 3, 2, 1]
         # This reflects the number of (lead_time, valid_time) combos per init
 
-        # All values should be positive (forecast exceeds, target doesn't)
-        assert np.all(result.values > 0)
+        # First init_time covers only the first valid_time (no previous
+        # timestep), so its consecutive duration is 0 h; all others >= 0
+        assert np.all(result.values >= 0)
+        assert np.any(result.values > 0)
 
-        # Middle init_times should have the maximum value (n_lead_times)
+        # Middle init_times accumulate n_lead_times consecutive pairs
+        # each spanning time_resolution_hours (6 h) → max = 5 × 6 = 30 h
         max_value = np.max(result.values)
-        assert max_value == n_lead_times
+        assert max_value == n_lead_times * 6
 
-        # Edge init_times should have value 1 (only one combination)
-        assert result.values[0] == 1
-        assert result.values[-1] == 1
+        # First init_time: only (lt=max, vt=t0) — no prior timestep → 0 h
+        assert result.values[0] == 0
+        # Last init_time: only (lt=0, vt=t_max) — one pair → 6 h
+        assert result.values[-1] == 6
 
     def test_me_with_lead_time_partial_target_exceedance(self):
         """Test MeanErrorwith lead_time dims where target partially exceeds.
@@ -1320,13 +1324,11 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
-        # Should still be positive (forecast exceeds where not NaN)
-        # Result is reduced to scalar per init_time
+        # NaN at vt 2-3 (all locations) breaks the run into two segments:
+        # [0,1] → 1 interval and [4..9] → 5 intervals → (1+5)×6 = 36 h
         mean_result = float(result.values[0])
         assert mean_result > 0
-        # 8 out of 10 timesteps exceed (2 are NaN), target never exceeds
-        # So result should be 0.8 (8 timesteps where forecast=1, target=0)
-        assert np.isclose(mean_result, 0.8)
+        assert np.isclose(mean_result, 36.0)
 
     def test_me_with_nans_one_target_exceedance(self):
         """Test MeanErrorwith NaNs when one target value exceeds threshold.
@@ -1353,12 +1355,11 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
-        # Should be less than 1.0 because:
-        # - timestep 0: both exceed (diff=0)
-        # - timesteps 1-4, 7-9: forecast exceeds, target doesn't (diff=1)
-        # - timesteps 5-6: NaN positions excluded
-        assert result.values[0] < 1.0
+        # Partial NaN (one grid cell) does not affect the spatial mean;
+        # all 10 forecast timesteps still exceed → 9 intervals × 6 h = 54 h
+        # Target: only vt=0 is True; no consecutive pair → 0 h → ME = 54 h
         assert result.values[0] > 0
+        assert np.isclose(result.values[0], 54.0)
 
     def test_me_with_nans_all_but_nan_exceed(self):
         """Test MeanErrorwhen all non-NaN forecast/target values exceed threshold.
@@ -1416,10 +1417,11 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
-        # Result should be positive but less than previous tests
-        # because some positions where forecast>target are NaN
+        # Partial NaN does not affect spatial mean; forecast [0..5] True
+        # → 5 intervals × 6 h = 30 h; target [0..2] True → 2 intervals
+        # × 6 h = 12 h; ME = 30 − 12 = 18 h
         assert result.values[0] > 0
-        assert result.values[0] < 1.0
+        assert np.isclose(result.values[0], 18.0)
 
         # Verify that the computation completed without errors
         assert not np.isnan(result.values[0])
@@ -1445,8 +1447,8 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=300.0)
         result = metric.compute_metric(forecast=forecast, target=target)
 
-        # Should be 1.0: forecast mask all 1s, target mask all 0s
-        assert np.isclose(result.values[0], 1.0)
+        # 9 consecutive 6 h intervals → 54 h; target = 0 h → ME = 54 h
+        assert np.isclose(result.values[0], 54.0)
 
     def test_me_with_float_threshold_mixed(self):
         """Test MeanErrorwith float threshold and mixed exceedance."""
@@ -1463,9 +1465,9 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=300.0)
         result = metric.compute_metric(forecast=forecast, target=target)
 
-        # Forecast: 6 timesteps exceed, Target: 3 timesteps exceed
-        # MeanError= (6 - 3) / 10 = 0.3
-        assert np.isclose(result.values[0], 0.3)
+        # Forecast: 5 consecutive intervals × 6 h = 30 h
+        # Target: 2 consecutive intervals × 6 h = 12 h → ME = 18 h
+        assert np.isclose(result.values[0], 18.0)
 
     def test_float_and_climatology_produce_same_result(self):
         """Test that float threshold and equivalent climatology give same result."""
@@ -1515,9 +1517,8 @@ class TestDurationMeanError:
 
         # Result should be valid (not NaN) and correct
         assert not np.isnan(result.values[0])
-        assert np.isclose(
-            result.values[0], 1.0
-        )  # All forecast exceeds, all target below
+        # 9 consecutive 6 h intervals → 54 h; target = 0 h → ME = 54 h
+        assert np.isclose(result.values[0], 54.0)
 
     def test_sparse_array_with_climatology(self):
         """Test sparse arrays with climatology threshold criteria."""
@@ -1544,8 +1545,8 @@ class TestDurationMeanError:
 
         # Result should be valid
         assert not np.isnan(result.values[0])
-        # Forecast: 6 timesteps exceed, Target: 3 timesteps exceed
-        assert np.isclose(result.values[0], 0.3)
+        # Forecast: 5 intervals × 6 h = 30 h; Target: 2 × 6 h = 12 h
+        assert np.isclose(result.values[0], 18.0)
 
 
 class TestThresholdMetric:
