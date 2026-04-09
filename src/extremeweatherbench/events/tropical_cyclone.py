@@ -68,6 +68,7 @@ def generate_tc_tracks_by_init_time(
     max_gc_distance_dz_contour_degrees: float = 6.5,
     orography_filter_threshold: float = 150.0,
     wind_search_radius_degrees: float = 2.0,
+    dz_reference_radius_degrees: float = 1.0,
 ) -> xr.Dataset:
     """Process all init_times and detect tropical cyclones.
 
@@ -99,8 +100,9 @@ def generate_tc_tracks_by_init_time(
             actual grid resolution. Defaults to 1.0 degree
         max_spatial_distance_degrees: Max spatial distance for TC track data filtering
             in degrees. Defaults to 5.0 degrees
-        max_temporal_hours: Maximum temporal window from init_time in hours. Defaults
-            to 48.0 hours
+        max_temporal_hours: Temporal window around each valid_time within which
+            IBTrACS observations are accepted as spatial anchors. Applied to
+            all lead times. Defaults to 48.0 hours
         use_contour_validation: Whether to use contour validation. Defaults to True
         timestep_count_wind_minimum: Minimum number of lead times where the neighbourhood
             peak wind speed (max within wind_search_radius_degrees) is >= 10 m/s
@@ -120,6 +122,10 @@ def generate_tc_tracks_by_init_time(
             neighbourhood maximum wind speed around each detected peak, following
             TempestExtremes 2.1. Converted to grid points at runtime. Defaults
             to 2.0 degrees
+        dz_reference_radius_degrees: GCD radius within which the maximum DZ value
+            is taken as the reference before computing the DZ anomaly contour.
+            Matches TempestExtremes "_DIFF" operator's "1.0" reference parameter.
+            Defaults to 1.0 degree.
 
     Returns:
         xarray Dataset with detected tropical cyclone tracks
@@ -196,6 +202,7 @@ def generate_tc_tracks_by_init_time(
             "max_gc_distance_dz_contour_degrees": max_gc_distance_dz_contour_degrees,
             "orography_filter_threshold": orography_filter_threshold,
             "wind_search_radius_degrees": wind_search_radius_degrees,
+            "dz_reference_radius_degrees": dz_reference_radius_degrees,
         },
         input_core_dims=[
             ["lead_time", "latitude", "longitude"],
@@ -274,6 +281,7 @@ def _process_single_init_time(
     max_gc_distance_dz_contour_degrees: float,
     orography_filter_threshold: float,
     wind_search_radius_degrees: float = 2.0,
+    dz_reference_radius_degrees: float = 1.0,
 ) -> dict:
     """Process tropical cyclone track detection for a single init_time.
 
@@ -293,7 +301,7 @@ def _process_single_init_time(
         min_distance_between_peaks_degrees: Min GCD distance between peaks in degrees.
             Converted to grid points using actual grid resolution
         max_spatial_distance_degrees: Max spatial distance in degrees
-        max_temporal_hours: Max temporal buffer in hours
+        max_temporal_hours: Temporal window applied to all lead times in hours
         slp_contour_magnitude: SLP contour threshold in Pa
         dz_contour_magnitude: DZ contour threshold in m
         use_contour_validation: Whether to use contour validation
@@ -311,6 +319,8 @@ def _process_single_init_time(
             in m
         wind_search_radius_degrees: GCD radius in degrees for neighbourhood wind
             sampling, per TempestExtremes 2.1. Converted to grid points at runtime
+        dz_reference_radius_degrees: GCD radius within which the max DZ is used as
+            the contour reference (TempestExtremes "1.0" parameter). Defaults to 1.0
 
     Returns:
         Dict containing filtered list of detections for this init_time
@@ -348,8 +358,27 @@ def _process_single_init_time(
 
     detections = []
     active_tracks: dict[int, dict[str, float]] = {}
-    # Global track ID offset based on init_time_idx
     track_id_offset = init_time_idx * 10000
+
+    # Genesis = first IBTrACS observation with SLP ≤ 1020 hPa AND wind
+    # ≥ 10 m/s.  This may not be the chronologically earliest row.
+    GENESIS_WIND_THRESHOLD_MS = 10.0
+    genesis_candidates = tc_track_data_df[
+        (
+            tc_track_data_df["air_pressure_at_mean_sea_level"]
+            <= surface_pressure_threshold
+        )
+        & (tc_track_data_df["surface_wind_speed"] >= GENESIS_WIND_THRESHOLD_MS)
+    ].sort_values("valid_time")
+    if len(genesis_candidates) > 0:
+        ibtracs_genesis_row = genesis_candidates.iloc[0]
+    else:
+        ibtracs_genesis_row = tc_track_data_df.sort_values("valid_time").iloc[0]
+    ibtracs_genesis_time = pd.Timestamp(ibtracs_genesis_row["valid_time"])
+    ibtracs_genesis_lat = float(ibtracs_genesis_row["latitude"])
+    ibtracs_genesis_lon = float(ibtracs_genesis_row["longitude"])
+
+    init_after_genesis = current_init_time > ibtracs_genesis_time
 
     # Find peaks for all timesteps at once
     all_peaks = []
@@ -377,6 +406,8 @@ def _process_single_init_time(
             latitude_max_degrees=latitude_max_degrees,
             max_gc_distance_slp_contour_degrees=max_gc_distance_slp_contour_degrees,
             max_gc_distance_dz_contour_degrees=max_gc_distance_dz_contour_degrees,
+            dz_reference_radius_degrees=dz_reference_radius_degrees,
+            require_spatial_mask=False,
         )
 
         all_peaks.append(
@@ -388,7 +419,20 @@ def _process_single_init_time(
             }
         )
 
-    # Now assign tracks sequentially
+    # IBTrACS anchoring rules:
+    #
+    # A) init_time ≤ genesis:
+    #    - New tracks may only start when the forecast valid_time is within
+    #      ±max_temporal_hours of the IBTrACS genesis AND the peak is within
+    #      max_spatial_distance_degrees of the IBTrACS genesis location.
+    #    - Once a valid genesis point is anchored, all subsequent lead times
+    #      are UNBOUND (only 8° stitching applies).
+    #
+    # B) init_time > genesis (storm already exists in IBTrACS):
+    #    - Only lead_time=0 (timestep_idx=0) requires the spatial check:
+    #      peak must be within max_spatial_distance_degrees of ANY point on
+    #      the full IBTrACS track.
+    #    - All subsequent lead times are UNBOUND.
     next_track_id = 0
     for peak_data in all_peaks:
         peaks = peak_data["peaks"]
@@ -403,9 +447,6 @@ def _process_single_init_time(
             peak_lats = latitude[peaks[:, 0]]
             peak_lons = longitude[peaks[:, 1]]
             peak_slps = slp_slice[peaks[:, 0], peaks[:, 1]]
-            # Sample max wind within wind_search_radius_degrees of each
-            # detected peak (per TempestExtremes 2.1) to capture the eyewall
-            # rather than the low-wind eye at the SLP minimum.
             _nrows, _ncols = wind_slice.shape
             _nb = wind_search_radius_gridpts
             peak_winds = np.array(
@@ -420,14 +461,12 @@ def _process_single_init_time(
 
             unassigned_peaks = list(range(len(peaks)))
 
-            # Match to existing tracks (within 8 degrees)
+            # Continue existing tracks (within 8°)
             for track_id, last_pos in list(active_tracks.items()):
                 if not unassigned_peaks:
                     break
-
                 best_idx = None
                 best_distance = float("inf")
-
                 for peak_idx in unassigned_peaks:
                     distance = calc.haversine_distance(
                         [peak_lats[peak_idx], peak_lons[peak_idx]],
@@ -437,7 +476,6 @@ def _process_single_init_time(
                     if distance <= 8.0 and distance < best_distance:
                         best_distance = distance
                         best_idx = peak_idx
-
                 if best_idx is not None:
                     detections.append(
                         {
@@ -450,33 +488,72 @@ def _process_single_init_time(
                             "wind": peak_winds[best_idx],
                         }
                     )
-
                     active_tracks[track_id] = {
                         "latitude": peak_lats[best_idx],
                         "longitude": peak_lons[best_idx],
                     }
                     unassigned_peaks.remove(best_idx)
 
-            # Create new tracks for unassigned peaks
+            current_valid_time = valid_times_seq[timestep_idx]
+
             for peak_idx in unassigned_peaks:
+                peak_lat = peak_lats[peak_idx]
+                peak_lon = peak_lons[peak_idx]
+                near_ibtracs = False
+
+                if not init_after_genesis:
+                    # Rule A: init ≤ genesis — anchor to IBTrACS genesis
+                    # point only, and only within ±max_temporal_hours.
+                    genesis_diff_h = abs(
+                        (current_valid_time - ibtracs_genesis_time).total_seconds()
+                        / 3600
+                    )
+                    if genesis_diff_h <= max_temporal_hours:
+                        dist = calc.haversine_distance(
+                            [peak_lat, peak_lon],
+                            [ibtracs_genesis_lat, ibtracs_genesis_lon],
+                            units="degrees",
+                        )
+                        near_ibtracs = float(dist) <= max_spatial_distance_degrees
+                else:
+                    # Spatial check only at lead_time=0 (first timestep of this model run)
+                    if timestep_idx == 0:
+                        min_dist = min(
+                            float(
+                                calc.haversine_distance(
+                                    [peak_lat, peak_lon],
+                                    [float(r["latitude"]), float(r["longitude"])],
+                                    units="degrees",
+                                )
+                            )
+                            for _, r in tc_track_data_df.iterrows()
+                        )
+                        near_ibtracs = min_dist <= max_spatial_distance_degrees
+                    else:
+                        # Later lead times for post-genesis inits are
+                        # unbound — any contour-valid peak can start a
+                        # new track segment.
+                        near_ibtracs = True
+
+                if not near_ibtracs:
+                    continue
+
                 track_id = next_track_id
                 next_track_id += 1
-
                 detections.append(
                     {
                         "lead_time_index": lead_time_index,
                         "valid_time_index": valid_time_index,
                         "track_id": track_id + track_id_offset,
-                        "latitude": peak_lats[peak_idx],
-                        "longitude": peak_lons[peak_idx],
+                        "latitude": peak_lat,
+                        "longitude": peak_lon,
                         "slp": peak_slps[peak_idx],
                         "wind": peak_winds[peak_idx],
                     }
                 )
-
                 active_tracks[track_id] = {
-                    "latitude": peak_lats[peak_idx],
-                    "longitude": peak_lons[peak_idx],
+                    "latitude": peak_lat,
+                    "longitude": peak_lon,
                 }
 
     logger.debug(
@@ -551,22 +628,55 @@ def find_furthest_contour_from_point(
 
 
 def find_contours_from_point_specified_field(
-    field: xr.DataArray, point: tuple[float, float], level: float
+    field: xr.DataArray,
+    point: tuple[float, float],
+    level: float,
+    reference_radius_degrees: float = 0.0,
 ) -> Sequence[Sequence[tuple[float, float]]]:
     """Find the contours from a point for a specified field.
 
+    Mirrors the TempestExtremes closed-contour approach. The reference value
+    subtracted from the field before contouring is either:
+      * the field value at the candidate grid point (reference_radius_degrees=0,
+        used for SLP with the "0" parameter), or
+      * the maximum of the field within reference_radius_degrees GCD of the
+        candidate point (used for DZ with the "1.0" parameter).
+
     Args:
-        field: The field to find the contours from
-        point: The point at which the field is subtracted from to find the
-            anomaly contours
-        level: The anomaly level to find the contours at
+        field: The field to find the contours from. Must have "latitude" and
+            "longitude" coordinate arrays (1-D, in degrees).
+        point: Grid-index tuple (lat_idx, lon_idx) of the candidate point.
+        level: The anomaly level to find the contours at.
+        reference_radius_degrees: GCD radius in degrees within which to take
+            the maximum as the reference value. 0 uses the point value
+            directly (default, matches TempestExtremes "0" parameter).
 
     Returns:
-        The contours as a list of tuples of latitude and longitude.
+        The contours as a list of arrays of (row, col) index pairs.
     """
-    field_at_point = field - field.isel(latitude=point[0], longitude=point[1])
+    if reference_radius_degrees > 0:
+        # Find maximum within reference_radius_degrees GCD of the candidate.
+        lat_grid, lon_grid = np.meshgrid(
+            field.latitude.values, field.longitude.values, indexing="ij"
+        )
+        point_lat = float(field.latitude.values[point[0]])
+        point_lon = float(field.longitude.values[point[1]])
+        gc_dist = calc.haversine_distance(
+            [point_lat, point_lon],
+            [lat_grid, lon_grid],
+            units="degrees",
+        )
+        within_radius = np.array(gc_dist) <= reference_radius_degrees
+        masked = np.where(within_radius, field.values, np.nan)
+        reference_value = float(np.nanmax(masked))
+    else:
+        reference_value = float(
+            field.isel(latitude=point[0], longitude=point[1]).values
+        )
+
+    field_anomaly = field - reference_value
     contours = measure.find_contours(
-        field_at_point.values, level=level, positive_orientation="high"
+        field_anomaly.values, level=level, positive_orientation="high"
     )
     return contours
 
@@ -672,6 +782,8 @@ def _find_peaks_batch(
     latitude_max_degrees: float,
     max_gc_distance_slp_contour_degrees: float,
     max_gc_distance_dz_contour_degrees: float,
+    dz_reference_radius_degrees: float = 1.0,
+    require_spatial_mask: bool = True,
 ) -> npt.NDArray:
     """Wrapper for peak finding across time slices.
 
@@ -696,6 +808,11 @@ def _find_peaks_batch(
             in degrees
         max_gc_distance_dz_contour_degrees: Max great circle distance for DZ contour
             in degrees
+        dz_reference_radius_degrees: GCD radius for max-DZ reference (TE "1.0"). Defaults
+            to 1.0
+        require_spatial_mask: When False, skip the IBTrACS spatial proximity mask
+            so that peaks anywhere in the domain can be returned (gate D bypassed).
+            Gate A (temporal) is always enforced. Defaults to True.
     Returns:
         Array of peak coordinates
     """
@@ -726,6 +843,7 @@ def _find_peaks_batch(
         latitude_max_degrees,
         max_gc_distance_slp_contour_degrees,
         max_gc_distance_dz_contour_degrees,
+        dz_reference_radius_degrees=dz_reference_radius_degrees,
     )
 
 
@@ -747,6 +865,7 @@ def _find_peaks_for_time_slice(
     latitude_max_degrees: float,
     max_gc_distance_slp_contour_degrees: float,
     max_gc_distance_dz_contour_degrees: float,
+    dz_reference_radius_degrees: float = 1.0,
 ) -> npt.NDArray:
     """Find peaks with tropical cyclone track data filtering.
 
@@ -764,12 +883,13 @@ def _find_peaks_for_time_slice(
         lon_coords: Longitude coordinates in degrees. Defaults to None
         max_spatial_distance_degrees: Max spatial distance in degrees. Defaults to
             5.0 degrees
-        max_temporal_hours: Max temporal buffer for genesis in hours. Defaults to
-            48.0 hours
+        max_temporal_hours: Temporal window around each valid_time within which
+            IBTrACS observations are accepted as anchors. Applied to all lead
+            times. Defaults to 48.0 hours
         slp_contour_magnitude: SLP contour magnitude in Pa. Defaults to 200.0 Pa
         dz_contour_magnitude: DZ contour magnitude in m. Defaults to -6.0 m
         use_contour_validation: Whether to use contour validation. Defaults to True
-        is_first_timestep: If True, applies temporal buffer. Defaults to False
+        is_first_timestep: Unused; retained for API compatibility.
         surface_pressure_threshold: Maximum surface pressure threshold for valid peaks
             in Pa. Defaults to 100500.0 Pa
         latitude_max_degrees: Maximum latitude for valid tracks in degrees. Defaults
@@ -779,26 +899,6 @@ def _find_peaks_for_time_slice(
         max_gc_distance_dz_contour_degrees: Max great circle distance for DZ contour
             in degrees. Defaults to 6.5 degrees
     """
-
-    # Filter tropical cyclone track data temporally
-    time_diff = np.abs(
-        (tc_track_data_df["valid_time"] - current_valid_time).dt.total_seconds() / 3600
-    )
-
-    # For first timestep (genesis), allow buffer; otherwise exact
-    if is_first_timestep:
-        temporal_mask = time_diff <= max_temporal_hours
-    else:
-        temporal_mask = time_diff == 0
-
-    nearby_tc_track_data = tc_track_data_df[temporal_mask]
-
-    if len(nearby_tc_track_data) == 0:
-        logger.debug("No TC track data at time %s", current_valid_time)
-        return np.array([])
-    else:
-        n_rows = len(nearby_tc_track_data)
-        logger.debug("Found %s TC track data rows at %s", n_rows, current_valid_time)
 
     # Check for valid data
     if np.all(np.isnan(slp_slice)):
@@ -810,15 +910,7 @@ def _find_peaks_for_time_slice(
     if not np.any(low_pressure_mask):
         return np.array([])
 
-    spatial_mask = _create_spatial_mask(
-        lat_coords, lon_coords, nearby_tc_track_data, max_spatial_distance_degrees
-    )
-
-    # Combine spatial and pressure masks
-    combined_mask = np.logical_and(spatial_mask, low_pressure_mask)
-
-    if not np.any(combined_mask):
-        return np.array([])
+    combined_mask = low_pressure_mask
 
     # Apply combined mask for peak detection
     masked_slp = np.where(combined_mask, -slp_slice, -999999)
@@ -850,12 +942,21 @@ def _find_peaks_for_time_slice(
         )
 
         for peak in peaks:
-            # Generate contours for this peak
+            # Generate contours for this peak.
+            # SLP: reference is the value at the candidate point (TE "0" param).
+            # DZ: reference is the max within dz_reference_radius_degrees GCD
+            #     of the candidate, per TempestExtremes "_DIFF" "1.0" param.
             slp_contours = find_contours_from_point_specified_field(
-                slp_da, peak, slp_contour_magnitude
+                slp_da,
+                peak,
+                slp_contour_magnitude,
+                reference_radius_degrees=0.0,
             )
             dz_contours = find_contours_from_point_specified_field(
-                dz_da, peak, dz_contour_magnitude
+                dz_da,
+                peak,
+                dz_contour_magnitude,
+                reference_radius_degrees=dz_reference_radius_degrees,
             )
 
             # Check if this peak passes contour validation
