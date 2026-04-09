@@ -1872,15 +1872,15 @@
   event_type: tropical_cyclone
 - case_id_number: 157
   title: Hone
-  start_date: 2024-08-17 12:00:00
-  end_date: 2024-09-03 18:00:00
+  start_date: 2024-08-20 00:00:00
+  end_date: 2024-09-03 06:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: 10.5
+      latitude_min: 13.2
       latitude_max: 32.0
-      longitude_min: 177.9
-      longitude_max: 231.5
+      longitude_min: 175.8
+      longitude_max: 224.8
   event_type: tropical_cyclone
 - case_id_number: 158
   title: Trami
@@ -1889,22 +1889,22 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 10.9
-      latitude_max: 19.9
-      longitude_min: 105.0
-      longitude_max: 143.0
+      latitude_min: 8.8
+      latitude_max: 22.0
+      longitude_min: 102.7
+      longitude_max: 143.3
   event_type: tropical_cyclone
 - case_id_number: 159
   title: Prapiroon (Butchoy)
-  start_date: 2024-07-17 06:00:00
+  start_date: 2024-07-13 12:00:00
   end_date: 2024-07-27 06:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: 5.7
+      latitude_min: 5.5
       latitude_max: 24.0
       longitude_min: 104.3
-      longitude_max: 131.7
+      longitude_max: 132.0
   event_type: tropical_cyclone
 - case_id_number: 160
   title: Gaemi (Carina)
@@ -1913,46 +1913,46 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 9.4
-      latitude_max: 32.0
-      longitude_min: 106.7
-      longitude_max: 135.5
+      latitude_min: 7.2
+      latitude_max: 34.2
+      longitude_min: 106.4
+      longitude_max: 137.8
   event_type: tropical_cyclone
 - case_id_number: 161
   title: Shanshan
-  start_date: 2024-08-19 00:00:00
+  start_date: 2024-08-18 18:00:00
   end_date: 2024-09-03 18:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: 13.8
-      latitude_max: 37.8
-      longitude_min: 127.7
-      longitude_max: 149.7
+      latitude_min: 11.1
+      latitude_max: 40.1
+      longitude_min: 125.4
+      longitude_max: 150.0
   event_type: tropical_cyclone
 - case_id_number: 162
   title: Yagi (Enteng)
-  start_date: 2024-08-30 00:00:00
+  start_date: 2024-08-28 12:00:00
   end_date: 2024-09-10 12:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: 6.8
-      latitude_max: 23.8
-      longitude_min: 98.7
-      longitude_max: 138.8
+      latitude_min: 4.4
+      latitude_max: 26.0
+      longitude_min: 98.4
+      longitude_max: 141.4
   event_type: tropical_cyclone
 - case_id_number: 163
   title: Bebinca (Ferdie)
-  start_date: 2024-09-07 12:00:00
+  start_date: 2024-09-06 18:00:00
   end_date: 2024-09-20 12:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: 7.9
+      latitude_min: 8.1
       latitude_max: 35.7
       longitude_min: 112.4
-      longitude_max: 149.9
+      longitude_max: 150.7
   event_type: tropical_cyclone
 - case_id_number: 164
   title: Soulik (Gener)
@@ -1968,27 +1968,27 @@
   event_type: tropical_cyclone
 - case_id_number: 165
   title: Krathon
-  start_date: 2024-09-24 12:00:00
+  start_date: 2024-09-24 00:00:00
   end_date: 2024-10-05 18:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: 16.2
-      latitude_max: 25.0
+      latitude_min: 16.3
+      latitude_max: 26.3
       longitude_min: 116.8
-      longitude_max: 129.9
+      longitude_max: 130.6
   event_type: tropical_cyclone
 - case_id_number: 166
   title: Asna
-  start_date: 2024-08-28 00:00:00
-  end_date: 2024-09-04 00:00:00
+  start_date: 2024-08-23 00:00:00
+  end_date: 2024-09-05 06:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: 18.8
-      latitude_max: 26.1
-      longitude_min: 59.0
-      longitude_max: 79.3
+      latitude_min: 17.5
+      latitude_max: 26.8
+      longitude_min: 58.3
+      longitude_max: 79.7
   event_type: tropical_cyclone
 - case_id_number: 167
   title: Kirrily
@@ -1998,33 +1998,33 @@
     type: bounded_region
     parameters:
       latitude_min: -31.8
-      latitude_max: -11.3
+      latitude_max: -11.5
       longitude_min: 135.3
-      longitude_max: 159.0
+      longitude_max: 158.9
   event_type: tropical_cyclone
 - case_id_number: 168
   title: Belal
-  start_date: 2024-01-10 12:00:00
-  end_date: 2024-01-21 12:00:00
+  start_date: 2024-01-09 18:00:00
+  end_date: 2024-01-25 06:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -35.5
-      latitude_max: -11.1
-      longitude_min: 50.8
-      longitude_max: 68.1
+      latitude_min: -35.7
+      latitude_max: -10.2
+      longitude_min: 49.9
+      longitude_max: 68.5
   event_type: tropical_cyclone
 - case_id_number: 169
   title: Alvaro
-  start_date: 2023-12-30 00:00:00
-  end_date: 2024-01-06 12:00:00
+  start_date: 2023-12-27 12:00:00
+  end_date: 2024-01-08 18:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -31.3
-      latitude_max: -18.5
-      longitude_min: 32.9
-      longitude_max: 69.9
+      latitude_min: -33.1
+      latitude_max: -17.0
+      longitude_min: 32.3
+      longitude_max: 70.5
   event_type: tropical_cyclone
 - case_id_number: 170
   title: Franklin
@@ -2213,10 +2213,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 21.1
-      latitude_max: 50.0
-      longitude_min: 132.3
-      longitude_max: 156.3
+      latitude_min: 18.9
+      latitude_max: 52.2
+      longitude_min: 129.9
+      longitude_max: 156.7
   event_type: tropical_cyclone
 - case_id_number: 186
   title: Saola (Goring)
@@ -2293,14 +2293,14 @@
 - case_id_number: 192
   title: Freddy
   start_date: 2023-02-02 12:00:00
-  end_date: 2023-03-15 18:00:00
+  end_date: 2023-03-16 12:00:00
   location:
     type: bounded_region
     parameters:
       latitude_min: -26.3
-      latitude_max: -8.9
-      longitude_min: 29.0
-      longitude_max: 121.6
+      latitude_max: -8.7
+      longitude_min: 28.8
+      longitude_max: 121.4
   event_type: tropical_cyclone
 - case_id_number: 193
   title: Jasper
@@ -2777,10 +2777,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: -31.0
-      latitude_max: -9.3
-      longitude_min: 20.4
-      longitude_max: 88.1
+      latitude_min: -31.2
+      latitude_max: -7.1
+      longitude_min: 19.8
+      longitude_max: 90.7
   event_type: tropical_cyclone
 - case_id_number: 233
   title: Amanda and Cristobal
@@ -3024,15 +3024,15 @@
   event_type: tropical_cyclone
 - case_id_number: 253
   title: Remal
-  start_date: 2024-05-23 12:00:00
-  end_date: 2024-05-29 18:00:00
+  start_date: 2024-05-21 12:00:00
+  end_date: 2024-05-30 06:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: 11.6
-      latitude_max: 26.4
-      longitude_min: 86.0
-      longitude_max: 92.8
+      latitude_min: 11.4
+      latitude_max: 27.3
+      longitude_min: 84.3
+      longitude_max: 94.1
   event_type: tropical_cyclone
 - case_id_number: 254
   title: Amphan
