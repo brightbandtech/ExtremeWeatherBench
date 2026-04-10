@@ -632,6 +632,7 @@ def _evaluate_metric_and_return_df(
     metric_result = metric.compute_metric(
         forecast_data,
         target_data,
+        case_metadata=case_operator.case_metadata,
         **kwargs,
     )
     # If data is sparse, densify it
