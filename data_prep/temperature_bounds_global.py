@@ -1148,12 +1148,14 @@ def main():
     parser.add_argument(
         "--dask-batch",
         type=int,
-        default=12,
+        default=1,
         help=(
             "Number of monthly chunks to submit to Dask at once. "
-            "Larger values increase parallelism but use more memory "
-            "and create larger task graphs. Default 12 (1 year at a "
-            "time)."
+            "Default 1 (one month per batch). Dask still parallelizes "
+            "daily time steps within each month across workers. Larger "
+            "values increase cross-month parallelism but cause "
+            "rechunk-merge bottlenecks when months span many zarr "
+            "chunks."
         ),
     )
     parser.add_argument(
@@ -1340,7 +1342,7 @@ def main():
         n_chunks = len(exc_lazy_list)
         batch = args.dask_batch
         logger.info(
-            "  Computing %d chunks in batches of %d via Dask...",
+            "  Computing %d chunks, %d per batch, via Dask...",
             n_chunks,
             batch,
         )
