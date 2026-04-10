@@ -1146,6 +1146,17 @@ def main():
         help="Number of dask workers",
     )
     parser.add_argument(
+        "--dask-batch",
+        type=int,
+        default=12,
+        help=(
+            "Number of monthly chunks to submit to Dask at once. "
+            "Larger values increase parallelism but use more memory "
+            "and create larger task graphs. Default 12 (1 year at a "
+            "time)."
+        ),
+    )
+    parser.add_argument(
         "--quantile-lower",
         type=float,
         default=None,
@@ -1327,15 +1338,24 @@ def main():
             t2m_lazy_list.append(t2m_chunk.resample({tdim: "1D"}).mean())
 
         n_chunks = len(exc_lazy_list)
+        batch = args.dask_batch
         logger.info(
-            "  Computing %d chunks × 2 tasks in parallel via Dask...",
+            "  Computing %d chunks in batches of %d via Dask...",
             n_chunks,
+            batch,
         )
-        all_computed = dask.compute(*exc_lazy_list, *t2m_lazy_list)
-        exc_parts = list(all_computed[:n_chunks])
-        t2m_parts = list(all_computed[n_chunks:])
-        for label in chunk_labels:
-            logger.info("  chunk %s done", label)
+        exc_parts: list = []
+        t2m_parts: list = []
+        for b0 in range(0, n_chunks, batch):
+            b1 = min(b0 + batch, n_chunks)
+            b_exc = exc_lazy_list[b0:b1]
+            b_t2m = t2m_lazy_list[b0:b1]
+            b_sz = b1 - b0
+            b_results = dask.compute(*b_exc, *b_t2m)
+            exc_parts.extend(b_results[:b_sz])
+            t2m_parts.extend(b_results[b_sz:])
+            for label in chunk_labels[b0:b1]:
+                logger.info("  chunk %s done", label)
 
         exc_da = xr.concat(exc_parts, dim=tdim)
         t2m_daily_da = xr.concat(t2m_parts, dim=tdim)
