@@ -704,6 +704,12 @@ def _make_ibt_for_dataset(ds: xr.Dataset) -> xr.Dataset:
         {
             "latitude": (["valid_time"], np.full(len(valid_times), 20.0)),
             "longitude": (["valid_time"], np.full(len(valid_times), -70.0)),
+            "air_pressure_at_mean_sea_level": (
+                ["valid_time"], np.full(len(valid_times), 100000.0)
+            ),
+            "surface_wind_speed": (
+                ["valid_time"], np.full(len(valid_times), 20.0)
+            ),
         },
         coords={"valid_time": valid_times},
     )
