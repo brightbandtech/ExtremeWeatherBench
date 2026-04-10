@@ -1434,7 +1434,9 @@ def main():
 
     logger.info("Computing per-event temperature statistics...")
     t0 = time_module.time()
-    events = include_temps_with_events(events, t2m_daily_np, exc_filt, dates, lats, lons)
+    events = include_temps_with_events(
+        events, t2m_daily_np, exc_filt, dates, lats, lons
+    )
     del t2m_daily_np
     logger.info("  done in %.1f s", time_module.time() - t0)
 
