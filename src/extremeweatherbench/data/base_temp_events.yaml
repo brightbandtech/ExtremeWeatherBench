@@ -347,9 +347,9 @@
   location:
     type: centered_region
     parameters:
-      latitude: 48.1351
+      latitude: 53.1351
       longitude: 11.582
-      bounding_box_degrees: 5
+      bounding_box_degrees: 10
   event_type: freeze
 - case_id_number: 33
   title: 2023 China
@@ -374,17 +374,17 @@
       bounding_box_degrees: 5
   event_type: freeze
 - case_id_number: 35
-  title: 2022 Colorado
+  title: 2022 West US
   start_date: 2022-04-06 00:00:00
   end_date: 2022-04-16 00:00:00
   location:
     type: centered_region
     parameters:
-      latitude: 39.7392
+      latitude: 43.7392
       longitude: 255.0097
-      bounding_box_degrees: 5
+      bounding_box_degrees: 10
   event_type: freeze
-- case_id_number: 72
+- case_id_number: 70
   title: May 2024 Texas
   start_date: 2024-05-25 00:00:00
   end_date: 2024-05-31 00:00:00
@@ -395,7 +395,7 @@
       longitude: 262.50260000000003
       bounding_box_degrees: 5
   event_type: heat_wave
-- case_id_number: 73
+- case_id_number: 71
   title: June 2024 Northeast US
   start_date: 2024-06-17 00:00:00
   end_date: 2024-06-23 00:00:00
@@ -403,21 +403,21 @@
     type: centered_region
     parameters:
       latitude: 41.8781
-      longitude: 286.771
+      longitude: 280.771
       bounding_box_degrees: 6
   event_type: heat_wave
-- case_id_number: 74
+- case_id_number: 72
   title: July 2024 Southwest US
   start_date: 2024-07-04 00:00:00
   end_date: 2024-07-10 00:00:00
   location:
     type: centered_region
     parameters:
-      latitude: 33.7701
+      latitude: 36.7701
       longitude: 243.78539999999998
       bounding_box_degrees: 6
   event_type: heat_wave
-- case_id_number: 75
+- case_id_number: 73
   title: July 2024 Northeast US
   start_date: 2024-07-07 00:00:00
   end_date: 2024-07-13 00:00:00
@@ -428,7 +428,7 @@
       longitude: 285.994
       bounding_box_degrees: 6
   event_type: heat_wave
-- case_id_number: 76
+- case_id_number: 74
   title: July 2024 Mid-Atlantic US
   start_date: 2024-07-15 00:00:00
   end_date: 2024-07-21 00:00:00
@@ -439,7 +439,7 @@
       longitude: 284.8348
       bounding_box_degrees: 6
   event_type: heat_wave
-- case_id_number: 77
+- case_id_number: 75
   title: August 2024 Midwest US
   start_date: 2024-08-25 00:00:00
   end_date: 2024-08-31 00:00:00
@@ -447,10 +447,10 @@
     type: centered_region
     parameters:
       latitude: 40.1106
-      longitude: 271.79269999999997
+      longitude: 275.79269999999997
       bounding_box_degrees: 5
   event_type: heat_wave
-- case_id_number: 78
+- case_id_number: 76
   title: July 2024 Antarctica
   start_date: 2024-07-01 00:00:00
   end_date: 2024-07-31 00:00:00
@@ -461,7 +461,7 @@
       longitude: 15.0
       bounding_box_degrees: 5
   event_type: heat_wave
-- case_id_number: 79
+- case_id_number: 77
   title: August 2024 Canada
   start_date: 2024-08-09 00:00:00
   end_date: 2024-08-15 00:00:00
@@ -472,7 +472,7 @@
       longitude: 248.0
       bounding_box_degrees: 5
   event_type: heat_wave
-- case_id_number: 80
+- case_id_number: 78
   title: August 2024 Australia
   start_date: 2024-08-22 00:00:00
   end_date: 2024-08-30 00:00:00
@@ -483,7 +483,7 @@
       longitude: 120.0
       bounding_box_degrees: 5
   event_type: heat_wave
-- case_id_number: 81
+- case_id_number: 79
   title: July/August 2024 Japan
   start_date: 2024-07-25 00:00:00
   end_date: 2024-08-05 00:00:00
@@ -494,7 +494,7 @@
       longitude: 138.0
       bounding_box_degrees: 6
   event_type: heat_wave
-- case_id_number: 82
+- case_id_number: 80
   title: June 2024 Saudi Arabia
   start_date: 2024-06-16 00:00:00
   end_date: 2024-06-22 00:00:00
@@ -505,7 +505,7 @@
       longitude: 45.0
       bounding_box_degrees: 6
   event_type: heat_wave
-- case_id_number: 83
+- case_id_number: 81
   title: August 2024 Europe
   start_date: 2024-08-10 00:00:00
   end_date: 2024-08-16 00:00:00
@@ -516,7 +516,7 @@
       longitude: 10.8978
       bounding_box_degrees: 10
   event_type: heat_wave
-- case_id_number: 84
+- case_id_number: 82
   title: July 2024 Ukraine
   start_date: 2024-07-12 00:00:00
   end_date: 2024-07-18 00:00:00
@@ -527,7 +527,7 @@
       longitude: 30.5234
       bounding_box_degrees: 5
   event_type: heat_wave
-- case_id_number: 85
+- case_id_number: 83
   title: June 2024 Europe
   start_date: 2024-06-20 00:00:00
   end_date: 2024-06-30 00:00:00
@@ -538,7 +538,7 @@
       longitude: 4.9041
       bounding_box_degrees: 6
   event_type: heat_wave
-- case_id_number: 86
+- case_id_number: 84
   title: May 2024 Central Mexico
   start_date: 2024-05-23 00:00:00
   end_date: 2024-05-31 00:00:00
@@ -549,7 +549,7 @@
       longitude: 260.8668
       bounding_box_degrees: 5
   event_type: heat_wave
-- case_id_number: 87
+- case_id_number: 85
   title: May 2024 Pakistan/India
   start_date: 2024-05-23 00:00:00
   end_date: 2024-05-31 00:00:00
@@ -558,9 +558,9 @@
     parameters:
       latitude: 34.0
       longitude: 76.0
-      bounding_box_degrees: 5
+      bounding_box_degrees: 8
   event_type: heat_wave
-- case_id_number: 88
+- case_id_number: 86
   title: August 2023 Chile
   start_date: 2023-08-01 00:00:00
   end_date: 2023-08-07 00:00:00
@@ -571,7 +571,7 @@
       longitude: 289.3307
       bounding_box_degrees: 5
   event_type: heat_wave
-- case_id_number: 89
+- case_id_number: 87
   title: January 2024 Pacific Northwest
   start_date: 2024-01-11 12:00:00
   end_date: 2024-01-20 00:00:00
@@ -582,18 +582,18 @@
       longitude: 237.6679
       bounding_box_degrees: 5
   event_type: freeze
-- case_id_number: 90
-  title: April 2022 Nevada
+- case_id_number: 88
+  title: April 2022 Western North America
   start_date: 2022-04-11 18:00:00
   end_date: 2022-04-17 18:00:00
   location:
     type: centered_region
     parameters:
-      latitude: 40.8324
+      latitude: 47.8324
       longitude: 244.2369
       bounding_box_degrees: 5
   event_type: freeze
-- case_id_number: 91
+- case_id_number: 89
   title: February/March 2021 New England
   start_date: 2021-03-04 18:00:00
   end_date: 2021-03-10 18:00:00
@@ -604,7 +604,7 @@
       longitude: 287.4421
       bounding_box_degrees: 5
   event_type: freeze
-- case_id_number: 92
+- case_id_number: 90
   title: January 2024 Northern Europe
   start_date: 2024-01-01 06:00:00
   end_date: 2024-01-09 12:00:00
@@ -615,7 +615,7 @@
       longitude: 18.0686
       bounding_box_degrees: 5
   event_type: freeze
-- case_id_number: 93
+- case_id_number: 91
   title: December 2022 Europe
   start_date: 2022-12-10 06:00:00
   end_date: 2022-12-20 00:00:00
@@ -626,7 +626,7 @@
       longitude: 13.405
       bounding_box_degrees: 5
   event_type: freeze
-- case_id_number: 94
+- case_id_number: 92
   title: April 2024 Europe
   start_date: 2024-04-16 12:00:00
   end_date: 2024-04-27 12:00:00
@@ -637,7 +637,7 @@
       longitude: 2.3522
       bounding_box_degrees: 5
   event_type: freeze
-- case_id_number: 95
+- case_id_number: 93
   title: January 2023 North China
   start_date: 2024-01-20 00:00:00
   end_date: 2024-02-04 18:00:00
@@ -645,10 +645,10 @@
     type: centered_region
     parameters:
       latitude: 42.5246
-      longitude: 122.3853
-      bounding_box_degrees: 5
+      longitude: 120.3853
+      bounding_box_degrees: 8
   event_type: freeze
-- case_id_number: 96
+- case_id_number: 94
   title: April 2024 Sweden
   start_date: 2024-04-02 00:00:00
   end_date: 2024-04-08 00:00:00
