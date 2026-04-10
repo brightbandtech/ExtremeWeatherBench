@@ -35,6 +35,7 @@ from typing import Dict, List, Literal, Optional, Tuple, cast
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+import dask
 import joblib
 import matplotlib.colors as mcolors
 import matplotlib.patches as mpatches
@@ -45,7 +46,6 @@ import pandas as pd
 import regionmask
 import scipy.ndimage as ndimage
 import xarray as xr
-import dask
 from dask.distributed import Client, LocalCluster
 from plot_temperature_events import (
     VALID_QUANTILES,
@@ -680,7 +680,7 @@ def detect_events(
     return list(events.values())
 
 
-def enrich_events_with_temps(
+def include_temps_with_events(
     events: List[Dict],
     t2m_daily_np: np.ndarray,
     exc_filt: np.ndarray,
@@ -1434,7 +1434,7 @@ def main():
 
     logger.info("Computing per-event temperature statistics...")
     t0 = time_module.time()
-    events = enrich_events_with_temps(events, t2m_daily_np, exc_filt, dates, lats, lons)
+    events = include_temps_with_events(events, t2m_daily_np, exc_filt, dates, lats, lons)
     del t2m_daily_np
     logger.info("  done in %.1f s", time_module.time() - t0)
 
