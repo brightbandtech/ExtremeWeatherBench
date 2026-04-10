@@ -1206,15 +1206,17 @@ class TestDurationMeanError:
         assert np.all(result.values >= 0)
         assert np.any(result.values > 0)
 
-        # Middle init_times accumulate n_lead_times consecutive pairs
-        # each spanning time_resolution_hours (6 h) → max = 5 × 6 = 30 h
+        # Middle init_times have n_lead_times timesteps → n_lead_times - 1
+        # consecutive intervals each spanning 6 h → max = 4 × 6 = 24 h
         max_value = np.max(result.values)
-        assert max_value == n_lead_times * 6
+        assert max_value == (n_lead_times - 1) * 6
 
         # First init_time: only (lt=max, vt=t0) — no prior timestep → 0 h
         assert result.values[0] == 0
-        # Last init_time: only (lt=0, vt=t_max) — one pair → 6 h
-        assert result.values[-1] == 6
+        # Last init_time: only (lt=0, vt=t_max) — 1 cell, no pairs → 0 h
+        assert result.values[-1] == 0
+        # Second-to-last: 2 cells → 1 consecutive pair → 6 h
+        assert result.values[-2] == 6
 
     def test_me_with_lead_time_partial_target_exceedance(self):
         """Test MeanErrorwith lead_time dims where target partially exceeds.
