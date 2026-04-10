@@ -5,7 +5,7 @@ events where the daily temperature falls within a user-specified
 climatology quantile band for 3+ consecutive days, over land.
 
 At least one of --quantile-lower or --quantile-upper must be given.
-Both can be combined to define a band (e.g. 50th–85th percentile).
+Both can be combined to define a band (e.g. 50th-85th percentile).
 
 Bounding boxes are first derived from blob tracking, then expanded
 using the same edge-validity logic as heat_cold_bounds_case.py:
@@ -14,32 +14,38 @@ active on the peak-footprint day.  Events terminate when their
 active area drops below 50% of peak.
 
 Usage:
+    # Anything below the 15th percentile (cold snap)
+    python temperature_bounds_global.py \\
+        --start-date 2020-01-01 --end-date 2020-12-31 \\
+        --quantile-upper 0.15 \\
+        --output cold_q15_2020.csv
+
     # Anything above the 85th percentile (heat wave)
     python temperature_bounds_global.py \\
         --start-date 2023-06-01 --end-date 2023-09-01 \\
         --quantile-lower 0.85 --operator-lower ">=" \\
-        --event-type heat_wave --output heat_cold_global.csv
-
-    # Band between 50th and 85th (moderate heat)
-    python temperature_bounds_global.py \\
-        --start-date 2023-06-01 --end-date 2023-09-01 \\
-        --quantile-lower 0.50 --quantile-upper 0.85 \\
-        --event-type heat_wave --output heat_cold_global.csv
+        --output heat_q85_2023.csv
 """
 
 import argparse
 import logging
 import pathlib
 import time as time_module
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple, cast
 
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 import joblib
+import matplotlib.colors as mcolors
+import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
 import numba as nb
 import numpy as np
 import pandas as pd
 import regionmask
 import scipy.ndimage as ndimage
 import xarray as xr
+import dask
 from dask.distributed import Client, LocalCluster
 from plot_temperature_events import (
     VALID_QUANTILES,
@@ -74,7 +80,7 @@ def compute_grid_cell_area(
     """Return a 2-D (lat, lon) array of grid-cell areas in km².
 
     Uses the spherical-Earth approximation:
-        area = R² × Δlat_rad × Δlon_rad × cos(lat)
+        area = R^2 * dlat_rad * dlon_rad * cos(lat)
 
     Args:
         lats: 1-D latitude array in degrees.
@@ -97,20 +103,12 @@ def get_climatology_bounds(
 ) -> Tuple[Optional[xr.DataArray], Optional[xr.DataArray]]:
     """Return climatology DataArrays for the lower and/or upper bound.
 
-    At least one of q_lower or q_upper must be provided. Each returned
-    DataArray is indexed by (dayofyear, hour) and sorted by latitude.
-
     Args:
-        q_lower: Quantile for the lower bound (e.g. 0.50 means temp
-            must exceed the 50th-percentile climatology). None skips
-            the lower-bound check.
-        q_upper: Quantile for the upper bound (e.g. 0.85 means temp
-            must not exceed the 85th-percentile climatology). None
-            skips the upper-bound check.
+        q_lower: Quantile for the lower bound. None skips it.
+        q_upper: Quantile for the upper bound. None skips it.
 
     Returns:
-        Tuple (clim_lower, clim_upper); either element may be None
-        when the corresponding quantile argument is not supplied.
+        Tuple (clim_lower, clim_upper); either may be None.
 
     Raises:
         ValueError: If both q_lower and q_upper are None.
@@ -141,8 +139,7 @@ def build_land_mask(
         lats: 1-D DataArray of latitudes.
 
     Returns:
-        Boolean DataArray of the same shape as the meshgrid of lons
-        and lats, where True indicates a land grid point.
+        Boolean DataArray where True indicates a land grid point.
     """
     land = regionmask.defined_regions.natural_earth_v5_0_0.land_110
     mask = land.mask(lons, lats)
@@ -156,9 +153,6 @@ def _edge_valid_fraction(
     band_pts: int,
 ) -> float:
     """Return the fraction of land grid points on an edge that are active.
-
-    Ocean/masked points are excluded from both numerator and denominator
-    so coastal edges are not penalised.
 
     Args:
         mask_2d: 2-D boolean activity array (lat, lon).
@@ -206,17 +200,13 @@ def expand_event_bounds(
     Starting from the blob-tracked bounding box, expands each edge
     outward while >= EDGE_VALIDITY_THRESHOLD of land points on that
     edge are active on the peak-footprint day. Also computes and stores
-    max_consecutive_days within the expanded region.
-
-    The expansion matches the spatial-growth algorithm used in
-    heat_cold_bounds_case.py: 1-degree steps, ocean-heavy edges
-    disabled upfront, convergence when all active edges drop below 50%.
+    max_consecutive_days and mean_consecutive_days within the expanded
+    region.
 
     Args:
-        event: Event dict from detect_events (keys: start, end,
-            lat_min, lat_max, lon_min, lon_max).
+        event: Event dict from detect_events.
         filt_mask: Boolean array (time, lat, lon) with consecutive-day
-            filtering already applied, aligned with dates/lats/lons.
+            filtering already applied.
         dates: 1-D datetime64 array of daily timestamps (axis 0).
         lats: 1-D latitude array (axis 1).
         lons: 1-D longitude array (axis 2).
@@ -224,7 +214,7 @@ def expand_event_bounds(
 
     Returns:
         The same event dict with updated lat_min/lat_max/lon_min/
-        lon_max and a new max_consecutive_days key.
+        lon_max, max_consecutive_days, and mean_consecutive_days.
     """
     grid_res = float(np.abs(np.diff(lats[:2]))[0]) if len(lats) > 1 else 0.25
     band_pts = max(1, int(round(EXPANSION_DEGREES / grid_res)))
@@ -236,6 +226,7 @@ def expand_event_bounds(
 
     if ev_filt.shape[0] == 0:
         event["max_consecutive_days"] = 0
+        event["mean_consecutive_days"] = 0.0
         return event
 
     def _lat_idx(val: float) -> int:
@@ -307,6 +298,10 @@ def expand_event_bounds(
     event["lon_min"] = float(lons[idx_w])
     event["lon_max"] = float(lons[idx_e])
     event["max_consecutive_days"] = int(consec.max()) if consec.size > 0 else 0
+    active = consec[consec >= MIN_CONSECUTIVE_DAYS]
+    event["mean_consecutive_days"] = (
+        round(float(active.mean()), 2) if active.size > 0 else 0.0
+    )
     return event
 
 
@@ -324,23 +319,16 @@ def build_exceedance_mask(
     passes only when every 6-hourly step satisfies every active bound.
     The result is further masked to land points.
 
-    At least one of clim_lower or clim_upper must be provided.
-
     Args:
         t2m: 6-hourly 2m temperature DataArray.
-        clim_lower: Climatology for the lower bound, indexed by
-            (dayofyear, hour). None skips this bound.
-        clim_upper: Climatology for the upper bound, indexed by
-            (dayofyear, hour). None skips this bound.
+        clim_lower: Climatology for the lower bound, or None.
+        clim_upper: Climatology for the upper bound, or None.
         land_mask: Boolean DataArray (True = land) matching t2m grid.
-        op_lower: Comparison operator for the lower bound.
-            Default is ">".
-        op_upper: Comparison operator for the upper bound.
-            Default is "<".
+        op_lower: Comparison operator for the lower bound. Default ">".
+        op_upper: Comparison operator for the upper bound. Default "<".
 
     Returns:
-        Daily boolean DataArray masked to land where True indicates
-        every 6-hourly step satisfied all active bounds.
+        Daily boolean DataArray masked to land.
     """
     tdim = detect_time_dim(t2m)
     doy = t2m[tdim].dt.dayofyear
@@ -383,14 +371,11 @@ def apply_consecutive_filter(
 
     Args:
         mask: Boolean array of shape (time, lat, lon).
-        min_days: Minimum run length required to qualify as an
-            event. Default is 3 (MIN_CONSECUTIVE_DAYS).
-        max_grace_days: Maximum gap length to bridge after the
-            minimum run is established. Default is 1.
+        min_days: Minimum run length. Default is 3.
+        max_grace_days: Maximum gap length to bridge. Default is 1.
 
     Returns:
-        Boolean array of the same shape with only qualifying runs
-        retained.
+        Boolean array of the same shape with qualifying runs only.
     """
     struct = np.zeros((min_days, 1, 1), dtype=bool)
     struct[:, 0, 0] = True
@@ -451,9 +436,6 @@ def _count_overlaps_nb(
 ) -> np.ndarray:
     """Compute a pixel-count overlap matrix between two label grids.
 
-    A single-pass JIT loop avoids the per-blob numpy scan in the
-    Python tracker.
-
     Args:
         labels_a: Integer label array for day t (shape lat x lon).
         labels_b: Integer label array for day t+1 (shape lat x lon).
@@ -484,21 +466,15 @@ def _resolve_event(
 ) -> Optional[int]:
     """Find and merge prior-day events overlapping with blob oid.
 
-    Uses a precomputed overlap matrix column instead of scanning the
-    full prev_labels array per blob.
-
     Args:
         oid: Current-day blob label (1-indexed).
-        overlap_mat: Pixel-count overlap matrix from
-            _count_overlaps_nb, or None if no previous day.
+        overlap_mat: Pixel-count overlap matrix, or None.
         prev_map: Mapping from previous-day blob label to event ID.
         events: Mutable dict of all live events keyed by event ID.
-        cur_map: Mutable mapping from current-day blob label to event
-            ID; updated in-place when events are merged.
+        cur_map: Mutable mapping from current-day blob label to event ID.
 
     Returns:
-        The surviving event ID after merging, or None if no overlap
-        with a prior-day event was found.
+        The surviving event ID after merging, or None if no overlap.
     """
     if overlap_mat is None:
         return None
@@ -534,8 +510,7 @@ def _terminate_declined_events(
 
     Args:
         events: Mutable dict of all live events keyed by event ID.
-        cur_map: Mapping from current-day blob label to event ID;
-            used to determine which events are still active today.
+        cur_map: Mapping from current-day blob label to event ID.
     """
     active = set(cur_map.values())
     for eid, ev in events.items():
@@ -554,16 +529,18 @@ def detect_events(
     lons: np.ndarray,
     event_type: str,
     area_grid: Optional[np.ndarray] = None,
+    min_seed_area_km2: float = 0.0,
 ) -> List[Dict]:
     """Track spatiotemporal events from a filtered boolean mask.
 
-    Labels one day at a time (low peak memory) but uses a numba-JIT
-    overlap matrix to match blobs across days. A single O(nlat*nlon)
-    pass replaces one O(nlat*nlon) scan per blob, which dominates
-    when many blobs are active simultaneously.
-
-    An event's bounding box is the union of all its daily extents.
-    Events terminate when their active area drops below 50% of peak.
+    New events are only seeded for blobs whose area meets or exceeds
+    ``min_seed_area_km2`` on the current day AND on each of the prior
+    ``MIN_CONSECUTIVE_DAYS - 1`` days (strict joint-area check). The
+    overlap of the current-day blob footprint with each previous day's
+    filtered mask must individually satisfy the threshold, ensuring the
+    contiguous region was jointly >= ``min_seed_area_km2`` for all
+    MIN_CONSECUTIVE_DAYS days. Blobs that fail but overlap an already-
+    established event still extend it.
 
     Args:
         filtered_mask: Boolean array of shape (time, lat, lon) with
@@ -571,14 +548,17 @@ def detect_events(
         dates: 1-D array of date labels aligned with axis 0.
         lats: 1-D latitude array aligned with axis 1.
         lons: 1-D longitude array aligned with axis 2.
-        event_type: Label string stored in each returned event dict
-            (e.g. "heat_wave" or "cold_snap").
+        event_type: Label string stored in each returned event dict.
         area_grid: Optional 2-D array (lat, lon) of grid-cell areas
-            in km². When provided, peak_area_km2 is tracked per event.
+            in km².
+        min_seed_area_km2: Minimum contiguous area in km² that the
+            blob footprint must satisfy on each of MIN_CONSECUTIVE_DAYS
+            days to seed a new event. Default is 0.0 (all blobs seed).
 
     Returns:
         List of event dicts with keys type, start, end, lat_min,
-        lat_max, lon_min, lon_max, peak, peak_area_km2, area, done.
+        lat_max, lon_min, lon_max, peak, peak_area_km2, area, done,
+        initial_bbox.
     """
     n_days = filtered_mask.shape[0]
     events: Dict[int, Dict] = {}
@@ -629,41 +609,61 @@ def detect_events(
             )
 
             if eid is None:
+                if blob_area_km2 < min_seed_area_km2:
+                    continue
+                # Strict joint-area check: the blob's footprint must
+                # also have been >= min_seed_area_km2 on each of the
+                # prior MIN_CONSECUTIVE_DAYS-1 days. Skip seeding when
+                # insufficient history is available.
+                if min_seed_area_km2 > 0:
+                    if di < MIN_CONSECUTIVE_DAYS - 1:
+                        continue
+                    joint_ok = True
+                    for k in range(1, MIN_CONSECUTIVE_DAYS):
+                        overlap = om & filtered_mask[di - k]
+                        prev_area = (
+                            float(area_grid[overlap].sum())
+                            if area_grid is not None
+                            else float(overlap.sum())
+                        )
+                        if prev_area < min_seed_area_km2:
+                            joint_ok = False
+                            break
+                    if not joint_ok:
+                        continue
                 eid = next_id
                 next_id += 1
+                _lat_min = float(lats[li].min())
+                _lat_max = float(lats[li].max())
+                _lon_min = float(lons[lo].min())
+                _lon_max = float(lons[lo].max())
                 events[eid] = {
                     "type": event_type,
                     "start": dates[di],
                     "end": dates[di],
-                    "lat_min": float(lats[li].min()),
-                    "lat_max": float(lats[li].max()),
-                    "lon_min": float(lons[lo].min()),
-                    "lon_max": float(lons[lo].max()),
+                    "lat_min": _lat_min,
+                    "lat_max": _lat_max,
+                    "lon_min": _lon_min,
+                    "lon_max": _lon_max,
                     "peak": area,
                     "peak_area_km2": blob_area_km2,
                     "area": area,
                     "done": False,
+                    "initial_bbox": (
+                        _lat_min,
+                        _lat_max,
+                        _lon_min,
+                        _lon_max,
+                    ),
                 }
             else:
                 ev = events[eid]
                 ev["end"] = dates[di]
                 ev["peak_area_km2"] = max(ev["peak_area_km2"], blob_area_km2)
-                ev["lat_min"] = min(
-                    ev["lat_min"],
-                    float(lats[li].min()),
-                )
-                ev["lat_max"] = max(
-                    ev["lat_max"],
-                    float(lats[li].max()),
-                )
-                ev["lon_min"] = min(
-                    ev["lon_min"],
-                    float(lons[lo].min()),
-                )
-                ev["lon_max"] = max(
-                    ev["lon_max"],
-                    float(lons[lo].max()),
-                )
+                ev["lat_min"] = min(ev["lat_min"], float(lats[li].min()))
+                ev["lat_max"] = max(ev["lat_max"], float(lats[li].max()))
+                ev["lon_min"] = min(ev["lon_min"], float(lons[lo].min()))
+                ev["lon_max"] = max(ev["lon_max"], float(lons[lo].max()))
                 ev["peak"] = max(ev["peak"], area)
                 ev["area"] = area
 
@@ -680,6 +680,65 @@ def detect_events(
     return list(events.values())
 
 
+def enrich_events_with_temps(
+    events: List[Dict],
+    t2m_daily_np: np.ndarray,
+    exc_filt: np.ndarray,
+    dates: np.ndarray,
+    lats: np.ndarray,
+    lons: np.ndarray,
+) -> List[Dict]:
+    """Add mean and minimum temperature (C) to each event dict.
+
+    Uses a pre-computed global daily-mean temperature array so that
+    all events share a single ERA5 fetch rather than making one Dask
+    compute call per event. Statistics are computed over exceedant
+    (active) grid point-days within each event's expanded bounding
+    box and time window.
+
+    Args:
+        events: Event dicts with lat_min/max, lon_min/max, start, end.
+        t2m_daily_np: Float32 array (days, lat, lon) of daily-mean
+            2 m temperature in Celsius, aligned with dates/lats/lons.
+        exc_filt: Boolean array (time, lat, lon) from
+            apply_consecutive_filter, aligned with dates/lats/lons.
+        dates: 1-D datetime64 array aligned with axis 0.
+        lats: 1-D latitude array aligned with axis 1.
+        lons: 1-D longitude array aligned with axis 2.
+
+    Returns:
+        The same event list with mean_temp_c and min_temp_c added
+        (NaN when no active points exist).
+    """
+
+    def _idx(arr: np.ndarray, val: float) -> int:
+        return int(np.argmin(np.abs(arr - val)))
+
+    for ev in events:
+        start_date = np.datetime64(ev["start"])
+        end_date = np.datetime64(ev["end"])
+        t_indices = np.where((dates >= start_date) & (dates <= end_date))[0]
+
+        idx_s = _idx(lats, ev["lat_min"])
+        idx_n = _idx(lats, ev["lat_max"])
+        idx_w = _idx(lons, ev["lon_min"])
+        idx_e = _idx(lons, ev["lon_max"])
+
+        exc_ev = exc_filt[t_indices][:, idx_s : idx_n + 1, idx_w : idx_e + 1]
+        t2m_ev = t2m_daily_np[t_indices][:, idx_s : idx_n + 1, idx_w : idx_e + 1]
+
+        n_days = min(t2m_ev.shape[0], exc_ev.shape[0])
+        active_temps = t2m_ev[:n_days][exc_ev[:n_days]]
+        if active_temps.size > 0:
+            ev["mean_temp_c"] = round(float(active_temps.mean()), 2)
+            ev["min_temp_c"] = round(float(active_temps.min()), 2)
+        else:
+            ev["mean_temp_c"] = float("nan")
+            ev["min_temp_c"] = float("nan")
+
+    return events
+
+
 def events_to_dataframe(
     events: List[Dict],
     min_gridpoints: int = MIN_GRIDPOINTS,
@@ -688,17 +747,16 @@ def events_to_dataframe(
     """Convert event dicts to a labelled DataFrame.
 
     Args:
-        events: Raw event dicts from ``detect_events``.
-        min_gridpoints: Drop events whose peak grid-point count is
-            below this threshold. Default is 500 (MIN_GRIDPOINTS).
-        min_area_km2: Drop events whose peak area (km²) is below
-            this threshold. Default is 200 000 (MIN_AREA_KM2).
+        events: Raw event dicts from detect_events (after enrichment).
+        min_gridpoints: Drop events below this peak grid-point count.
+        min_area_km2: Drop events below this peak area (km²).
 
     Returns:
         DataFrame with columns label, event_type, start_date,
-        end_date, latitude_min, latitude_max, longitude_min,
-        longitude_max, max_consecutive_days, sorted by start_date.
-        Events below either threshold are excluded.
+        end_date, latitude_min/max, longitude_min/max,
+        max_consecutive_days, mean_consecutive_days, mean_temp_c,
+        min_temp_c, sorted by start_date. Events with fewer than
+        MIN_CONSECUTIVE_DAYS consecutive days are also excluded.
     """
     columns = [
         "label",
@@ -710,6 +768,9 @@ def events_to_dataframe(
         "longitude_min",
         "longitude_max",
         "max_consecutive_days",
+        "mean_consecutive_days",
+        "mean_temp_c",
+        "min_temp_c",
     ]
     if not events:
         return pd.DataFrame(columns=columns)
@@ -718,13 +779,16 @@ def events_to_dataframe(
     events = [
         e
         for e in events
-        if e["peak"] >= min_gridpoints and e.get("peak_area_km2", 0.0) >= min_area_km2
+        if e["peak"] >= min_gridpoints
+        and e.get("peak_area_km2", 0.0) >= min_area_km2
+        and e.get("max_consecutive_days", 0) >= MIN_CONSECUTIVE_DAYS
     ]
     logger.info(
-        "  Filtered %d events (< %d pts or < %.0f km²); %d remain",
+        "  Filtered %d events (< %d pts, < %.0f km², or < %d consec days); %d remain",
         n_before - len(events),
         min_gridpoints,
         min_area_km2,
+        MIN_CONSECUTIVE_DAYS,
         len(events),
     )
 
@@ -741,12 +805,319 @@ def events_to_dataframe(
             "longitude_min": e["lon_min"],
             "longitude_max": e["lon_max"],
             "max_consecutive_days": e.get("max_consecutive_days", 0),
+            "mean_consecutive_days": e.get("mean_consecutive_days", 0.0),
+            "mean_temp_c": e.get("mean_temp_c", float("nan")),
+            "min_temp_c": e.get("min_temp_c", float("nan")),
         }
         for e in events
     ]
     df = pd.DataFrame(rows).sort_values("start_date").reset_index(drop=True)
     df.insert(0, "label", range(1, len(df) + 1))
     return df
+
+
+def _add_lon_rect(
+    ax: plt.Axes,
+    lon_min_0360: float,
+    lon_max_0360: float,
+    lat_min: float,
+    lat_max: float,
+    color: tuple,
+    linewidth: float = 0.8,
+    zorder: int = 4,
+) -> None:
+    """Add a lat/lon rectangle to ax, splitting at the antimeridian if needed.
+
+    Inputs use 0-360 longitude. When the event wraps around the 0°/360°
+    boundary the bounding box is split into two rectangles so that
+    matplotlib does not draw an inverted or near-zero-width patch.
+    """
+
+    def _to_180(lon: float) -> float:
+        return lon if lon <= 180 else lon - 360
+
+    lmin = _to_180(lon_min_0360)
+    lmax = _to_180(lon_max_0360)
+
+    def _rect(x0: float, x1: float) -> mpatches.Rectangle:
+        return mpatches.Rectangle(
+            (x0, lat_min),
+            x1 - x0,
+            lat_max - lat_min,
+            linewidth=linewidth,
+            edgecolor=color,
+            facecolor=(*color[:3], 0.25),
+            transform=ccrs.PlateCarree(),
+            zorder=zorder,
+        )
+
+    if lmin <= lmax:
+        ax.add_patch(_rect(lmin, lmax))
+    else:
+        # Event wraps across the antimeridian – draw two segments.
+        ax.add_patch(_rect(lmin, 180.0))
+        ax.add_patch(_rect(-180.0, lmax))
+
+
+def plot_events_global(
+    df: pd.DataFrame,
+    event_type: str,
+    title: str,
+    output_path: str,
+) -> None:
+    """Plot detected events as bounding boxes on a global Robinson map.
+
+    Each event is drawn as a rectangle coloured by its start date.
+
+    Args:
+        df: DataFrame with latitude_min/max, longitude_min/max,
+            start_date columns.
+        event_type: 'heat_wave' or 'cold_snap' for colormap.
+        title: Figure title.
+        output_path: Destination PNG file path.
+    """
+    cmap_name = "Reds" if event_type == "heat_wave" else "Blues"
+    cmap = plt.colormaps.get_cmap(cmap_name)
+
+    fig = plt.figure(figsize=(18, 9))
+    ax = fig.add_subplot(1, 1, 1, projection=ccrs.Robinson())
+    ax.set_global()
+    ax.add_feature(cfeature.OCEAN, facecolor="lightcyan", zorder=0)
+    ax.add_feature(cfeature.LAND, facecolor="whitesmoke", zorder=1)
+    ax.coastlines(linewidth=0.5, zorder=3)
+    ax.add_feature(cfeature.BORDERS, linewidth=0.4, edgecolor="grey", zorder=3)
+    ax.gridlines(draw_labels=False, linewidth=0.3, color="grey", alpha=0.5, zorder=2)
+
+    if df.empty:
+        ax.set_title(f"{title}\n(no events)", fontsize=11, loc="left")
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        logger.info("Events plot saved to %s (no events)", output_path)
+        return
+
+    start_dates = pd.to_datetime(df["start_date"])
+    date_min = start_dates.min()
+    date_max = start_dates.max()
+    span = max((date_max - date_min).days, 1)
+    norm = mcolors.Normalize(vmin=0, vmax=span)
+
+    for _, row in df.iterrows():
+        days = (pd.to_datetime(row["start_date"]) - date_min).days
+        color = cmap(norm(days))
+        _add_lon_rect(
+            ax,
+            row["longitude_min"],
+            row["longitude_max"],
+            row["latitude_min"],
+            row["latitude_max"],
+            color,
+        )
+
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=ax, orientation="vertical", fraction=0.02, pad=0.02)
+    tick_days = np.linspace(0, span, min(7, span + 1))
+    cbar.set_ticks(tick_days)
+    cbar.set_ticklabels(
+        [(date_min + pd.Timedelta(days=int(d))).strftime("%Y-%m-%d") for d in tick_days]
+    )
+    cbar.set_label("Event start date", fontsize=9)
+    ax.set_title(f"{title}\n{len(df)} events", fontsize=11, loc="left")
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    logger.info("Events plot saved to %s", output_path)
+
+
+def plot_events_high_consec(
+    df: pd.DataFrame,
+    title: str,
+    output_path: str,
+    min_consec: int = 6,
+) -> None:
+    """Plot events with >= min_consec days, coloured by consecutive days.
+
+    Uses the plasma colormap (neutral, not event-type specific).
+
+    Args:
+        df: DataFrame from events_to_dataframe with columns
+            latitude_min/max, longitude_min/max, max_consecutive_days.
+        title: Figure title.
+        output_path: Destination PNG file path.
+        min_consec: Minimum max_consecutive_days to include. Default 6.
+    """
+    sub = df[df["max_consecutive_days"] >= min_consec].copy()
+
+    fig = plt.figure(figsize=(18, 9))
+    ax = fig.add_subplot(1, 1, 1, projection=ccrs.Robinson())
+    ax.set_global()
+    ax.add_feature(cfeature.OCEAN, facecolor="lightcyan", zorder=0)
+    ax.add_feature(cfeature.LAND, facecolor="whitesmoke", zorder=1)
+    ax.coastlines(linewidth=0.5, zorder=3)
+    ax.add_feature(cfeature.BORDERS, linewidth=0.4, edgecolor="grey", zorder=3)
+    ax.gridlines(draw_labels=False, linewidth=0.3, color="grey", alpha=0.5, zorder=2)
+
+    if sub.empty:
+        ax.set_title(
+            f"{title}\n(no events with >= {min_consec} consecutive days)",
+            fontsize=11,
+            loc="left",
+        )
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        logger.info(
+            "High-consec plot saved to %s (no qualifying events)",
+            output_path,
+        )
+        return
+
+    vmin = min_consec
+    vmax = int(sub["max_consecutive_days"].max())
+    n_levels = vmax - vmin + 1
+    cmap = plt.colormaps.get_cmap("plasma_r").resampled(n_levels)
+    bin_edges = np.arange(vmin - 0.5, vmax + 1.5, 1)
+    norm = mcolors.BoundaryNorm(bin_edges, ncolors=n_levels)
+
+    for _, row in sub.iterrows():
+        consec_val = int(row["max_consecutive_days"])
+        color = cmap(norm(consec_val))
+        _add_lon_rect(
+            ax,
+            row["longitude_min"],
+            row["longitude_max"],
+            row["latitude_min"],
+            row["latitude_max"],
+            color,
+        )
+
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=ax, orientation="vertical", fraction=0.02, pad=0.02)
+    cbar.set_ticks(range(vmin, vmax + 1))
+    cbar.set_label("Max Consecutive Days", fontsize=9)
+    ax.set_title(f"{title}\n{len(sub)} events", fontsize=11, loc="left")
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    logger.info("High-consec plot saved to %s", output_path)
+
+
+def plot_event_consec_maps(
+    df: pd.DataFrame,
+    exc_filt: np.ndarray,
+    dates: np.ndarray,
+    lats: np.ndarray,
+    lons: np.ndarray,
+    stem: str,
+    min_consec: int = 6,
+) -> None:
+    """Plot a per-event consecutive-days map for each qualifying event.
+
+    For each row in df with max_consecutive_days >= min_consec, slices
+    exc_filt to the event's bounding box and time window, computes
+    per-grid-point max consecutive days, and saves a pcolormesh plot
+    using the plasma colormap.
+
+    Args:
+        df: DataFrame from events_to_dataframe with columns label,
+            start_date, end_date, latitude_min/max, longitude_min/max,
+            max_consecutive_days.
+        exc_filt: Boolean array (time, lat, lon) from
+            apply_consecutive_filter, aligned with dates/lats/lons.
+        dates: 1-D datetime64 array aligned with exc_filt axis 0.
+        lats: 1-D latitude array aligned with exc_filt axis 1.
+        lons: 1-D longitude array (0-360) aligned with exc_filt axis 2.
+        stem: Output path stem; each plot saved as
+            {stem}_event_{label:04d}_consec.png.
+        min_consec: Minimum max_consecutive_days to plot. Default 6.
+    """
+    qualifying = df[df["max_consecutive_days"] >= min_consec]
+    if qualifying.empty:
+        logger.info(
+            "No events with >= %d consecutive days to plot individually.",
+            min_consec,
+        )
+        return
+
+    logger.info(
+        "Plotting %d per-event consecutive-days maps...",
+        len(qualifying),
+    )
+
+    def _idx(arr: np.ndarray, val: float) -> int:
+        return int(np.argmin(np.abs(arr - val)))
+
+    plot_lons = np.where(lons > 180, lons - 360.0, lons)
+
+    for _, row in qualifying.iterrows():
+        label = int(row["label"])
+        start_date = np.datetime64(row["start_date"])
+        end_date = np.datetime64(row["end_date"])
+        t_indices = np.where((dates >= start_date) & (dates <= end_date))[0]
+
+        idx_s = _idx(lats, row["latitude_min"])
+        idx_n = _idx(lats, row["latitude_max"])
+        idx_w = _idx(lons, row["longitude_min"])
+        idx_e = _idx(lons, row["longitude_max"])
+
+        ev_filt = exc_filt[t_indices][:, idx_s : idx_n + 1, idx_w : idx_e + 1]
+        consec = max_consecutive_days(ev_filt)
+
+        ev_lats = lats[idx_s : idx_n + 1]
+        ev_lons = plot_lons[idx_w : idx_e + 1]
+
+        plot_data = consec.astype(float)
+        plot_data[consec < MIN_CONSECUTIVE_DAYS] = np.nan
+        valid = plot_data[~np.isnan(plot_data)]
+        if valid.size == 0:
+            continue
+
+        vmax = int(valid.max())
+        n_levels = vmax - MIN_CONSECUTIVE_DAYS + 1
+        cmap = plt.colormaps.get_cmap("plasma_r").resampled(n_levels)
+        bin_edges = np.arange(MIN_CONSECUTIVE_DAYS - 0.5, vmax + 1.5, 1)
+        norm = mcolors.BoundaryNorm(bin_edges, ncolors=n_levels)
+
+        fig, ax = plt.subplots(
+            subplot_kw={"projection": ccrs.PlateCarree()},
+            figsize=(10, 8),
+        )
+        ax.set_extent(
+            [
+                float(ev_lons.min()) - 1,
+                float(ev_lons.max()) + 1,
+                float(ev_lats.min()) - 1,
+                float(ev_lats.max()) + 1,
+            ],
+            crs=ccrs.PlateCarree(),
+        )
+        ax.add_feature(cfeature.OCEAN, facecolor="lightblue", zorder=0)
+        im = ax.pcolormesh(
+            ev_lons,
+            ev_lats,
+            plot_data,
+            cmap=cmap,
+            norm=norm,
+            transform=ccrs.PlateCarree(),
+            shading="auto",
+        )
+        ax.coastlines(linewidth=0.5, zorder=10)
+        ax.add_feature(cfeature.BORDERS, linewidth=0.6, edgecolor="grey")
+        ax.add_feature(cfeature.STATES, linewidth=0.4, edgecolor="lightgrey")
+
+        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_ticks(range(MIN_CONSECUTIVE_DAYS, vmax + 1))
+        cbar.set_label("Consecutive Days", fontsize=12)
+
+        start_str = str(row["start_date"])[:10]
+        end_str = str(row["end_date"])[:10]
+        ax.set_title(
+            f"Event {label}: Consecutive Exceedance Days\n{start_str} to {end_str}",
+            loc="left",
+            fontsize=13,
+        )
+        out_path = f"{stem}_event_{label:04d}_consec.png"
+        fig.savefig(out_path, dpi=200, bbox_inches="tight")
+        plt.close(fig)
+        logger.info("  Event %04d saved to %s", label, out_path)
 
 
 def main():
@@ -766,7 +1137,7 @@ def main():
     parser.add_argument(
         "--output",
         default="events_global.csv",
-        help="Output CSV path",
+        help="Output CSV path stem (actual file will be {stem}_events.csv)",
     )
     parser.add_argument(
         "--n-workers",
@@ -780,15 +1151,13 @@ def main():
         default=None,
         help=(
             f"Lower-bound climatology quantile ({VALID_QUANTILES}). "
-            "Days where temp op_lower clim_lower are candidates. "
-            "At least one of --quantile-lower or --quantile-upper "
-            "is required."
+            "At least one of --quantile-lower or --quantile-upper required."
         ),
     )
     parser.add_argument(
         "--operator-lower",
         default=">",
-        help=("Comparison operator applied to the lower bound (default: >)"),
+        help="Comparison operator for the lower bound (default: >)",
     )
     parser.add_argument(
         "--quantile-upper",
@@ -796,14 +1165,13 @@ def main():
         default=None,
         help=(
             f"Upper-bound climatology quantile ({VALID_QUANTILES}). "
-            "Days where temp op_upper clim_upper are candidates. "
             "Combine with --quantile-lower to define a band."
         ),
     )
     parser.add_argument(
         "--operator-upper",
         default="<",
-        help=("Comparison operator applied to the upper bound (default: <)"),
+        help="Comparison operator for the upper bound (default: <)",
     )
     parser.add_argument(
         "--lat-min",
@@ -817,6 +1185,41 @@ def main():
         default=90.0,
         help="Maximum latitude to include in detection. Default 90.0",
     )
+    parser.add_argument(
+        "--chunk-months",
+        type=int,
+        default=1,
+        help=(
+            "Process the exceedance mask this many months at a time "
+            "to stay within Dask worker memory limits. Set to 0 to "
+            "compute the full date range at once. Default is 1."
+        ),
+    )
+    parser.add_argument(
+        "--min-area-km2",
+        type=float,
+        default=200_000.0,
+        help=(
+            "Minimum contiguous blob area in km² required to seed a "
+            "new event AND on each of the prior MIN_CONSECUTIVE_DAYS-1 "
+            "days (joint-area check). Always applied, including in "
+            "sensitivity mode. Default 200 000."
+        ),
+    )
+    parser.add_argument(
+        "--sensitivity-thresholds",
+        type=float,
+        nargs="+",
+        default=None,
+        metavar="KM2",
+        help=(
+            "Count surviving events at each supplied area threshold "
+            "(km²) and write a summary CSV. Events are seeded at "
+            "--min-area-km2 first; thresholds below that value will "
+            "equal the seed-filter count. Example: "
+            "--sensitivity-thresholds 200000 300000 500000 1000000"
+        ),
+    )
     args = parser.parse_args()
 
     if args.quantile_lower is None and args.quantile_upper is None:
@@ -824,8 +1227,6 @@ def main():
             "At least one of --quantile-lower or --quantile-upper must be provided."
         )
 
-    # Derive event_type label and plot colour from the quantiles.
-    # Format: "q{lower}+" / "q{upper}-" / "q{lower}-q{upper}"
     ql, qu = args.quantile_lower, args.quantile_upper
     if ql is not None and qu is not None:
         event_type = f"q{ql:.2f}-q{qu:.2f}"
@@ -833,9 +1234,7 @@ def main():
         event_type = f"q{ql:.2f}+"
     else:
         event_type = f"q{qu:.2f}-"
-    # Infer warm vs cold for the plot colourmap:
-    # warm when the lower bound is above the median (high percentile),
-    # cold when the upper bound is below the median (low percentile).
+
     if ql is not None and ql >= 0.5:
         plot_event_type = "heat_wave"
     elif qu is not None and qu <= 0.5:
@@ -843,10 +1242,19 @@ def main():
     else:
         plot_event_type = "heat_wave"
 
+    is_sensitivity = args.sensitivity_thresholds is not None
+    if is_sensitivity:
+        below = [t for t in args.sensitivity_thresholds if t < args.min_area_km2]
+        if below:
+            logger.warning(
+                "Sensitivity thresholds %s are below the seed filter "
+                "(%.0f km²); those counts will equal the seed-filter total.",
+                below,
+                args.min_area_km2,
+            )
+
     wall_start = time_module.time()
-    client = Client(
-        LocalCluster(n_workers=args.n_workers),
-    )
+    client = Client(LocalCluster(n_workers=args.n_workers))
     logger.info("Dask dashboard: %s", client.dashboard_link)
 
     logger.info("Pre-warming numba JIT...")
@@ -882,28 +1290,84 @@ def main():
     land_mask_np = land_mask.values.astype(bool)
     area_grid = compute_grid_cell_area(t2m.latitude.values, t2m.longitude.values)
 
-    logger.info("Building exceedance mask (lazy)...")
-    exc_lazy = build_exceedance_mask(
-        t2m,
-        clim_lower,
-        clim_upper,
-        land_mask,
-        op_lower=args.operator_lower,
-        op_upper=args.operator_upper,
-    )
+    tdim = detect_time_dim(t2m)
 
-    tdim = detect_time_dim(exc_lazy)
-
-    logger.info("Computing exceedance mask...")
+    # ── Exceedance mask + daily temperature (combined, parallel) ──────
+    # Both passes read the same ERA5 data month-by-month. Combining them
+    # into one loop and submitting all lazy chunks to dask.compute() at
+    # once lets the Dask workers process months in parallel, halving ERA5
+    # reads and eliminating sequential chunk overhead.
     t0 = time_module.time()
-    exc_da = exc_lazy.compute()
-    logger.info("  done in %.1f s", time_module.time() - t0)
+    if args.chunk_months > 0:
+        logger.info(
+            "Building lazy graphs for exceedance mask + temperature "
+            "(%d-month chunks, parallel)...",
+            args.chunk_months,
+        )
+        month_starts = pd.date_range(args.start_date, args.end_date, freq="MS")
+        chunk_labels = []
+        exc_lazy_list = []
+        t2m_lazy_list = []
+        for i in range(0, len(month_starts), args.chunk_months):
+            ms = month_starts[i]
+            me = month_starts[min(i + args.chunk_months, len(month_starts)) - 1]
+            me = me + pd.offsets.MonthEnd(1)
+            chunk_labels.append(f"{ms.strftime('%Y-%m')} - {me.strftime('%Y-%m')}")
+            t2m_chunk = t2m.sel({tdim: slice(str(ms.date()), str(me.date()))})
+            exc_lazy_list.append(
+                build_exceedance_mask(
+                    t2m_chunk,
+                    clim_lower,
+                    clim_upper,
+                    land_mask,
+                    op_lower=args.operator_lower,
+                    op_upper=args.operator_upper,
+                )
+            )
+            t2m_lazy_list.append(t2m_chunk.resample({tdim: "1D"}).mean())
+
+        n_chunks = len(exc_lazy_list)
+        logger.info(
+            "  Computing %d chunks × 2 tasks in parallel via Dask...",
+            n_chunks,
+        )
+        all_computed = dask.compute(*exc_lazy_list, *t2m_lazy_list)
+        exc_parts = list(all_computed[:n_chunks])
+        t2m_parts = list(all_computed[n_chunks:])
+        for label in chunk_labels:
+            logger.info("  chunk %s done", label)
+
+        exc_da = xr.concat(exc_parts, dim=tdim)
+        t2m_daily_da = xr.concat(t2m_parts, dim=tdim)
+        del exc_parts, t2m_parts
+    else:
+        logger.info(
+            "Building lazy graphs (all-at-once) for exceedance mask + temperature..."
+        )
+        exc_lazy = build_exceedance_mask(
+            t2m,
+            clim_lower,
+            clim_upper,
+            land_mask,
+            op_lower=args.operator_lower,
+            op_upper=args.operator_upper,
+        )
+        t2m_lazy = t2m.resample({tdim: "1D"}).mean()
+        exc_da, t2m_daily_da = dask.compute(exc_lazy, t2m_lazy)
+
+    logger.info(
+        "  exceedance mask + temperature done in %.1f s",
+        time_module.time() - t0,
+    )
 
     dates = exc_da[tdim].values
     lats = exc_da.latitude.values
     lons = exc_da.longitude.values
     exc_np = exc_da.values.astype(bool)
     del exc_da
+
+    t2m_daily_np = (t2m_daily_da.values - 273.15).astype(np.float32)
+    del t2m_daily_da
 
     logger.info(
         "Applying %d-day consecutive filter...",
@@ -917,10 +1381,21 @@ def main():
     )
     del exc_np
 
-    logger.info("Detecting events...")
+    logger.info(
+        "Detecting events (min_seed_area_km2=%.0f)...",
+        args.min_area_km2,
+    )
     t0 = time_module.time()
-    events = detect_events(exc_filt, dates, lats, lons, event_type, area_grid=area_grid)
-    logger.info("  %d events (%.1f s)", len(events), time_module.time() - t0)
+    events = detect_events(
+        exc_filt,
+        dates,
+        lats,
+        lons,
+        event_type,
+        area_grid=area_grid,
+        min_seed_area_km2=args.min_area_km2,
+    )
+    logger.info("  %d raw events (%.1f s)", len(events), time_module.time() - t0)
 
     logger.info(
         "Expanding event bounds (%d-deg steps)...",
@@ -935,32 +1410,78 @@ def main():
     )
     logger.info("  done in %.1f s", time_module.time() - t0)
 
-    logger.info("Computing max-consecutive-days plot...")
+    logger.info("Computing per-event temperature statistics...")
+    t0 = time_module.time()
+    events = enrich_events_with_temps(events, t2m_daily_np, exc_filt, dates, lats, lons)
+    del t2m_daily_np
+    logger.info("  done in %.1f s", time_module.time() - t0)
+
     stem = str(pathlib.Path(args.output).with_suffix(""))
+
+    df = events_to_dataframe(events, min_area_km2=args.min_area_km2)
+    events_csv = f"{stem}_events.csv"
+    df.to_csv(events_csv, index=False)
+    logger.info("%d events written to %s", len(df), events_csv)
+
+    # ── Global consecutive-days map ───────────────────────────────────
+    logger.info("Computing max-consecutive-days plot...")
     consec = max_consecutive_days(exc_filt)
     plot_consecutive_map(
         consec,
         lats,
         lons,
-        plot_event_type,
+        cast(Literal["heat_wave", "cold_snap"], plot_event_type),
         title=(
             f"Consecutive Exceedance Days ({event_type})"
             f"\n{args.start_date} to {args.end_date}"
         ),
         output_path=f"{stem}_consec.png",
     )
-    del consec, exc_filt
+    del consec
 
-    df = events_to_dataframe(events)
-    df.to_csv(args.output, index=False)
+    # ── Overview and high-consec bounding-box plots ───────────────────
+    plot_events_global(
+        df,
+        event_type=plot_event_type,
+        title=(
+            f"Detected events ({event_type.replace('_', ' ')})"
+            f"\n{args.start_date} to {args.end_date}"
+        ),
+        output_path=f"{stem}_events.png",
+    )
+    plot_events_high_consec(
+        df,
+        title=(
+            f"Events \u22656 consecutive days ({event_type.replace('_', ' ')})"
+            f"\n{args.start_date} to {args.end_date}"
+        ),
+        output_path=f"{stem}_high_consec.png",
+    )
+
+    # ── Per-event consecutive-days maps (>= 6 consec days) ───────────
+    plot_event_consec_maps(df, exc_filt, dates, lats, lons, stem)
+
+    del exc_filt
+
+    # ── Sensitivity table ─────────────────────────────────────────────
+    if is_sensitivity:
+        thresholds = sorted(args.sensitivity_thresholds)
+        logger.info(
+            "Sensitivity test: counting events at %d thresholds...",
+            len(thresholds),
+        )
+        rows = []
+        for thresh in thresholds:
+            df_thresh = events_to_dataframe(events, min_area_km2=thresh)
+            rows.append({"area_threshold_km2": thresh, "n_events": len(df_thresh)})
+        sens_df = pd.DataFrame(rows)
+        print(sens_df.to_string(index=False))
+        sens_path = f"{stem}_sensitivity.csv"
+        sens_df.to_csv(sens_path, index=False)
+        logger.info("Sensitivity table saved to %s", sens_path)
 
     elapsed = time_module.time() - wall_start
-    logger.info(
-        "Done: %d events -> %s (%.1f s)",
-        len(df),
-        args.output,
-        elapsed,
-    )
+    logger.info("Done in %.1f s", elapsed)
     client.close()
 
 
