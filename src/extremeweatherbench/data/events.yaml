@@ -377,10 +377,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 45.75
-      latitude_max: 68.75
-      longitude_min: 9.0
-      longitude_max: 14.0
+      latitude_min: 48.25
+      latitude_max: 68.25
+      longitude_min: 1.5
+      longitude_max: 21.5
   event_type: freeze
 - case_id_number: 33
   title: 2023 China
@@ -407,16 +407,16 @@
       longitude_max: 71.75
   event_type: freeze
 - case_id_number: 35
-  title: 2022 Colorado
+  title: 2022 West US
   start_date: 2022-04-06 00:00:00
   end_date: 2022-04-16 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: 37.25
-      latitude_max: 42.25
-      longitude_min: -107.5
-      longitude_max: -102.5
+      latitude_min: 38.75
+      latitude_max: 64.75
+      longitude_min: -129.75
+      longitude_max: -91.0
   event_type: freeze
 - case_id_number: 36
   title: July 2024 South Dakota
@@ -833,10 +833,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 9.75
-      latitude_max: 32.25
-      longitude_min: 254.25
-      longitude_max: 277.0
+      latitude_min: 14.5
+      latitude_max: 31.5
+      longitude_min: -105.0
+      longitude_max: -95.0
   event_type: heat_wave
 - case_id_number: 71
   title: June 2024 Northeast US
@@ -846,9 +846,9 @@
     type: bounded_region
     parameters:
       latitude_min: 37.0
-      latitude_max: 50.75
-      longitude_min: 272.0
-      longitude_max: 307.25
+      latitude_max: 46.0
+      longitude_min: -87.25
+      longitude_max: -69.25
   event_type: heat_wave
 - case_id_number: 72
   title: July 2024 Southwest US
@@ -857,10 +857,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 14.5
-      latitude_max: 31.5
-      longitude_min: -105.0
-      longitude_max: -95.0
+      latitude_min: 28.75
+      latitude_max: 59.75
+      longitude_min: -125.25
+      longitude_max: -110.25
   event_type: heat_wave
 - case_id_number: 73
   title: July 2024 Northeast US
@@ -869,10 +869,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 39.0
-      latitude_max: 48.0
-      longitude_min: -82.25
-      longitude_max: -69.25
+      latitude_min: 37.75
+      latitude_max: 52.75
+      longitude_min: -78.0
+      longitude_max: -61.0
   event_type: heat_wave
 - case_id_number: 74
   title: July 2024 Mid-Atlantic US
@@ -881,10 +881,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 30.75
-      latitude_max: 37.75
-      longitude_min: -124.25
-      longitude_max: -113.25
+      latitude_min: 37.0
+      latitude_max: 43.0
+      longitude_min: -81.25
+      longitude_max: -68.25
   event_type: heat_wave
 - case_id_number: 75
   title: August 2024 Midwest US
@@ -893,10 +893,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 37.75
-      latitude_max: 52.75
-      longitude_min: -78.0
-      longitude_max: -61.0
+      latitude_min: 37.5
+      latitude_max: 43.5
+      longitude_min: -86.75
+      longitude_max: -81.75
   event_type: heat_wave
 - case_id_number: 76
   title: July 2024 Antarctica
@@ -905,10 +905,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 37.0
-      latitude_max: 43.0
-      longitude_min: -81.25
-      longitude_max: -68.25
+      latitude_min: -83.5
+      latitude_max: -68.5
+      longitude_min: 4.5
+      longitude_max: 37.5
   event_type: heat_wave
 - case_id_number: 77
   title: August 2024 Canada
@@ -917,10 +917,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 37.5
-      latitude_max: 44.5
-      longitude_min: -90.75
-      longitude_max: -85.75
+      latitude_min: 58.5
+      latitude_max: 76.5
+      longitude_min: -133.5
+      longitude_max: -89.5
   event_type: heat_wave
 - case_id_number: 78
   title: August 2024 Australia
@@ -929,10 +929,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: -83.5
-      latitude_max: -68.5
-      longitude_min: 4.5
-      longitude_max: 37.5
+      latitude_min: -27.5
+      latitude_max: -17.5
+      longitude_min: 114.5
+      longitude_max: 142.5
   event_type: heat_wave
 - case_id_number: 79
   title: July/August 2024 Japan
@@ -941,10 +941,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 58.5
-      latitude_max: 76.5
-      longitude_min: -133.5
-      longitude_max: -89.5
+      latitude_min: 33.0
+      latitude_max: 39.0
+      longitude_min: 132.0
+      longitude_max: 141.0
   event_type: heat_wave
 - case_id_number: 80
   title: June 2024 Saudi Arabia
@@ -953,10 +953,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: -27.5
-      latitude_max: -17.5
-      longitude_min: 114.5
-      longitude_max: 142.5
+      latitude_min: 18.0
+      latitude_max: 36.0
+      longitude_min: 22.0
+      longitude_max: 55.0
   event_type: heat_wave
 - case_id_number: 81
   title: August 2024 Europe
@@ -965,10 +965,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 33.0
-      latitude_max: 39.0
-      longitude_min: 132.0
-      longitude_max: 141.0
+      latitude_min: 34.5
+      latitude_max: 53.5
+      longitude_min: 3.0
+      longitude_max: 22.0
   event_type: heat_wave
 - case_id_number: 82
   title: July 2024 Ukraine
@@ -977,10 +977,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 18.0
-      latitude_max: 36.0
-      longitude_min: 22.0
-      longitude_max: 55.0
+      latitude_min: 39.0
+      latitude_max: 55.0
+      longitude_min: 15.0
+      longitude_max: 39.0
   event_type: heat_wave
 - case_id_number: 83
   title: June 2024 Europe
@@ -989,10 +989,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 34.5
-      latitude_max: 53.5
-      longitude_min: 3.0
-      longitude_max: 22.0
+      latitude_min: 48.25
+      latitude_max: 55.25
+      longitude_min: 2.0
+      longitude_max: 9.0
   event_type: heat_wave
 - case_id_number: 84
   title: May 2024 Central Mexico
@@ -1001,10 +1001,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 39.0
-      latitude_max: 55.0
-      longitude_min: 15.0
-      longitude_max: 39.0
+      latitude_min: 14.0
+      latitude_max: 31.0
+      longitude_min: -104.75
+      longitude_max: -82.75
   event_type: heat_wave
 - case_id_number: 85
   title: May 2024 Pakistan/India
@@ -1013,10 +1013,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 48.25
-      latitude_max: 55.25
-      longitude_min: 2.0
-      longitude_max: 9.0
+      latitude_min: 30.0
+      latitude_max: 43.0
+      longitude_min: 72.0
+      longitude_max: 86.0
   event_type: heat_wave
 - case_id_number: 86
   title: August 2023 Chile
@@ -1025,10 +1025,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 14.0
-      latitude_max: 31.0
-      longitude_min: -104.75
-      longitude_max: -82.75
+      latitude_min: -42.0
+      latitude_max: -20.0
+      longitude_min: -73.25
+      longitude_max: -62.25
   event_type: heat_wave
 - case_id_number: 87
   title: January 2024 Pacific Northwest
@@ -1037,10 +1037,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 31.5
-      latitude_max: 36.5
-      longitude_min: 73.5
-      longitude_max: 78.5
+      latitude_min: 45.0
+      latitude_max: 69.0
+      longitude_min: -133.75
+      longitude_max: -100.0
   event_type: freeze
 - case_id_number: 88
   title: April 2022 Nevada
@@ -1049,10 +1049,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: -42.0
-      latitude_max: -20.0
-      longitude_min: -73.25
-      longitude_max: -62.25
+      latitude_min: 42.25
+      latitude_max: 67.25
+      longitude_min: -138.25
+      longitude_max: -93.5
   event_type: freeze
 - case_id_number: 89
   title: February/March 2021 New England
@@ -1061,10 +1061,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 45.0
-      latitude_max: 69.0
-      longitude_min: -133.75
-      longitude_max: -100.0
+      latitude_min: 40.25
+      latitude_max: 46.25
+      longitude_min: -75.0
+      longitude_max: -68.0
   event_type: freeze
 - case_id_number: 90
   title: January 2024 Northern Europe
@@ -1073,10 +1073,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 38.25
-      latitude_max: 63.25
-      longitude_min: -118.25
-      longitude_max: -113.25
+      latitude_min: 56.75
+      latitude_max: 71.75
+      longitude_min: 3.5
+      longitude_max: 20.5
   event_type: freeze
 - case_id_number: 91
   title: December 2022 Europe
@@ -1085,10 +1085,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 40.25
-      latitude_max: 46.25
-      longitude_min: -75.0
-      longitude_max: -68.0
+      latitude_min: 48.0
+      latitude_max: 55.0
+      longitude_min: -9.0
+      longitude_max: 16.0
   event_type: freeze
 - case_id_number: 92
   title: April 2024 Europe
@@ -1097,10 +1097,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 56.75
-      latitude_max: 71.75
-      longitude_min: 3.5
-      longitude_max: 20.5
+      latitude_min: 42.25
+      latitude_max: 54.25
+      longitude_min: -3.25
+      longitude_max: 23.75
   event_type: freeze
 - case_id_number: 93
   title: January 2023 North China
@@ -1109,10 +1109,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 48.0
-      latitude_max: 55.0
-      longitude_min: -9.0
-      longitude_max: 16.0
+      latitude_min: 38.5
+      latitude_max: 46.5
+      longitude_min: 116.5
+      longitude_max: 124.5
   event_type: freeze
 - case_id_number: 94
   title: April 2024 Sweden
@@ -1121,10 +1121,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 42.25
-      latitude_max: 54.25
-      longitude_min: -3.25
-      longitude_max: 23.75
+      latitude_min: 57.75
+      latitude_max: 71.75
+      longitude_min: 10.25
+      longitude_max: 21.25
   event_type: freeze
 - case_id_number: 95
   title: November 2024 West Coast US
@@ -1133,10 +1133,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 40.0
-      latitude_max: 45.0
-      longitude_min: 120.0
-      longitude_max: 125.0
+      latitude_min: 27.8
+      latitude_max: 54.2
+      longitude_min: 222.4
+      longitude_max: 245.3
   event_type: atmospheric_river
 - case_id_number: 96
   title: October 2024 British Columbia
@@ -1145,10 +1145,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 57.75
-      latitude_max: 71.75
-      longitude_min: 10.25
-      longitude_max: 21.25
+      latitude_min: 32.8
+      latitude_max: 56.0
+      longitude_min: 217.3
+      longitude_max: 247.0
   event_type: atmospheric_river
 - case_id_number: 97
   title: September 2024 SW Alaska and British Columbia
