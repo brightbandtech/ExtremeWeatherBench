@@ -244,14 +244,29 @@ def preprocess_hres_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
 
 
 def get_climatology(quantile: float = 0.85) -> xr.DataArray:
-    """Get the climatology dataset for the heatwave criteria."""
-    if quantile not in [0.15, 0.85]:
-        raise ValueError("Quantile must be 0.15 or 0.85")
+    """Open the surface temperature climatology for the given quantile.
+
+    Args:
+        quantile: Climatology quantile to retrieve. Must be one of
+            0.10, 0.15, 0.25, 0.50, 0.75, 0.85, 0.90. Default is
+            0.85.
+
+    Returns:
+        DataArray of 2m temperature climatology indexed by
+        (dayofyear, hour, latitude, longitude).
+
+    Raises:
+        ValueError: If quantile is not in the supported list.
+    """
+    _QUANTILE_LIST = [0.10, 0.15, 0.25, 0.50, 0.75, 0.85, 0.90]
+    if quantile not in _QUANTILE_LIST:
+        raise ValueError(f"Quantile must be one of {_QUANTILE_LIST}")
+    idx = _QUANTILE_LIST.index(quantile)
     return xr.open_zarr(
         "gs://extremeweatherbench/datasets/surface_air_temperature_1990_2019_climatology.zarr",  # noqa: E501
         storage_options={"anon": True},
-        chunks="auto",
-    )["2m_temperature"].sel(quantile=quantile)
+        chunks={},
+    )["2m_temperature"].isel(quantile=idx)
 
 
 # ERA5 targets

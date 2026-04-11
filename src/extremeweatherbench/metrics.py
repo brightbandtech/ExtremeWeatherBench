@@ -1407,6 +1407,77 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
         )
 
 
+def _calculate_event_duration(
+    mask: xr.DataArray,
+    time_resolution_hours: int | float,
+    preserve_dims: str = "init_time",
+) -> xr.DataArray:
+    """Count total consecutive-run duration in hours along valid_time.
+
+    A run of N adjacent True timesteps each separated by exactly
+    time_resolution_hours counts as (N - 1) * time_resolution_hours
+    hours. An isolated True timestep contributes 0 hours.
+    Discontinuous True values (gap > time_resolution_hours between
+    any two True points) are not counted.
+
+    NaN values in mask are treated as False.
+
+    When preserve_dims is a regular array dimension (the simple
+    init_time case), consecutive hours are summed over valid_time,
+    returning total duration per preserve_dims slice.  When
+    preserve_dims is only a coordinate (the lead_time case where
+    init_time is a 2-D coord), a groupby aggregation is used
+    instead so that total hours are accumulated per unique
+    preserve_dims value.
+
+    For the init_time case the predecessor lookup shifts both
+    valid_time and lead_time by the same temporal distance
+    (expected_gap) so that the predecessor cell belongs to the
+    same forecast run.  The number of lead_time index steps is
+    expected_gap / lead_time_step (e.g. 4 for a daily target
+    on a 6 h lead_time grid).
+
+    Args:
+        mask: Boolean (or NaN-filled bool) DataArray with a
+            valid_time dimension.
+        time_resolution_hours: Expected temporal spacing in hours.
+        preserve_dims: Dimension or coordinate to aggregate over.
+            Defaults to "init_time".
+
+    Returns:
+        DataArray with valid_time reduced out, values in hours.
+    """
+    expected_gap = np.timedelta64(int(time_resolution_hours), "h")
+    mask = mask.fillna(False).astype(bool)
+    vt = mask.valid_time.values
+    gaps = np.concatenate([[False], (vt[1:] - vt[:-1]) == expected_gap])
+    is_expected_gap = xr.DataArray(gaps, dims=["valid_time"], coords={"valid_time": vt})
+    # When init_time is only a coordinate (not a dim) and lead_time is a dim,
+    # consecutive timesteps within one forecast run follow the diagonal of the
+    # (valid_time, lead_time) grid.  Shifting along valid_time alone always
+    # lands on NaN-filled cells (sparse outer-join grid), so shift both axes.
+    # The number of lead_time index steps must equal expected_gap in time so
+    # that the predecessor cell has the same init_time (vt - lead = const).
+    # For daily targets aligned to a 6 h lead_time grid this is 24h/6h = 4.
+    if "lead_time" in mask.dims and preserve_dims not in mask.dims:
+        lt_step = np.unique(np.diff(mask.lead_time.values))
+        n_lead_steps = (
+            max(1, int(expected_gap / lt_step[0]))
+            if len(lt_step) == 1 and lt_step[0] > np.timedelta64(0)
+            else 1
+        )
+        mask_prev = mask.shift(
+            {"valid_time": 1, "lead_time": n_lead_steps}, fill_value=False
+        )
+    else:
+        mask_prev = mask.shift(valid_time=1, fill_value=False)
+    consecutive_pairs = mask & mask_prev & is_expected_gap
+    hours = consecutive_pairs * time_resolution_hours
+    if preserve_dims in hours.dims:
+        return hours.sum("valid_time")
+    return hours.groupby(preserve_dims).sum()
+
+
 class DurationMeanError(MeanError):
     """Compute mean error of event duration between forecast and target.
 
@@ -1457,10 +1528,27 @@ class DurationMeanError(MeanError):
         Args:
             forecast: the forecast DataArray.
             target: the target DataArray.
+            **kwargs: Accepts case_metadata (IndividualCase) to apply
+                a ±48 h buffer around the case start/end before any
+                reduction. If absent, the buffer step is skipped.
 
         Returns:
-            The mean error between forecast and target event durations.
+            The mean error between forecast and target event durations
+            in hours.
         """
+        # Apply ±48 h buffer around case start/end before any reduction.
+        case_metadata = kwargs.get("case_metadata", None)
+        if case_metadata is not None:
+            buffer = np.timedelta64(48, "h")
+            case_start = np.datetime64(case_metadata.start_date) - buffer
+            case_end = np.datetime64(case_metadata.end_date) + buffer
+            forecast = forecast.sel(valid_time=slice(case_start, case_end))
+            target = target.sel(valid_time=slice(case_start, case_end))
+        else:
+            logger.debug(
+                "case_metadata not in kwargs; skipping ±48 h valid_time buffer"
+            )
+
         # Handle criteria - either climatology (xr.DataArray) or float threshold
         # Use local variable to avoid mutating self.threshold_criteria
         threshold_criteria = self.threshold_criteria
@@ -1517,16 +1605,20 @@ class DurationMeanError(MeanError):
                 dim={"lead_time": target.lead_time.size}
             ).where(forecast_valid_mask)
 
-        # Sum to get durations (NaN values are excluded by default)
-        forecast_duration = forecast_mask_final.groupby(self.preserve_dims).sum(
-            skipna=True
+        time_resolution_hours = utils.determine_temporal_resolution(forecast)
+        if time_resolution_hours is None:
+            logger.warning(
+                "Could not determine temporal resolution; duration defaults to 0"
+            )
+            time_resolution_hours = 0
+        # product_time_resolution_hours is deprecated; duration is now
+        # always returned in hours by _calculate_event_duration
+        forecast_duration = _calculate_event_duration(
+            forecast_mask_final, time_resolution_hours, self.preserve_dims
         )
-        target_duration = target_mask_final.groupby(self.preserve_dims).sum(skipna=True)
-
-        if self.product_time_resolution_hours:
-            time_resolution_hours = utils.determine_temporal_resolution(forecast)
-            forecast_duration = forecast_duration * time_resolution_hours
-            target_duration = target_duration * time_resolution_hours
+        target_duration = _calculate_event_duration(
+            target_mask_final, time_resolution_hours, self.preserve_dims
+        )
 
         return super()._compute_metric(
             forecast=forecast_duration,

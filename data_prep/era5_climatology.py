@@ -29,21 +29,17 @@ https://github.com/google-research/arco-era5
 Usage examples:
 --------------
 # One percentile:
-uv run data_prep/climatology.py generate \\
+uv run data_prep/era5_climatology.py generate \\
     --variable 2m_temperature --percentile 0.85 \\
-    --output /home/taylor/data/climatology_zarr/2m_temperature_p85.zarr
+    --output ~/climatology_zarr/2m_temperature_p85.zarr
 
 # Multiple quantiles in one pass:
-uv run data_prep/climatology.py all-quantiles \\
-    --variable 2m_temperature \\
-    --quantiles 0.10 0.25 0.50 0.75 0.90 \\
-    --output-dir /home/taylor/data/climatology_zarr \\
-    --n-workers 16
+uv run data_prep/era5_climatology.py all-quantiles  --variable 2m_temperature  --quantiles 0.10 0.25 0.50 0.75 0.90  --output-dir ~/climatology_zarr --n-workers 16 --gcs-quantiles 0.15 0.85
 
 # Combine local stores (+ optionally pull p15/p85 from GCS):
-uv run data_prep/climatology.py combine \\
-    --input-dir /home/taylor/data/climatology_zarr \\
-    --output /home/taylor/data/climatology_zarr/2m_temperature_combined.zarr \\
+uv run data_prep/era5_climatology.py combine \\
+    --input-dir ~/climatology_zarr \\
+    --output ~/climatology_zarr/2m_temperature_combined.zarr \\
     --gcs-quantiles 0.15 0.85
 """
 
@@ -342,11 +338,17 @@ def _load_gcs_store(quantile: float, variable: str) -> xr.DataArray:
 
 def combine_stores(
     input_dir: pathlib.Path,
-    output: pathlib.Path,
+    output: pathlib.Path | str,
     variable: str,
     gcs_quantiles: list[float],
+    application_credentials: str = "",
 ) -> None:
-    """Concatenate per-quantile stores into one zarr with a quantile dim."""
+    """Concatenate per-quantile stores into one zarr with a quantile dim.
+
+    ``output`` may be a local path or a GCS URL (``gs://bucket/prefix``).
+    When writing to GCS, ADC is used unless ``application_credentials``
+    points to a service-account JSON file.
+    """
     slices: list[xr.DataArray] = []
 
     local_stores = sorted(input_dir.glob(f"{variable}_p*_climatology.zarr"))
@@ -361,14 +363,12 @@ def combine_stores(
     if not slices:
         raise RuntimeError("No data found — check --input-dir and --gcs-quantiles.")
 
-    output_variable = "surface_air_temperature"
-
     logger.info(
         "Concatenating %d quantile slices along 'quantile' dim...",
         len(slices),
     )
     combined_da = xr.concat(slices, dim="quantile").sortby("quantile")
-    ds_out = combined_da.to_dataset(name=output_variable)
+    ds_out = combined_da.to_dataset(name=variable)
     ds_out.attrs.update(
         {
             "source": "ERA5 ARCO",
@@ -379,7 +379,7 @@ def combine_stores(
 
     n_quantiles = ds_out.sizes["quantile"]
     encoding = {
-        output_variable: {
+        variable: {
             "chunks": [
                 n_quantiles,  # keep all quantiles in one chunk
                 COMBINED_ZARR_CHUNKS["dayofyear"],
@@ -390,10 +390,25 @@ def combine_stores(
         }
     }
 
-    output.parent.mkdir(parents=True, exist_ok=True)
-    logger.info("Writing combined zarr to %s...", output)
-    ds_out.to_zarr(output, mode="w", zarr_format=2, encoding=encoding)
-    logger.info("Done: %s", output)
+    output_str = str(output)
+    if output_str.startswith("gs://"):
+        token = application_credentials if application_credentials else "google_default"
+        storage_options = {"token": token}
+        logger.info("Writing combined zarr to GCS: %s ...", output_str)
+        ds_out.to_zarr(
+            output_str,
+            mode="w",
+            zarr_format=2,
+            encoding=encoding,
+            storage_options=storage_options,
+        )
+    else:
+        local_out = pathlib.Path(output_str)
+        local_out.parent.mkdir(parents=True, exist_ok=True)
+        logger.info("Writing combined zarr to %s...", local_out)
+        ds_out.to_zarr(local_out, mode="w", zarr_format=2, encoding=encoding)
+
+    logger.info("Done: %s", output_str)
 
 
 def _zarr_store_path(
@@ -496,11 +511,15 @@ def cmd_combine(args: argparse.Namespace) -> None:
         output=args.output,
         variable=args.variable,
         gcs_quantiles=args.gcs_quantiles,
+        application_credentials=getattr(args, "application_credentials", ""),
     )
 
 
-_DEFAULT_OUTPUT_DIR = pathlib.Path("/home/taylor/data/climatology_zarr")
-_DEFAULT_COMBINED = _DEFAULT_OUTPUT_DIR / "2m_temperature_combined.zarr"
+_DEFAULT_OUTPUT_DIR = pathlib.Path("~/climatology_zarr")
+_DEFAULT_COMBINED = (
+    "gs://extremeweatherbench/datasets/"
+    "surface_air_temperature_1990_2019_climatology.zarr"
+)
 
 
 def _add_era5_args(p: argparse.ArgumentParser) -> None:
@@ -541,7 +560,7 @@ def _add_era5_args(p: argparse.ArgumentParser) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="climatology.py",
+        prog="era5_climatology.py",
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -599,9 +618,11 @@ def parse_args() -> argparse.Namespace:
     )
     p_comb.add_argument(
         "--output",
-        type=pathlib.Path,
         default=_DEFAULT_COMBINED,
-        help="Output path for the combined zarr store.",
+        help=(
+            "Output path for the combined zarr store. "
+            "May be a local path or a GCS URL (gs://bucket/prefix)."
+        ),
     )
     p_comb.add_argument(
         "--variable",
@@ -617,6 +638,14 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Additional quantiles to pull from the existing GCS climatology "
             "store (e.g. 0.15 0.85).  Only 0.15 and 0.85 are available."
+        ),
+    )
+    p_comb.add_argument(
+        "--application-credentials",
+        default="",
+        help=(
+            "Path to a GCP service-account JSON file for GCS output. "
+            "Leave empty to use Application Default Credentials."
         ),
     )
 
