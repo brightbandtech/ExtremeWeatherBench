@@ -248,10 +248,16 @@ def plot_consecutive_map(
     lons: np.ndarray,
     event_type: Literal["heat_wave", "cold_snap"],
     title: str,
-    output_path: str,
+    output_path: str | None = None,
     extent: tuple[float, float, float, float] | None = None,
+    ax=None,
 ) -> None:
     """Plot a max-consecutive-days field using the standard style.
+
+    When ``ax`` is provided the plot is drawn into that axis and
+    nothing is saved to disk; ``output_path`` is ignored.  When
+    ``ax`` is None a new figure is created and saved to
+    ``output_path``.
 
     Args:
         consec: int32 2-D array (nlat, nlon) of max consecutive days.
@@ -259,9 +265,12 @@ def plot_consecutive_map(
         lons: 1-D longitude array (0-360) matching consec columns.
         event_type: ``'heat_wave'`` or ``'cold_snap'``.
         title: Two-line figure title (left-aligned).
-        output_path: Destination PNG file path.
+        output_path: Destination PNG file path. Required when ax is
+            None; ignored when ax is provided.
         extent: (lon_min, lon_max, lat_min, lat_max) in -180..180.
             Derived from lats/lons when None. Default is None.
+        ax: Optional existing cartopy GeoAxes to draw into. When
+            provided, no figure is created or saved. Default is None.
     """
     plot_data = consec.astype(float)
     plot_data[consec < MIN_CONSECUTIVE_DAYS] = np.nan
@@ -283,10 +292,15 @@ def plot_consecutive_map(
     else:
         lon_min, lon_max, lat_min, lat_max = extent
 
-    fig, ax = plt.subplots(
-        subplot_kw={"projection": ccrs.PlateCarree()},
-        figsize=(10, 8),
-    )
+    own_fig = ax is None
+    if own_fig:
+        fig, ax = plt.subplots(
+            subplot_kw={"projection": ccrs.PlateCarree()},
+            figsize=(10, 8),
+        )
+    else:
+        fig = ax.get_figure()
+
     ax.set_extent(
         [lon_min, lon_max, lat_min, lat_max],
         crs=ccrs.PlateCarree(),
@@ -307,18 +321,23 @@ def plot_consecutive_map(
     divider = make_axes_locatable(ax)
     cax = divider.append_axes(
         "right",
-        size="5%",
+        size="3.75%",
         pad=0.1,
         axes_class=plt.Axes,
     )
     cbar = fig.colorbar(im, cax=cax)
     cbar.set_ticks(range(MIN_CONSECUTIVE_DAYS, vmax + 1))
-    cbar.set_label("Consecutive Days", fontsize=12)
+    cbar.set_label("Consecutive Days", fontsize=12, labelpad=6)
+    cbar.ax.yaxis.set_label_position("left")
 
     ax.set_title(title, loc="left", fontsize=13)
-    fig.savefig(output_path, dpi=200, bbox_inches="tight")
-    plt.close(fig)
-    logger.info("Saved consecutive-days plot to %s", output_path)
+
+    if own_fig:
+        if output_path is None:
+            raise ValueError("output_path is required when ax is not provided.")
+        fig.savefig(output_path, dpi=200, bbox_inches="tight")
+        plt.close(fig)
+        logger.info("Saved consecutive-days plot to %s", output_path)
 
 
 # ── bounding-box overview ─────────────────────────────────────────────
