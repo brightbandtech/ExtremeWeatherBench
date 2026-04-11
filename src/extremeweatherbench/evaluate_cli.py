@@ -7,7 +7,9 @@ from typing import Optional
 import click
 import pandas as pd
 
-from extremeweatherbench import cases, defaults, evaluate
+import extremeweatherbench.cases as cases
+import extremeweatherbench.defaults as defaults
+import extremeweatherbench.evaluate as evaluate
 
 
 @click.command()
@@ -52,14 +54,6 @@ from extremeweatherbench import cases, defaults, evaluate
     type=click.Path(),
     help="Save CaseOperator objects to a pickle file at this path",
 )
-@click.option(
-    "--precompute",
-    is_flag=True,
-    help=(
-        "Pre-compute datasets to avoid recomputing them for each metric (faster but "
-        "uses more memory)"
-    ),
-)
 @click.pass_context
 def cli_runner(
     ctx: click.Context,
@@ -70,7 +64,6 @@ def cli_runner(
     n_jobs: int,
     parallel_config: Optional[dict],
     save_case_operators: Optional[str],
-    precompute: bool,
 ):
     """ExtremeWeatherBench command line interface.
 
@@ -88,17 +81,17 @@ def cli_runner(
     save CaseOperator objects for later use or inspection.
 
     Args:
-        default: Use default Brightband evaluation objects with current directory as
-        output
-        config_file: Path to a config.py file containing evaluation objects
-        output_dir: Directory for analysis outputs (default: current directory)
-        cache_dir: Optional directory for caching intermediate data
-        parallel_config: Parallel configuration using joblib (default: {'backend':
-        'threading', 'n_jobs': 8})
-        save_case_operators: Save CaseOperator objects to a pickle file at this path
-        precompute: Pre-compute datasets before running metrics to avoid recomputing
-        them for each metric (faster but uses more memory)
-
+        default: Use default Brightband evaluation objects with current directory
+            as output.
+        config_file: Path to a config.py file containing evaluation objects.
+        output_dir: Directory for analysis outputs (default: current directory).
+        cache_dir: Optional directory for caching intermediate data. When set,
+            datasets or dataarrays are computed and cached as zarrs.
+        n_jobs: Number of parallel jobs to run (default: 1 for serial execution).
+        parallel_config: Advanced parallel configuration using joblib. Takes
+            precedence over n_jobs if provided.
+        save_case_operators: Save CaseOperator objects to a pickle file at this
+            path.
     Examples:
         # Use default evaluation objects
         $ ewb --default
@@ -109,11 +102,8 @@ def cli_runner(
         # Save case operators to pickle file
         $ ewb --default --save-case-operators case_ops.pkl
 
-        # Use custom output and cache directories
+        # Use custom output and cache directories (cache enables zarr storage)
         $ ewb --default --output-dir ./results --cache-dir ./cache
-
-        # Use precompute for faster execution (higher memory usage)
-        $ ewb --default --precompute
 
         # Use custom parallel configuration
         $ ewb --default --parallel-config '{"backend": "dask", "n_jobs": 4}'
@@ -137,15 +127,15 @@ def cli_runner(
     if default:
         click.echo("Using default Brightband evaluation objects...")
         evaluation_objects = defaults.get_brightband_evaluation_objects()
-        cases_dict = _load_default_cases()
+        case_list = _load_default_cases()
     else:
         assert config_file is not None  # for mypy
         click.echo(f"Loading evaluation objects from {config_file}...")
-        evaluation_objects, cases_dict = _load_config_file(config_file)
+        evaluation_objects, case_list = _load_config_file(config_file)
 
     # Initialize ExtremeWeatherBench
     ewb = evaluate.ExtremeWeatherBench(
-        case_metadata=cases_dict,
+        case_metadata=case_list,
         evaluation_objects=evaluation_objects,
         cache_dir=cache_dir if cache_dir else None,
     )
@@ -164,10 +154,9 @@ def cli_runner(
 
     # Run evaluation
     click.echo("Running evaluation...")
-    results = ewb.run(
+    results = ewb.run_evaluation(
         n_jobs=n_jobs,
         parallel_config=parallel_config,
-        pre_compute=precompute,
     )
 
     # Save results
@@ -183,7 +172,7 @@ def cli_runner(
 def _load_default_cases():
     """Load default case data for default evaluation objects."""
 
-    return cases.load_ewb_events_yaml_into_case_collection()
+    return cases.load_ewb_events_yaml_into_case_list()
 
 
 def _load_config_file(config_path: str) -> tuple:
@@ -191,7 +180,7 @@ def _load_config_file(config_path: str) -> tuple:
 
     The config file should define:
     - evaluation_objects: List of EvaluationObject instances
-    - cases_dict: Dictionary containing case data
+    - case_list: List of case data
     """
     config_path_obj = pathlib.Path(config_path)
 
@@ -207,10 +196,10 @@ def _load_config_file(config_path: str) -> tuple:
     if not hasattr(config_module, "evaluation_objects"):
         raise click.ClickException("Config file must define 'evaluation_objects' list")
 
-    if not hasattr(config_module, "cases_dict"):
-        raise click.ClickException("Config file must define 'cases_dict' dictionary")
+    if not hasattr(config_module, "case_list"):
+        raise click.ClickException("Config file must define 'case_list' list")
 
-    return config_module.evaluation_objects, config_module.cases_dict
+    return config_module.evaluation_objects, config_module.case_list
 
 
 if __name__ == "__main__":

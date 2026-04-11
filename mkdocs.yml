@@ -1,0 +1,79 @@
+site_name: ExtremeWeatherBench
+site_url: https://extremeweatherbench.readthedocs.io/
+site_author: Brightband PBC
+repo_url: https://github.com/brightbandtech/extremeweatherbench
+repo_name: brightbandtech/extremeweatherbench
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Usage: usage.md
+  - A Note on Parallelism: parallelism.md
+  - Event Categories:
+      - All Case Studies: events/AllCaseStudies.md
+      - Atmospheric Rivers:
+          - Overview: events/AtmosphericRivers.md
+          - November 2024 West Coast US: events/atmospheric_rivers/november_2024_west_coast_us.md
+      - Severe Convection: events/ConvectiveWx.md
+      - Derechos: events/Derechos.md
+      - Flooding: events/Flooding.md
+      - Freezes: events/FreezeEvents.md
+      - Heatwaves: events/Heatwaves.md
+      - Other Floods: events/OtherFloods.md
+      - Tropical Cyclones: events/TropicalCyclones.md
+      - Tropical Cyclone Flooding: events/TCFloods.md
+      - Tropical Cyclone Tornadic Outbreaks: events/TCTornadoOutbreaks.md
+      - Wind Events: events/WindEvents.md
+      - Winter Weather: events/WinterWeather.md
+  - Cookbook:
+      - CIRA Forecast: recipes/cira_forecast.md
+      - BYOF (Bring Your Own Forecast): recipes/your_own_forecast.md
+      - BYOT (Bring Your Own Target): recipes/your_own_target.md
+      - BYOM (Bring Your Own Metrics): recipes/your_own_metrics.md
+      - BYOV (Bring Your Own Variable): recipes/your_own_variable.md
+      - Evaluate Recent Tropical Cyclones: recipes/evaluate_recent_tropical_cyclones.md
+      - Near Real-Time Point Observations: recipes/near_real_time_point_observations.md
+      - Single Case: recipes/single_case.md
+      - One Forecast, Two Targets: recipes/one_forecast_two_targets.md
+      - Multi Model Evaluation: recipes/multi_model_evaluation.md
+
+theme:
+  name: material
+  logo: _static/bb_dark.svg
+  favicon: _static/bb.svg
+  palette:
+    scheme: "brightband"
+
+extra_css:
+  - stylesheets/brightband.css
+  - https://unpkg.com/katex@0/dist/katex.min.css
+
+markdown_extensions:
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascripts/katex.js
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
+
+plugins:
+  - search
+  - mkdocs-autoapi:
+      autoapi_dir: src/extremeweatherbench
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            docstring_options:
+              ignore_init_summary: true
+            merge_init_into_class: true
+            group_by_category: true
+            # show_category_heading: true
+            docstring_section_style: list
+            show_source: false
+            separate_signature: true
+            signature_crossrefs: true
+            summary: true

@@ -1,11 +1,9 @@
 """Tests for the evaluate_cli interface."""
 
 import pickle
-import tempfile
-from pathlib import Path
+import textwrap
 from unittest import mock
 
-import click.testing
 import pandas as pd
 import pytest
 
@@ -23,30 +21,13 @@ def suppress_cli_output():
 
 
 @pytest.fixture
-def runner():
-    """Create a Click test runner with output suppression."""
-    return click.testing.CliRunner()
-
-
-@pytest.fixture
-def temp_config_dir():
-    """Create a temporary directory for config files and test outputs.
-
-    This ensures all test files are created in temporary directories and automatically
-    cleaned up after each test.
-    """
-    with tempfile.TemporaryDirectory() as temp_dir:
-        yield Path(temp_dir)
-
-
-@pytest.fixture
 def sample_config_py(temp_config_dir):
     """Create a sample Python config file."""
-    config_content = """
-# Simple test config that doesn't import complex modules
-evaluation_objects = []
-cases_dict = {"cases": []}
-"""
+    config_content = textwrap.dedent("""
+        # Simple test config that doesn't import complex modules
+        evaluation_objects = []
+        case_list = []
+        """)
     config_file = temp_config_dir / "test_config.py"
     config_file.write_text(config_content)
     return config_file
@@ -87,11 +68,11 @@ class TestDefaultMode:
         # Mock the ExtremeWeatherBench class and its methods
         mock_ewb = mock.Mock()
         mock_ewb.case_operators = [mock.Mock(), mock.Mock()]  # Mock 2 case operators
-        mock_ewb.run.return_value = pd.DataFrame({"test": [1, 2]})
+        mock_ewb.run_evaluation.return_value = pd.DataFrame({"test": [1, 2]})
         mock_ewb_class.return_value = mock_ewb
 
         # Mock loading default cases
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         result = runner.invoke(
             evaluate_cli.cli_runner, ["--default", "--output-dir", str(temp_config_dir)]
@@ -99,7 +80,7 @@ class TestDefaultMode:
 
         assert result.exit_code == 0
         mock_ewb_class.assert_called_once()
-        mock_ewb.run.assert_called_once()
+        mock_ewb.run_evaluation.assert_called_once()
 
     @mock.patch(
         "extremeweatherbench.defaults.get_brightband_evaluation_objects",
@@ -118,9 +99,9 @@ class TestDefaultMode:
         """Test default mode with cache directory."""
         mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
-        mock_ewb.run.return_value = pd.DataFrame()
+        mock_ewb.run_evaluation.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         cache_dir = temp_config_dir / "cache"
 
@@ -144,7 +125,7 @@ class TestConfigFileMode:
         """Test basic config file mode execution."""
         mock_ewb = mock.Mock()
         mock_ewb.case_operators = [mock.Mock()]
-        mock_ewb.run.return_value = pd.DataFrame({"test": [1]})
+        mock_ewb.run_evaluation.return_value = pd.DataFrame({"test": [1]})
         mock_ewb_class.return_value = mock_ewb
 
         result = runner.invoke(
@@ -170,9 +151,9 @@ class TestConfigFileMode:
 
     def test_config_file_missing_evaluation_objects(self, runner, temp_config_dir):
         """Test config file missing required evaluation_objects."""
-        config_content = """
-cases_dict = {"cases": []}
-        """
+        config_content = textwrap.dedent("""
+        cases_list = []
+        """)
         config_file = temp_config_dir / "bad_config.py"
         config_file.write_text(config_content)
 
@@ -183,11 +164,11 @@ cases_dict = {"cases": []}
         assert result.exit_code != 0
         # Output suppressed - only check exit code
 
-    def test_config_file_missing_cases_dict(self, runner, temp_config_dir):
-        """Test config file missing required cases_dict."""
-        config_content = """
-evaluation_objects = []
-        """
+    def test_config_file_missing_case_list(self, runner, temp_config_dir):
+        """Test config file missing required case_list."""
+        config_content = textwrap.dedent("""
+        evaluation_objects = []
+        """)
         config_file = temp_config_dir / "bad_config.py"
         config_file.write_text(config_content)
 
@@ -218,18 +199,17 @@ class TestParallelExecution:
         """Test parallel execution mode."""
         mock_ewb = mock.Mock()
         mock_ewb.case_operators = [mock.Mock(), mock.Mock(), mock.Mock()]
-        mock_ewb.run.return_value = pd.DataFrame({"test": [1, 2, 3]})
+        mock_ewb.run_evaluation.return_value = pd.DataFrame({"test": [1, 2, 3]})
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         result = runner.invoke(evaluate_cli.cli_runner, ["--default", "--n-jobs", "3"])
 
         assert result.exit_code == 0
-        # Verify ewb.run was called with parallel config
-        mock_ewb.run.assert_called_once_with(
+        # Verify ewb.run_evaluation was called with parallel config
+        mock_ewb.run_evaluation.assert_called_once_with(
             n_jobs=3,
             parallel_config=None,
-            pre_compute=False,
         )
 
     @mock.patch(
@@ -244,15 +224,15 @@ class TestParallelExecution:
         """Test that serial execution is default (parallel=1)."""
         mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
-        mock_ewb.run.return_value = pd.DataFrame()
+        mock_ewb.run_evaluation.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         result = runner.invoke(evaluate_cli.cli_runner, ["--default"])
 
         assert result.exit_code == 0
         # Output suppressed - only check exit code
-        mock_ewb.run.assert_called_once()
+        mock_ewb.run_evaluation.assert_called_once()
 
 
 class TestCaseOperatorSaving:
@@ -278,9 +258,9 @@ class TestCaseOperatorSaving:
         mock_case_op2 = {"id": 2, "type": "test_case_op"}
         mock_ewb = mock.Mock()
         mock_ewb.case_operators = [mock_case_op1, mock_case_op2]
-        mock_ewb.run.return_value = pd.DataFrame()
+        mock_ewb.run_evaluation.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         # Use temp directory for pickle file to ensure cleanup
         save_path = temp_config_dir / "case_ops.pkl"
@@ -317,9 +297,9 @@ class TestCaseOperatorSaving:
         """Test that saving case operators creates parent directories."""
         mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
-        mock_ewb.run.return_value = pd.DataFrame()
+        mock_ewb.run_evaluation.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         # Use nested path within temp directory for auto-cleanup
         nested_path = temp_config_dir / "nested" / "dirs" / "case_ops.pkl"
@@ -369,9 +349,9 @@ class TestValidationAndErrorHandling:
         """Test that output directory is created if it doesn't exist."""
         mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
-        mock_ewb.run.return_value = pd.DataFrame()
+        mock_ewb.run_evaluation.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         output_dir = temp_config_dir / "new_output_dir"
         assert not output_dir.exists()
@@ -395,9 +375,9 @@ class TestValidationAndErrorHandling:
         """Test that default output directory is current working directory."""
         mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
-        mock_ewb.run.return_value = pd.DataFrame()
+        mock_ewb.run_evaluation.return_value = pd.DataFrame()
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         # Use isolated filesystem to avoid creating files in actual directories
         with runner.isolated_filesystem():
@@ -435,9 +415,9 @@ class TestResultsSaving:
 
         mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
-        mock_ewb.run.return_value = mock_results
+        mock_ewb.run_evaluation.return_value = mock_results
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         # Use temp directory for output to ensure cleanup
         result = runner.invoke(
@@ -456,9 +436,9 @@ class TestResultsSaving:
         """Test handling when no results are returned."""
         mock_ewb = mock.Mock()
         mock_ewb.case_operators = []
-        mock_ewb.run.return_value = pd.DataFrame()  # Empty results
+        mock_ewb.run_evaluation.return_value = pd.DataFrame()  # Empty results
         mock_ewb_class.return_value = mock_ewb
-        mock_load_cases.return_value = {"cases": []}
+        mock_load_cases.return_value = []
 
         result = runner.invoke(evaluate_cli.cli_runner, ["--default"])
 
@@ -469,10 +449,12 @@ class TestResultsSaving:
 class TestHelperFunctions:
     """Test helper function functionality."""
 
-    @mock.patch("extremeweatherbench.cases.load_ewb_events_yaml_into_case_collection")
+    @mock.patch(
+        "extremeweatherbench.evaluate_cli.cases.load_ewb_events_yaml_into_case_list"
+    )
     def test_load_default_cases(self, mock_load_yaml):
         """Test _load_default_cases function."""
-        mock_cases = {"cases": [{"id": 1}]}
+        mock_cases = [{"id": 1}]
         mock_load_yaml.return_value = mock_cases
 
         result = evaluate_cli._load_default_cases()

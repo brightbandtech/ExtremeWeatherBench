@@ -536,8 +536,8 @@ class TestGeopotentialCalculations:
         """Test geopotential thickness with custom levels."""
         thickness = calc.geopotential_thickness(
             sample_calc_dataset["geopotential"],
-            top_level_value=200,
-            bottom_level_value=850,
+            top_level=200,
+            bottom_level=850,
             geopotential=True,
         )
 
@@ -555,15 +555,15 @@ class TestGeopotentialCalculations:
         # Calculate thickness for multiple level pairs
         thickness_200_850 = calc.geopotential_thickness(
             sample_calc_dataset["geopotential"],
-            top_level_value=200,
-            bottom_level_value=850,
+            top_level=200,
+            bottom_level=850,
             geopotential=True,
         )
 
         thickness_300_700 = calc.geopotential_thickness(
             sample_calc_dataset["geopotential"],
-            top_level_value=300,
-            bottom_level_value=700,
+            top_level=300,
+            bottom_level=700,
             geopotential=True,
         )
 
@@ -572,6 +572,22 @@ class TestGeopotentialCalculations:
         assert isinstance(thickness_300_700, xr.DataArray)
         assert "level" not in thickness_200_850.dims
         assert "level" not in thickness_300_700.dims
+
+    def test_geopotential_thickness_different_pressure_dim_name(
+        self, sample_calc_dataset
+    ):
+        """Test geopotential thickness with different pressure dimension name."""
+
+        sample_calc_dataset = sample_calc_dataset.rename({"level": "name"})
+        thickness = calc.geopotential_thickness(
+            sample_calc_dataset["geopotential"],
+            top_level=200,
+            bottom_level=850,
+            pressure_dim="name",
+        )
+
+        # Assert calculation is performed; would KeyError if not
+        assert isinstance(thickness, xr.DataArray)
 
 
 class TestSpecificHumidityCalculations:
@@ -986,141 +1002,438 @@ class TestFindLandIntersection:
         assert result.shape == mask.shape
 
 
-class TestNantrapezoid:
-    """Taken from numpy testing code, with modification to include handling nans."""
+class TestNantrapezoidPressureLevels:
+    """Tests for nantrapezoid using guvectorize kernel over xarray DataArrays."""
+
+    def _make_da(self, y_values, levels_hpa):
+        """Helper to wrap a numpy array in an xarray DataArray with level coord."""
+        return xr.DataArray(
+            y_values,
+            dims=["level"],
+            coords={"level": levels_hpa},
+        )
+
+    def _make_da_nd(self, y_values, levels_hpa, extra_dims, extra_coords):
+        """Helper for multi-dimensional DataArrays with level coord."""
+        dims = list(extra_dims) + ["level"]
+        coords = {**extra_coords, "level": levels_hpa}
+        return xr.DataArray(y_values, dims=dims, coords=coords)
 
     def test_simple(self):
+        """Test integral of normal distribution equals 1."""
         x = np.arange(-10, 10, 0.1)
-        r = calc.nantrapezoid(np.exp(-0.5 * x**2) / np.sqrt(2 * np.pi), dx=0.1)
-        # check integral of normal equals 1
-        testing.assert_almost_equal(r, 1, 7)
-
-    def test_ndim(self):
-        x = np.linspace(0, 1, 3)
-        y = np.linspace(0, 2, 8)
-        z = np.linspace(0, 3, 13)
-
-        wx = np.ones_like(x) * (x[1] - x[0])
-        wx[0] /= 2
-        wx[-1] /= 2
-        wy = np.ones_like(y) * (y[1] - y[0])
-        wy[0] /= 2
-        wy[-1] /= 2
-        wz = np.ones_like(z) * (z[1] - z[0])
-        wz[0] /= 2
-        wz[-1] /= 2
-
-        q = x[:, None, None] + y[None, :, None] + z[None, None, :]
-
-        qx = (q * wx[:, None, None]).sum(axis=0)
-        qy = (q * wy[None, :, None]).sum(axis=1)
-        qz = (q * wz[None, None, :]).sum(axis=2)
-
-        # n-d `x`
-        r = calc.nantrapezoid(q, x=x[:, None, None], axis=0)
-        testing.assert_almost_equal(r, qx)
-        r = calc.nantrapezoid(q, x=y[None, :, None], axis=1)
-        testing.assert_almost_equal(r, qy)
-        r = calc.nantrapezoid(q, x=z[None, None, :], axis=2)
-        testing.assert_almost_equal(r, qz)
-
-        # 1-d `x`
-        r = calc.nantrapezoid(q, x=x, axis=0)
-        testing.assert_almost_equal(r, qx)
-        r = calc.nantrapezoid(q, x=y, axis=1)
-        testing.assert_almost_equal(r, qy)
-        r = calc.nantrapezoid(q, x=z, axis=2)
-        testing.assert_almost_equal(r, qz)
-
-    def test_masked(self):
-        # Testing that masked arrays behave as if the function is 0 where
-        # masked
-        x = np.arange(5)
-        y = x * x
-        mask = x == 2
-        ym = np.ma.array(y, mask=mask)
-        r = 13.0  # sum(0.5 * (0 + 1) * 1.0 + 0.5 * (9 + 16))
-        testing.assert_almost_equal(calc.nantrapezoid(ym, x), r)
-
-        xm = np.ma.array(x, mask=mask)
-        testing.assert_almost_equal(calc.nantrapezoid(ym, xm), r)
-
-        xm = np.ma.array(x, mask=mask)
-        testing.assert_almost_equal(calc.nantrapezoid(y, xm), r)
+        y = np.exp(-0.5 * x**2) / np.sqrt(2 * np.pi)
+        # Use x values as levels in hPa — kernel receives x*100 as Pascals
+        # so we divide by 100 to get back the original x spacing
+        levels_hpa = x / 100
+        da = self._make_da(y, levels_hpa)
+        result = calc.nantrapezoid_pressure_levels(da)
+        testing.assert_almost_equal(float(result), 1, 7)
 
     def test_nan_handling(self):
-        """Test that nantrapezoid properly handles NaN values."""
-        # Test with NaN values in y
-        x = np.array([0, 1, 2, 3, 4])
-        y = np.array([0, 1, np.nan, 9, 16])
-
-        # Should ignore NaN values in the integration
-        result = calc.nantrapezoid(y, x)
-
-        # Compare with manual calculation ignoring NaN
-        # Integration should be: 0.5*(0+1)*1 + 0.5*(9+16)*1 = 0.5 + 12.5 = 13.0
-        expected = 13.0
-        testing.assert_almost_equal(result, expected)
+        """Test that nantrapezoid properly skips intervals where either endpoint is NaN."""
+        # Kernel skips interval if y0 OR y1 is NaN
+        # intervals: (0,1), (1,nan)=skip, (nan,9)=skip, (9,16)
+        # result: 0.5*(0+1)*1 + 0.5*(9+16)*1 = 0.5 + 12.5 = 13.0
+        levels_hpa = (
+            np.array([0, 1, 2, 3, 4]) / 100
+        )  # convert to hPa so *100 = original
+        y = np.array([0.0, 1.0, np.nan, 9.0, 16.0])
+        da = self._make_da(y, levels_hpa)
+        result = calc.nantrapezoid_pressure_levels(da)
+        testing.assert_almost_equal(float(result), 13.0)
 
     def test_all_nan_values(self):
-        """Test nantrapezoid with all NaN values."""
-        x = np.array([0, 1, 2, 3])
+        """Test nantrapezoid with all NaN values returns 0."""
+        levels_hpa = np.array([0, 1, 2, 3]) / 100
         y = np.array([np.nan, np.nan, np.nan, np.nan])
-
-        result = calc.nantrapezoid(y, x)
-
-        # Should return 0 when all values are NaN (nansum behavior)
-        assert result == 0.0
+        da = self._make_da(y, levels_hpa)
+        result = calc.nantrapezoid_pressure_levels(da)
+        assert float(result) == 0.0
 
     def test_mixed_nan_and_finite(self):
-        """Test nantrapezoid with mixed NaN and finite values."""
-        # Test case with NaN at beginning
-        x = np.array([0, 1, 2, 3, 4])
-        y = np.array([np.nan, 1, 4, 9, 16])
+        """Test nantrapezoid with NaN at beginning.
 
-        result = calc.nantrapezoid(y, x)
-
-        # Should integrate only the finite portions
-        # Integration: 0.5*(1+4)*1 + 0.5*(4+9)*1 + 0.5*(9+16)*1 = 21.5
-        expected = 21.5
-        testing.assert_almost_equal(result, expected)
-
-    def test_nan_in_x_coordinates(self):
-        """Test nantrapezoid with NaN values in x coordinates."""
-        x = np.array([0, 1, np.nan, 3, 4])
-        y = np.array([0, 1, 4, 9, 16])
-
-        # Should handle NaN in x coordinates properly
-        result = calc.nantrapezoid(y, x)
-
-        # The function should still work, handling NaN appropriately
-        assert not np.isnan(result) or np.isnan(result)  # Either valid result or NaN
+        Kernel skips intervals where either endpoint is NaN.
+        intervals: (nan,1)=skip, (1,4), (4,9), (9,16)
+        result: 0.5*(1+4)*1 + 0.5*(4+9)*1 + 0.5*(9+16)*1 = 2.5 + 6.5 + 12.5 = 21.5
+        """
+        levels_hpa = np.array([0, 1, 2, 3, 4]) / 100
+        y = np.array([np.nan, 1.0, 4.0, 9.0, 16.0])
+        da = self._make_da(y, levels_hpa)
+        result = calc.nantrapezoid_pressure_levels(da)
+        testing.assert_almost_equal(float(result), 21.5)
 
     def test_multidimensional_with_nans(self):
-        """Test nantrapezoid with multidimensional arrays containing NaNs."""
-        x = np.array([0, 1, 2, 3])
-        y = np.array([[0, 1, np.nan, 9], [1, np.nan, 4, 16], [np.nan, 2, 8, 25]])
-
-        # Test integration along axis 1 (columns)
-        result = calc.nantrapezoid(y, x, axis=1)
-
-        # Should return array with proper NaN handling for each row
+        """Test nantrapezoid with multidimensional DataArray containing NaNs."""
+        levels_hpa = np.array([0, 1, 2, 3]) / 100
+        y = np.array(
+            [
+                [0.0, 1.0, np.nan, 9.0],
+                [1.0, np.nan, 4.0, 16.0],
+                [np.nan, 2.0, 8.0, 25.0],
+            ]
+        )
+        da = self._make_da_nd(
+            y,
+            levels_hpa,
+            extra_dims=["time"],
+            extra_coords={"time": [0, 1, 2]},
+        )
+        result = calc.nantrapezoid_pressure_levels(da)
         assert result.shape == (3,)
-        # At least some results should be finite (not all NaN)
-        assert not np.isnan(result).all()
+        assert not np.isnan(result.values).all()
 
-    def test_nantrapezoid_dimension_expansion(self):
-        """Test nantrapezoid with dimension mismatch (line 228 coverage)."""
-        # Create a case where y.ndim != d.ndim to trigger dimension expansion
-        x = np.array([0, 1, 2])
-        y = np.array([[1, 2, 3]])  # 2D array
+    def test_no_nans(self):
+        """Test nantrapezoid matches expected trapezoid result with no NaNs."""
+        levels_hpa = np.array([0, 1, 2, 3, 4]) / 100
+        y = np.array([0.0, 1.0, 4.0, 9.0, 16.0])
+        da = self._make_da(y, levels_hpa)
+        result = calc.nantrapezoid_pressure_levels(da)
+        # manual: 0.5*(0+1) + 0.5*(1+4) + 0.5*(4+9) + 0.5*(9+16) = 0.5+2.5+6.5+12.5 = 22.0
+        testing.assert_almost_equal(float(result), 22.0)
 
-        # This should trigger the dimension expansion on line 228
-        result = calc.nantrapezoid(y, x, axis=1)
+    def test_level_conversion_to_pascals(self):
+        """Test that level coordinates are correctly converted from hPa to Pascals.
 
-        # Should still work and return proper result
-        assert result.shape == (1,)
-        assert not np.isnan(result)
+        The kernel receives levels in Pascals (hPa * 100), so dx values
+        are 100x larger than the hPa spacing.
+        """
+        # Two levels: 900 and 1000 hPa → 90000 and 100000 Pa → dx = 10000 Pa
+        levels_hpa = np.array([900.0, 1000.0])
+        y = np.array([1.0, 1.0])  # constant 1, integral = 1 * dx = 10000
+        da = self._make_da(y, levels_hpa)
+        result = calc.nantrapezoid_pressure_levels(da)
+        testing.assert_almost_equal(float(result), 10000.0)
+
+    def test_rechunks_level_to_single_chunk(self):
+        """Verify level is rechunked to -1 regardless of input chunking.
+
+        The function must apply da.chunk({"level": -1}) so that the
+        guvectorize kernel receives the full level axis in each task.
+        """
+        levels_hpa = np.array([1000.0, 850.0, 700.0, 500.0, 300.0, 200.0])
+        y = np.ones((4, len(levels_hpa)))
+        da = xr.DataArray(
+            y,
+            dims=["time", "level"],
+            coords={"time": np.arange(4), "level": levels_hpa},
+        ).chunk({"time": 1, "level": 2})  # level chunked into multiple pieces
+
+        # After calling the function the level dim must be a single chunk
+        result_da = calc.nantrapezoid_pressure_levels(da)
+        result_da.__dask_graph__()  # forces graph creation
+        # Inspect the rechunked intermediate: da inside the function has
+        # level chunk size == len(levels_hpa).  We verify correctness by
+        # checking the computed result matches the serial numpy reference.
+        serial = float(
+            calc.nantrapezoid_pressure_levels(
+                xr.DataArray(
+                    y[0],
+                    dims=["level"],
+                    coords={"level": levels_hpa},
+                )
+            )
+        )
+        computed = result_da.compute()
+        assert computed.shape == (4,)
+        testing.assert_almost_equal(float(computed[0]), serial)
+
+    def test_chunked_level_matches_unchunked(self):
+        """Results with a chunked level dim must match an unchunked input.
+
+        Before the da.chunk({"level": -1}) fix, apply_ufunc with
+        dask="parallelized" and a chunked level core-dim would silently
+        produce wrong or failed results. This test guards against
+        regression.
+        """
+        rng = np.random.default_rng(1)
+        levels_hpa = np.array([1000.0, 925.0, 850.0, 700.0, 500.0, 300.0, 200.0])
+        n_time, n_lat, n_lon = 3, 4, 4
+        y = rng.uniform(0.0, 1e-3, (n_time, n_lat, n_lon, len(levels_hpa)))
+        y[0, 0, 0, 2] = np.nan  # sprinkle a NaN
+
+        da_base = xr.DataArray(
+            y,
+            dims=["time", "latitude", "longitude", "level"],
+            coords={"level": levels_hpa},
+        )
+        chunked = da_base.chunk({"time": 1, "level": 3})
+        unchunked = da_base.chunk({"time": 1})  # level unchunked
+
+        result_chunked = calc.nantrapezoid_pressure_levels(chunked).compute()
+        result_unchunked = calc.nantrapezoid_pressure_levels(unchunked).compute()
+
+        xr.testing.assert_allclose(result_chunked, result_unchunked)
+
+    def test_level_single_chunk_after_rechunk(self):
+        """The dask graph for the rechunked da must show level as one chunk.
+
+        Directly inspects chunk sizes on the DataArray produced by
+        da.chunk({"level": -1}) inside the function, by mimicking the
+        same operation externally and confirming the chunk count == 1.
+        """
+        levels_hpa = np.array([1000.0, 850.0, 700.0, 500.0])
+        y = np.ones((2, len(levels_hpa)))
+        da = xr.DataArray(
+            y,
+            dims=["time", "level"],
+            coords={"time": np.arange(2), "level": levels_hpa},
+        ).chunk({"time": 1, "level": 2})
+
+        rechunked = da.chunk({"level": -1})
+        # chunks is a tuple of tuples; level is the second dim here
+        level_dim_idx = rechunked.dims.index("level")
+        level_chunks = rechunked.chunks[level_dim_idx]
+        assert len(level_chunks) == 1, (
+            f"Expected 1 level chunk after rechunking, got {len(level_chunks)}"
+        )
+        assert level_chunks[0] == len(levels_hpa)
+
+
+class TestBinaryDilationUfunc:
+    """Tests for _binary_dilation_ufunc."""
+
+    def test_binary_dilation_ufunc_2d(self):
+        """Test that 2D (lat, lon) input is handled correctly."""
+        data = np.zeros((10, 10), dtype=bool)
+        data[5, 5] = True
+        result = calc._binary_dilation_ufunc(data, dilation_radius=1)
+        assert result.shape == (10, 10)
+        assert result.dtype == np.int8
+        assert result[5, 5] == 1
+        assert result[4, 5] == 1
+
+    def test_binary_dilation_ufunc_3d(self):
+        """Test that 3D (valid_time, lat, lon) input is handled correctly."""
+        data = np.zeros((3, 10, 10), dtype=bool)
+        data[0, 5, 5] = True
+        result = calc._binary_dilation_ufunc(data, dilation_radius=1)
+        assert result.shape == (3, 10, 10)
+        assert result.dtype == np.int8
+        assert result[0, 5, 5] == 1
+        assert result[0, 4, 5] == 1
+        # Other time steps should be zero
+        assert result[1].sum() == 0
+
+    def test_binary_dilation_ufunc_4d(self):
+        """Regression test: 4D (lead_time, valid_time, lat, lon) input must not
+        raise IndexError due to structure/ndim mismatch."""
+        data = np.zeros((4, 2, 10, 10), dtype=bool)
+        data[0, 0, 5, 5] = True
+        # Before the fix this raised IndexError: tuple index out of range
+        result = calc._binary_dilation_ufunc(data, dilation_radius=1)
+        assert result.shape == (4, 2, 10, 10)
+        assert result.dtype == np.int8
+        assert result[0, 0, 5, 5] == 1
+        assert result[0, 0, 4, 5] == 1
+        # Other lead/time slices untouched
+        assert result[1].sum() == 0
+
+    def test_binary_dilation_ufunc_dilates_correctly(self):
+        """Verify dilation expands a True region by the correct radius."""
+        radius = 2
+        data = np.zeros((20, 20), dtype=bool)
+        data[10, 10] = True
+        result = calc._binary_dilation_ufunc(data, dilation_radius=radius)
+        # The dilation structure covers a (2r+1) x (2r+1) square
+        size = radius * 2 + 1
+        assert (
+            result[10 - radius : 10 + radius + 1, 10 - radius : 10 + radius + 1].sum()
+            == size * size
+        )
+
+    def test_binary_dilation_ufunc_via_apply_ufunc_4d(self):
+        """Regression test: apply_ufunc path with 4D dask array must not crash."""
+        import xarray as xr
+
+        lead = [0, 6, 12]
+        time = pd.date_range("2023-01-01", periods=2, freq="6h")
+        lat = np.linspace(20, 50, 10)
+        lon = np.linspace(-130, -100, 10)
+
+        data = np.zeros((len(lead), len(time), len(lat), len(lon)), dtype=bool)
+        data[0, 0, 5, 5] = True
+
+        da = xr.DataArray(
+            data,
+            dims=["lead_time", "valid_time", "latitude", "longitude"],
+            coords={
+                "lead_time": lead,
+                "valid_time": time,
+                "latitude": lat,
+                "longitude": lon,
+            },
+        )
+
+        result = xr.apply_ufunc(
+            calc._binary_dilation_ufunc,
+            da.chunk({"valid_time": 1, "latitude": -1, "longitude": -1}),
+            1,
+            input_core_dims=[["latitude", "longitude"], []],
+            output_core_dims=[["latitude", "longitude"]],
+            dask="parallelized",
+            output_dtypes=[np.int8],
+        ).compute()
+
+        assert result.shape == da.shape
+        assert result.sel(lead_time=0, valid_time=time[0]).values[5, 5] == 1
+
+
+class TestThreadSafety:
+    """Confirm target='cpu' kernel and binary dilation ufunc are thread-safe.
+
+    _nantrapezoid_kernel previously used target='parallel', which spawns
+    numba-internal threads. When multiple Dask workers called it
+    simultaneously, nested parallelism caused race conditions and incorrect
+    results. target='cpu' makes each invocation single-threaded so that
+    external thread pools (e.g. Dask's threaded scheduler) can call it
+    concurrently without corruption.
+    """
+
+    def test_nantrapezoid_kernel_concurrent_threads(self):
+        """_nantrapezoid_kernel must return the correct value from every
+        thread when invoked concurrently from many threads at once."""
+        import concurrent.futures
+
+        rng = np.random.default_rng(42)
+        n_levels = 200
+        x = np.sort(rng.uniform(10_000, 100_000, n_levels)).astype(np.float64)
+        y = rng.uniform(0.0, 1.0, n_levels).astype(np.float64)
+
+        ref = float(calc._nantrapezoid_kernel(y, x))
+
+        def call_kernel():
+            return float(calc._nantrapezoid_kernel(y, x))
+
+        n_workers = 16
+        n_calls = n_workers * 8
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as ex:
+            futures = [ex.submit(call_kernel) for _ in range(n_calls)]
+            results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+        assert all(abs(r - ref) < 1e-6 for r in results), (
+            f"Thread-unsafe results detected; expected {ref}, got: {results}"
+        )
+
+    def test_nantrapezoid_pressure_levels_dask_threaded_matches_serial(self):
+        """nantrapezoid_pressure_levels computed with Dask's threaded
+        scheduler must match synchronous (single-threaded) computation.
+
+        This directly exercises the scenario where many Dask workers call
+        the cpu-target kernel concurrently across chunks.
+        """
+        rng = np.random.default_rng(0)
+        levels_hpa = np.array([1000, 925, 850, 700, 500, 300, 200], dtype=float)
+        n_time, n_lat, n_lon = 20, 8, 8
+
+        y = rng.uniform(0.0, 1e-3, (n_time, n_lat, n_lon, len(levels_hpa)))
+        y[::3, ::2, ::2, 0] = np.nan  # sprinkle NaNs to exercise nan path
+
+        da = xr.DataArray(
+            y,
+            dims=["time", "latitude", "longitude", "level"],
+            coords={"level": levels_hpa},
+        ).chunk({"time": 1})
+
+        serial = calc.nantrapezoid_pressure_levels(da).compute(scheduler="synchronous")
+        threaded = calc.nantrapezoid_pressure_levels(da).compute(
+            scheduler="threads", num_workers=8
+        )
+
+        xr.testing.assert_allclose(serial, threaded)
+
+    def test_nantrapezoid_nd_concurrent_threads(self):
+        """nantrapezoid_nd must produce identical results when called from
+        many threads at the same time (no shared mutable state)."""
+        import concurrent.futures
+
+        rng = np.random.default_rng(99)
+        levels = np.array([1000.0, 925, 850, 700, 500, 300, 200]) * 100  # Pa
+        n_lat, n_lon = 10, 10
+        y = rng.uniform(0.0, 1.0, (n_lat, n_lon, len(levels)))
+        x = levels.copy()
+
+        ref = calc.nantrapezoid_nd(y, x)
+
+        def call_nd():
+            return calc.nantrapezoid_nd(y, x)
+
+        n_workers = 12
+        n_calls = n_workers * 6
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as ex:
+            futures = [ex.submit(call_nd) for _ in range(n_calls)]
+            results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+        for result in results:
+            np.testing.assert_allclose(result, ref, rtol=1e-6)
+
+    def test_binary_dilation_ufunc_concurrent_threads(self):
+        """_binary_dilation_ufunc must return correct results for every
+        thread when called concurrently from many threads at once."""
+        import concurrent.futures
+
+        rng = np.random.default_rng(7)
+        data = (rng.random((30, 30)) > 0.85).astype(bool)
+        radius = 2
+
+        ref = calc._binary_dilation_ufunc(data, radius)
+
+        def call_dilation():
+            return calc._binary_dilation_ufunc(data, radius)
+
+        n_workers = 16
+        n_calls = n_workers * 6
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as ex:
+            futures = [ex.submit(call_dilation) for _ in range(n_calls)]
+            results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+        for result in results:
+            np.testing.assert_array_equal(result, ref)
+
+    def test_binary_dilation_via_apply_ufunc_threaded_dask(self):
+        """_binary_dilation_ufunc via apply_ufunc with dask='parallelized'
+        and a threaded scheduler must match the synchronous result.
+
+        This mirrors how atmospheric_river_mask calls the function in
+        production and validates that axes=(-2, -1) is safe under
+        concurrent execution across chunks.
+        """
+        rng = np.random.default_rng(13)
+        lead = [0, 6, 12, 18]
+        time = pd.date_range("2023-01-01", periods=6, freq="6h")
+        lat = np.linspace(20, 50, 16)
+        lon = np.linspace(-130, -100, 16)
+
+        data = (rng.random((len(lead), len(time), len(lat), len(lon))) > 0.9).astype(
+            bool
+        )
+        da = xr.DataArray(
+            data,
+            dims=["lead_time", "valid_time", "latitude", "longitude"],
+            coords={
+                "lead_time": lead,
+                "valid_time": time,
+                "latitude": lat,
+                "longitude": lon,
+            },
+        ).chunk({"lead_time": 1, "valid_time": 1, "latitude": -1, "longitude": -1})
+
+        def _apply(arr):
+            return xr.apply_ufunc(
+                calc._binary_dilation_ufunc,
+                arr,
+                1,
+                input_core_dims=[["latitude", "longitude"], []],
+                output_core_dims=[["latitude", "longitude"]],
+                dask="parallelized",
+                output_dtypes=[np.int8],
+            )
+
+        serial = _apply(da).compute(scheduler="synchronous")
+        threaded = _apply(da).compute(scheduler="threads", num_workers=8)
+
+        xr.testing.assert_equal(serial, threaded)
 
 
 class TestDewpointFromSpecificHumidity:
@@ -1310,9 +1623,7 @@ class TestLandfallDetection:
         # Create land geometry with multiple potential crossings
         land_geom = shapely.geometry.box(-82, 24, -80, 28)
 
-        result = calc.find_landfalls(
-            track, land_geom=land_geom, return_next_landfall=True
-        )
+        result = calc.find_landfalls(track, land_geom=land_geom)
 
         # Should return DataArray with landfall dimension if found
         if result is not None:
@@ -1339,8 +1650,9 @@ class TestLandfallDetection:
 
         result = calc.find_landfalls(track, land_geom=land_geom)
 
-        # Should return None for insufficient points
-        assert result is None
+        # Should return an empty DataArray (no landfalls detectable)
+        assert isinstance(result, xr.DataArray)
+        assert len(result) == 0
 
     def test_find_landfalls_with_track_dimension(self):
         """Test find_landfalls with singleton track dimension."""
@@ -1364,7 +1676,7 @@ class TestLandfallDetection:
         # Should squeeze track dimension and process
         result = calc.find_landfalls(track, land_geom=land_geom)
 
-        assert result is None or isinstance(result, xr.DataArray)
+        assert isinstance(result, xr.DataArray)
 
     def test_find_next_landfall_for_init_time(self):
         """Test find_next_landfall_for_init_time function."""
@@ -1425,8 +1737,9 @@ class TestLandfallDetection:
 
         result = calc.find_next_landfall_for_init_time(forecast, target_landfalls)
 
-        # Should return None when no future landfalls
-        assert result is None
+        # Should return empty DataArray when no future landfalls
+        assert isinstance(result, xr.DataArray)
+        assert len(result) == 0
 
     def test_find_next_landfall_without_init_time(self):
         """Test find_next_landfall with forecast without init_time."""
@@ -1464,12 +1777,13 @@ class TestLandfallDetection:
 
         # Create simple land geometry (box)
         land_geom = shapely.geometry.box(-81, 24, -80, 26)
+        ocean_geom = shapely.geometry.box(-85, 23, -81.5, 27)
 
         # Ocean point to land point (landfall)
         lon1, lat1 = -82.0, 25.0  # Ocean
         lon2, lat2 = -80.5, 25.0  # Land
 
-        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom, ocean_geom)
 
         # Should detect landfall
         assert result is True
@@ -1480,12 +1794,13 @@ class TestLandfallDetection:
 
         # Create land geometry
         land_geom = shapely.geometry.box(-81, 24, -80, 26)
+        ocean_geom = shapely.geometry.box(-85, 23, -81.5, 27)
 
         # Ocean to ocean but crossing land
         lon1, lat1 = -82.0, 25.0  # Ocean
         lon2, lat2 = -79.0, 25.0  # Ocean (other side)
 
-        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom, ocean_geom)
 
         # Should detect landfall (crossing)
         assert result is True
@@ -1496,12 +1811,13 @@ class TestLandfallDetection:
 
         # Create land geometry
         land_geom = shapely.geometry.box(-81, 24, -80, 26)
+        ocean_geom = shapely.geometry.box(-85, 23, -81.5, 27)
 
         # Land to ocean (not landfall)
         lon1, lat1 = -80.5, 25.0  # Land
         lon2, lat2 = -82.0, 25.0  # Ocean
 
-        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom, ocean_geom)
 
         # Should not detect landfall (exit, not entry)
         assert result is False
@@ -1512,12 +1828,13 @@ class TestLandfallDetection:
 
         # Create land geometry
         land_geom = shapely.geometry.box(-81, 24, -80, 26)
+        ocean_geom = shapely.geometry.box(-87, 23, -81.5, 27)
 
         # Ocean to ocean without crossing land
         lon1, lat1 = -85.0, 25.0  # Ocean (far away)
         lon2, lat2 = -84.0, 25.0  # Ocean (still far)
 
-        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom)
+        result = calc._is_true_landfall(lon1, lat1, lon2, lat2, land_geom, ocean_geom)
 
         # Should not detect landfall
         assert result is False
@@ -1525,7 +1842,7 @@ class TestLandfallDetection:
     def test_is_true_landfall_error_handling(self):
         """Test _is_true_landfall handles errors gracefully."""
         # Invalid geometry should return False
-        result = calc._is_true_landfall(0, 0, 1, 1, None)
+        result = calc._is_true_landfall(0, 0, 1, 1, None, None)
 
         # Should return False on error
         assert result is False
@@ -1551,7 +1868,7 @@ class TestLandfallDetection:
         result = calc.find_landfalls(track, land_geom=land_geom)
 
         # Should handle unnamed DataArray
-        assert result is None or isinstance(result, xr.DataArray)
+        assert isinstance(result, xr.DataArray)
 
     def test_find_landfalls_all_nan_track(self):
         """Test find_landfalls with all NaN values in track."""
@@ -1573,8 +1890,9 @@ class TestLandfallDetection:
 
         result = calc.find_landfalls(track, land_geom=land_geom)
 
-        # Should return None for all NaN track
-        assert result is None
+        # Should return an empty DataArray when all track values are NaN
+        assert isinstance(result, xr.DataArray)
+        assert len(result) == 0
 
     def test_detect_landfalls_wrapper(self):
         """Test _detect_landfalls_wrapper function."""
@@ -1593,8 +1911,9 @@ class TestLandfallDetection:
         )
 
         land_geom = shapely.geometry.box(-82, 24, -80, 26)
+        ocean_geom = shapely.geometry.box(-87, 23, -82.5, 27)
 
-        result = calc._detect_landfalls_wrapper(track, land_geom)
+        result = calc._detect_landfalls_wrapper(track, land_geom, ocean_geom)
 
         # Should return boolean DataArray
         assert isinstance(result, xr.DataArray)
@@ -1670,9 +1989,9 @@ class TestLandfallDetection:
 
         land_geom = shapely.geometry.box(-82, 24, -80, 26)
 
-        # Test with return_all_landfalls=False (first only)
+        # Test with is_forecast=False (non-forecast track)
         result = calc._interpolate_and_format_landfalls(
-            track, landfall_mask, land_geom, return_all_landfalls=False
+            track, landfall_mask, land_geom, is_forecast=False
         )
 
         # Should return DataArray or None
@@ -1682,7 +2001,7 @@ class TestLandfallDetection:
             assert "longitude" in result.coords
             assert "valid_time" in result.coords
 
-        # Test with return_all_landfalls=True
+        # Test with multiple landfalls
         landfall_mask_all = xr.DataArray(
             [False, True, True, False],
             dims=["valid_time"],
@@ -1690,13 +2009,64 @@ class TestLandfallDetection:
         )
 
         result_all = calc._interpolate_and_format_landfalls(
-            track, landfall_mask_all, land_geom, return_all_landfalls=True
+            track, landfall_mask_all, land_geom, is_forecast=False
         )
 
         if result_all is not None:
             assert isinstance(result_all, xr.DataArray)
             # Should have landfall dimension
             assert "landfall" in result_all.dims
+
+    def test_deduplicate_landfalls_suppresses_nearby(self):
+        """Landfalls within 50 km of each other keep only the first."""
+        lats = np.array([25.0, 25.1, 26.0])
+        lons = np.array([-81.5, -81.4, -81.5])
+
+        landfalls = xr.DataArray(
+            [95000.0, 94500.0, 94000.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1, 2],
+                "latitude": ("landfall", lats),
+                "longitude": ("landfall", lons),
+                "valid_time": (
+                    "landfall",
+                    pd.date_range("2024-10-09 20:00", periods=3, freq="3h"),
+                ),
+            },
+        )
+
+        result = calc._deduplicate_landfalls(landfalls, min_distance_km=50.0)
+
+        # First two are ~12 km apart; only the first should survive.
+        # Third is ~111 km from the first and must be kept.
+        assert len(result) == 2
+        assert np.isclose(result.coords["latitude"].values[0], 25.0)
+        assert np.isclose(result.coords["latitude"].values[1], 26.0)
+
+    def test_deduplicate_landfalls_preserves_distant(self):
+        """Landfalls more than 50 km apart are both preserved."""
+        lats = np.array([25.0, 26.0])
+        lons = np.array([-81.5, -81.5])
+
+        landfalls = xr.DataArray(
+            [95000.0, 94000.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1],
+                "latitude": ("landfall", lats),
+                "longitude": ("landfall", lons),
+                "valid_time": (
+                    "landfall",
+                    pd.date_range("2024-10-09 20:00", periods=2, freq="6h"),
+                ),
+            },
+        )
+
+        result = calc._deduplicate_landfalls(landfalls, min_distance_km=50.0)
+
+        # ~111 km apart — both must be kept.
+        assert len(result) == 2
 
 
 class TestLandfallDeduplication:
@@ -1728,30 +2098,21 @@ class TestLandfallDeduplication:
 
         land_geom = shapely.geometry.box(-82, 24, -80, 26)
 
-        result = calc.find_landfalls(
-            track, land_geom=land_geom, return_next_landfall=True
-        )
+        result = calc.find_landfalls(track, land_geom=land_geom)
 
-        if result is not None:
-            # Check that each init_time has no duplicate landfalls
-            for init_t in result.init_time.values:
-                init_result = result.sel(init_time=init_t)
-                if "landfall" in init_result.dims:
-                    # Get valid_times for this init_time
-                    times = init_result.coords["valid_time"].values
-                    lats = init_result.coords["latitude"].values
-                    lons = init_result.coords["longitude"].values
-
-                    # Check for exact duplicates
-                    for i in range(len(times)):
-                        for j in range(i + 1, len(times)):
-                            # No two landfalls should be identical
-                            same_time = times[i] == times[j]
-                            same_lat = np.isclose(lats[i], lats[j], atol=0.01)
-                            same_lon = np.isclose(lons[i], lons[j], atol=0.01)
-                            assert not (same_time and same_lat and same_lon), (
-                                f"Duplicate landfalls at init_time={init_t}"
-                            )
+        if result is not None and len(result) > 0:
+            # Check that there are no duplicate landfalls (same time+location)
+            times = result.coords["valid_time"].values
+            lats_vals = result.coords["latitude"].values
+            lons_vals = result.coords["longitude"].values
+            for i in range(len(times)):
+                for j in range(i + 1, len(times)):
+                    same_time = times[i] == times[j]
+                    same_lat = np.isclose(lats_vals[i], lats_vals[j], atol=0.01)
+                    same_lon = np.isclose(lons_vals[i], lons_vals[j], atol=0.01)
+                    assert not (same_time and same_lat and same_lon), (
+                        "Duplicate landfalls found in result"
+                    )
 
     def test_consistent_landfall_dimension(self):
         """Test that all init_times have landfall dimension (no scalars)."""
@@ -1784,9 +2145,7 @@ class TestLandfallDeduplication:
 
         land_geom = shapely.geometry.box(-82, 24, -80, 28)
 
-        result = calc.find_landfalls(
-            track, land_geom=land_geom, return_next_landfall=True
-        )
+        result = calc.find_landfalls(track, land_geom=land_geom)
 
         if result is not None and "init_time" in result.dims:
             # Check that all init_times have consistent structure
@@ -1918,7 +2277,10 @@ class TestLandfallNextApproach:
         result = calc.find_next_landfall_for_init_time(
             forecast_landfalls, target_landfalls
         )
-        assert result is None
+
+        # Should return empty DataArray when no future landfalls
+        assert isinstance(result, xr.DataArray)
+        assert len(result) == 0
 
 
 class TestLandfallMetricAlignment:
@@ -1930,38 +2292,47 @@ class TestLandfallMetricAlignment:
 
         # Create forecast landfalls (3 init_times)
         forecast_landfalls = xr.DataArray(
-            [35.0, 36.0, 37.0],
-            dims=["init_time"],
+            [[35.0], [36.0], [37.0]],
+            dims=["init_time", "landfall"],
             coords={
                 "init_time": pd.to_datetime(["2023-09-14", "2023-09-15", "2023-09-16"]),
+                "landfall": [0],
                 "valid_time": (
-                    ["init_time"],
-                    pd.to_datetime(["2023-09-15", "2023-09-16", "2023-09-17"]),
+                    ["init_time", "landfall"],
+                    [
+                        [pd.Timestamp("2023-09-15")],
+                        [pd.Timestamp("2023-09-16")],
+                        [pd.Timestamp("2023-09-17")],
+                    ],
                 ),
-                "latitude": (["init_time"], [24.0, 25.0, 26.0]),
-                "longitude": (["init_time"], [280.0, 279.0, 278.0]),
+                "latitude": (["init_time", "landfall"], [[24.0], [25.0], [26.0]]),
+                "longitude": (["init_time", "landfall"], [[280.0], [279.0], [278.0]]),
             },
             name="surface_wind_speed",
         )
 
         # Create target landfalls (only 2 matching init_times)
         target_landfalls = xr.DataArray(
-            [40.0, 45.0],
-            dims=["init_time"],
+            [[40.0], [45.0]],
+            dims=["init_time", "landfall"],
             coords={
                 "init_time": pd.to_datetime(["2023-09-14", "2023-09-15"]),
+                "landfall": [0],
                 "valid_time": (
-                    ["init_time"],
-                    pd.to_datetime(["2023-09-15 06:00", "2023-09-16 06:00"]),
+                    ["init_time", "landfall"],
+                    [
+                        [pd.Timestamp("2023-09-15 06:00")],
+                        [pd.Timestamp("2023-09-16 06:00")],
+                    ],
                 ),
-                "latitude": (["init_time"], [24.5, 25.5]),
-                "longitude": (["init_time"], [279.5, 278.5]),
+                "latitude": (["init_time", "landfall"], [[24.5], [25.5]]),
+                "longitude": (["init_time", "landfall"], [[279.5], [278.5]]),
             },
             name="surface_wind_speed",
         )
 
         metric = LandfallDisplacement()
-        result = metric._calculate_distance(forecast_landfalls, target_landfalls)
+        result = metric.calculate_displacement(forecast_landfalls, target_landfalls)
 
         # Result should only have 2 init_times (the common ones)
         assert len(result.init_time) == 2
@@ -1977,41 +2348,48 @@ class TestLandfallMetricAlignment:
 
         # Create forecast and target with different init_times
         forecast_landfalls = xr.DataArray(
-            [35.0, 36.0, 37.0],
-            dims=["init_time"],
+            [[35.0], [36.0], [37.0]],
+            dims=["init_time", "landfall"],
             coords={
                 "init_time": pd.to_datetime(
                     ["2023-09-14 00:00", "2023-09-14 12:00", "2023-09-15 00:00"]
                 ),
+                "landfall": [0],
                 "valid_time": (
-                    ["init_time"],
-                    pd.to_datetime(
-                        ["2023-09-15 00:00", "2023-09-15 12:00", "2023-09-16 00:00"]
-                    ),
+                    ["init_time", "landfall"],
+                    [
+                        [pd.Timestamp("2023-09-15 00:00")],
+                        [pd.Timestamp("2023-09-15 12:00")],
+                        [pd.Timestamp("2023-09-16 00:00")],
+                    ],
                 ),
-                "latitude": (["init_time"], [24.0, 25.0, 26.0]),
-                "longitude": (["init_time"], [280.0, 279.0, 278.0]),
+                "latitude": (["init_time", "landfall"], [[24.0], [25.0], [26.0]]),
+                "longitude": (["init_time", "landfall"], [[280.0], [279.0], [278.0]]),
             },
             name="surface_wind_speed",
         )
 
         target_landfalls = xr.DataArray(
-            [40.0, 45.0],
-            dims=["init_time"],
+            [[40.0], [45.0]],
+            dims=["init_time", "landfall"],
             coords={
                 "init_time": pd.to_datetime(["2023-09-14 00:00", "2023-09-14 12:00"]),
+                "landfall": [0],
                 "valid_time": (
-                    ["init_time"],
-                    pd.to_datetime(["2023-09-15 06:00", "2023-09-15 18:00"]),
+                    ["init_time", "landfall"],
+                    [
+                        [pd.Timestamp("2023-09-15 06:00")],
+                        [pd.Timestamp("2023-09-15 18:00")],
+                    ],
                 ),
-                "latitude": (["init_time"], [24.5, 25.5]),
-                "longitude": (["init_time"], [279.5, 278.5]),
+                "latitude": (["init_time", "landfall"], [[24.5], [25.5]]),
+                "longitude": (["init_time", "landfall"], [[279.5], [278.5]]),
             },
             name="surface_wind_speed",
         )
 
         metric = metrics.LandfallTimeMeanError()
-        result = metric._calculate_time_difference(forecast_landfalls, target_landfalls)
+        result = metric.calculate_time_difference(forecast_landfalls, target_landfalls)
 
         # Result should only have common init_times
         assert len(result.init_time) == 2

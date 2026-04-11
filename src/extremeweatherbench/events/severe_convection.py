@@ -144,10 +144,13 @@ def low_level_shear(
     """Calculates the low level (0-6 km) shear of a dataset (Lepore et al 2021).
 
     Args:
-        ds: Dataset containing eastward and northward (u and v) wind vectors
+        eastward_wind: Eastward wind component DataArray.
+        northward_wind: Northward wind component DataArray.
+        surface_eastward_wind: Surface eastward wind component DataArray.
+        surface_northward_wind: Surface northward wind component DataArray.
 
     Returns:
-        ll_shear: ndarray of low level shear values in m/s
+        Low level shear values in m/s as a DataArray.
     """
     ll_shear = np.sqrt(
         (eastward_wind.sel(level=500) - surface_eastward_wind) ** 2

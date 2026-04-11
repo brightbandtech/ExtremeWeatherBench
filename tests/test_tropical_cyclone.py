@@ -8,6 +8,7 @@ This test suite covers:
 """
 
 # flake8: noqa: E501
+import math
 from unittest.mock import patch
 
 import numpy as np
@@ -15,6 +16,7 @@ import pandas as pd
 import pytest
 import xarray as xr
 
+from extremeweatherbench import derived
 from extremeweatherbench.events import tropical_cyclone
 
 
@@ -616,3 +618,347 @@ class TestTCIntegration:
             ]
             for var in expected_vars:
                 assert var in result.data_vars
+
+
+# ---------------------------------------------------------------------------
+# Shared fixture for end-to-end filter tests
+# ---------------------------------------------------------------------------
+
+
+def _make_single_init_tc_dataset(n_lead: int = 12, n_wind_strong: int = 10):
+    """Build a minimal synthetic TC dataset with one clear init_time.
+
+    Grid: 1° resolution, 21×21 points (lat 10–30°, lon -80 to -60°).
+    Storm: SLP=98 000 Pa at centre (lat=20, lon=-70) every (lead, valid) pair
+    on the diagonal (same init_time T0).
+    Wind: 20 m/s at one gridpoint east of centre for the first
+    ``n_wind_strong`` diagonal pairs; 2 m/s everywhere else.
+    Contour validation is OFF so only the wind filter is exercised.
+
+    With a 1° grid ``_degrees_to_gridpoints(2.0, ...)`` = 2 gridpoints, so
+    the ±2-pt neighbourhood around the centre includes the +1-pt east cell.
+
+    Expected: n_wind_strong detections have neighbourhood wind ≥ 10 m/s.
+    """
+    lat = np.arange(10.0, 31.0, 1.0)  # 21 pts, 1 ° spacing
+    lon = np.arange(-80.0, -59.0, 1.0)  # 21 pts, 1 ° spacing
+    n_lat, n_lon = len(lat), len(lon)
+    c_lat, c_lon = 10, 10  # centre indices → lat=20°, lon=-70°
+
+    T0 = pd.Timestamp("2023-09-10")
+    lead_h = np.arange(n_lead) * 6  # hours
+    lead_td = (lead_h * np.timedelta64(1, "h")).astype("timedelta64[ns]")
+    valid_times = pd.date_range(T0, periods=n_lead, freq="6h")
+
+    # init_time[lt, vt] = valid_time[vt] - lead_time[lt]
+    init_2d = np.array(
+        [
+            [valid_times[vt].to_datetime64() - lead_td[lt] for vt in range(n_lead)]
+            for lt in range(n_lead)
+        ]
+    )
+
+    # SLP: 98 000 Pa at centre for every (lt, vt) pair; 102 000 elsewhere
+    slp = np.full((n_lead, n_lead, n_lat, n_lon), 102000.0)
+    for k in range(n_lead):
+        slp[k, k, c_lat, c_lon] = 98000.0
+
+    # Wind: 20 m/s east of centre for the first n_wind_strong diagonal pairs
+    wind = np.full((n_lead, n_lead, n_lat, n_lon), 2.0)
+    for k in range(n_wind_strong):
+        wind[k, k, c_lat, c_lon + 1] = 20.0
+
+    # Geopotential thickness: zeros (contour validation disabled)
+    dz = np.zeros((n_lead, n_lead, n_lat, n_lon))
+
+    ds = xr.Dataset(
+        {
+            "air_pressure_at_mean_sea_level": (
+                ["lead_time", "valid_time", "latitude", "longitude"],
+                slp,
+            ),
+            "surface_wind_speed": (
+                ["lead_time", "valid_time", "latitude", "longitude"],
+                wind,
+            ),
+            "geopotential_thickness": (
+                ["lead_time", "valid_time", "latitude", "longitude"],
+                dz,
+            ),
+        },
+        coords={
+            "lead_time": lead_td,
+            "valid_time": valid_times,
+            "latitude": lat,
+            "longitude": lon,
+            "init_time": (["lead_time", "valid_time"], init_2d),
+        },
+    )
+    return ds
+
+
+def _make_ibt_for_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """IBTrACS stub matching the storm centre in ``_make_single_init_tc_dataset``."""
+    valid_times = ds.valid_time.values
+    return xr.Dataset(
+        {
+            "latitude": (["valid_time"], np.full(len(valid_times), 20.0)),
+            "longitude": (["valid_time"], np.full(len(valid_times), -70.0)),
+        },
+        coords={"valid_time": valid_times},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tests for _degrees_to_gridpoints
+# ---------------------------------------------------------------------------
+
+
+class TestDegreesToGridpoints:
+    """Unit tests for the _degrees_to_gridpoints helper.
+
+    Expected values are derived independently via:
+        ceil(degrees / mean_spacing)
+    where mean_spacing = (mean(|Δlat|) + mean(|Δlon|)) / 2.
+    """
+
+    def test_uniform_025_deg_grid_1deg(self):
+        """1° radius on 0.25° grid → ceil(1/0.25)=4."""
+        lat = np.arange(0.0, 10.0, 0.25)
+        lon = np.arange(0.0, 10.0, 0.25)
+        assert tropical_cyclone._degrees_to_gridpoints(1.0, lat, lon) == 4
+
+    def test_uniform_025_deg_grid_2deg(self):
+        """2° radius on 0.25° grid → ceil(2/0.25)=8."""
+        lat = np.arange(0.0, 20.0, 0.25)
+        lon = np.arange(0.0, 20.0, 0.25)
+        assert tropical_cyclone._degrees_to_gridpoints(2.0, lat, lon) == 8
+
+    def test_uniform_025_deg_grid_5deg(self):
+        """5° radius on 0.25° grid → ceil(5/0.25)=20."""
+        lat = np.arange(0.0, 90.0, 0.25)
+        lon = np.arange(0.0, 360.0, 0.25)
+        assert tropical_cyclone._degrees_to_gridpoints(5.0, lat, lon) == 20
+
+    def test_uniform_05_deg_grid_2deg(self):
+        """2° radius on 0.5° grid → ceil(2/0.5)=4."""
+        lat = np.arange(0.0, 20.0, 0.5)
+        lon = np.arange(0.0, 20.0, 0.5)
+        assert tropical_cyclone._degrees_to_gridpoints(2.0, lat, lon) == 4
+
+    def test_uniform_1_deg_grid_2deg(self):
+        """2° radius on 1° grid → ceil(2/1)=2."""
+        lat = np.arange(10.0, 31.0, 1.0)
+        lon = np.arange(-80.0, -59.0, 1.0)
+        assert tropical_cyclone._degrees_to_gridpoints(2.0, lat, lon) == 2
+
+    def test_non_square_grid(self):
+        """Non-square grid (0.25° lat, 0.5° lon): mean=0.375; 1.5°→ceil(4)=4."""
+        lat = np.arange(0.0, 20.0, 0.25)  # 0.25° spacing
+        lon = np.arange(0.0, 20.0, 0.5)  # 0.5° spacing
+        # mean_spacing = (0.25 + 0.5) / 2 = 0.375
+        # ceil(1.5 / 0.375) = ceil(4.0) = 4
+        assert tropical_cyclone._degrees_to_gridpoints(1.5, lat, lon) == 4
+
+    def test_non_square_grid_fractional(self):
+        """Non-square grid (0.25° lat, 0.5° lon): 2°→ceil(5.333)=6."""
+        lat = np.arange(0.0, 20.0, 0.25)
+        lon = np.arange(0.0, 20.0, 0.5)
+        # mean_spacing = 0.375; ceil(2/0.375) = ceil(5.333) = 6
+        expected = math.ceil(2.0 / 0.375)
+        assert tropical_cyclone._degrees_to_gridpoints(2.0, lat, lon) == expected
+
+    def test_always_at_least_one(self):
+        """Very small degree value never returns zero."""
+        lat = np.arange(0.0, 10.0, 0.25)
+        lon = np.arange(0.0, 10.0, 0.25)
+        assert tropical_cyclone._degrees_to_gridpoints(0.01, lat, lon) >= 1
+
+    def test_single_point_coords_fallback(self):
+        """Single-point coordinates fall back to 1.0° spacing."""
+        lat = np.array([20.0])
+        lon = np.array([-70.0])
+        # mean_spacing = (1.0 + 1.0) / 2 = 1.0; ceil(2/1) = 2
+        assert tropical_cyclone._degrees_to_gridpoints(2.0, lat, lon) == 2
+
+    def test_result_is_integer(self):
+        """Return type is always a plain Python int."""
+        lat = np.arange(0.0, 10.0, 0.25)
+        lon = np.arange(0.0, 10.0, 0.25)
+        result = tropical_cyclone._degrees_to_gridpoints(1.0, lat, lon)
+        assert isinstance(result, int)
+
+    def test_monotone_in_degrees(self):
+        """Larger degree radius never gives fewer gridpoints."""
+        lat = np.arange(0.0, 20.0, 0.25)
+        lon = np.arange(0.0, 20.0, 0.25)
+        prev = tropical_cyclone._degrees_to_gridpoints(0.5, lat, lon)
+        for deg in [1.0, 1.5, 2.0, 3.0, 5.0]:
+            cur = tropical_cyclone._degrees_to_gridpoints(deg, lat, lon)
+            assert cur >= prev, f"Expected monotone increase at {deg}°"
+            prev = cur
+
+
+# ---------------------------------------------------------------------------
+# Tests for TropicalCycloneTrackVariables parameter defaults
+# ---------------------------------------------------------------------------
+
+
+class TestTropicalCycloneTrackVariablesDefaults:
+    """Verify new parameter names and default values."""
+
+    def test_min_distance_between_peaks_degrees_default(self):
+        tc = derived.TropicalCycloneTrackVariables()
+        assert tc.min_distance_between_peaks_degrees == 1.0
+
+    def test_wind_search_radius_degrees_default(self):
+        tc = derived.TropicalCycloneTrackVariables()
+        assert tc.wind_search_radius_degrees == 2.0
+
+    def test_timestep_count_wind_minimum_default(self):
+        tc = derived.TropicalCycloneTrackVariables()
+        assert tc.timestep_count_wind_minimum == 10
+
+    def test_custom_min_distance_between_peaks_degrees(self):
+        tc = derived.TropicalCycloneTrackVariables(
+            min_distance_between_peaks_degrees=0.5
+        )
+        assert tc.min_distance_between_peaks_degrees == 0.5
+
+    def test_custom_wind_search_radius_degrees(self):
+        tc = derived.TropicalCycloneTrackVariables(wind_search_radius_degrees=3.0)
+        assert tc.wind_search_radius_degrees == 3.0
+
+    def test_old_min_distance_between_peaks_kwarg_raises(self):
+        """Renamed parameter: old name must raise TypeError."""
+        with pytest.raises(TypeError):
+            tropical_cyclone.generate_tc_tracks_by_init_time(
+                xr.DataArray(),
+                xr.DataArray(),
+                xr.DataArray(),
+                xr.Dataset(),
+                min_distance_between_peaks=5,  # old name
+            )
+
+
+# ---------------------------------------------------------------------------
+# End-to-end tests for neighbourhood wind sampling and the wind-count filter
+# ---------------------------------------------------------------------------
+
+
+class TestNeighbourhoodWindSampling:
+    """Verify that peak_winds uses max in the ±wind_search_radius neighbourhood.
+
+    On the 1° test grid, _degrees_to_gridpoints(2.0, …)=2. The high-wind cell
+    is 1 gridpoint east of the SLP minimum, so it falls inside the ±2-pt box.
+    The wind AT the centre is 2 m/s; the neighbourhood max is 20 m/s.
+    The output surface_wind_speed must reflect the neighbourhood max (≥10 m/s),
+    not the centre value (2 m/s).
+    """
+
+    def test_output_wind_exceeds_centre_wind(self):
+        """Detected surface_wind_speed > wind at SLP minimum (2 m/s)."""
+        ds = _make_single_init_tc_dataset(n_lead=12, n_wind_strong=12)
+        ibt = _make_ibt_for_dataset(ds)
+        result = tropical_cyclone.generate_tc_tracks_by_init_time(
+            sea_level_pressure=ds["air_pressure_at_mean_sea_level"],
+            wind_speed=ds["surface_wind_speed"],
+            geopotential_thickness=ds["geopotential_thickness"],
+            tc_track_analysis_data=ibt,
+            timestep_count_wind_minimum=1,
+            use_contour_validation=False,
+            surface_pressure_threshold=102000.0,
+            wind_search_radius_degrees=2.0,
+        )
+        assert result.sizes.get("valid_time", 0) > 0, "Expected detections"
+        ws = result["surface_wind_speed"].values
+        # Centre wind is 2 m/s; neighbourhood max is 20 m/s
+        assert np.nanmax(ws) > 2.0, "Neighbourhood max must exceed centre wind"
+        assert np.nanmax(ws) >= 10.0, "At least one detection should be ≥10 m/s"
+
+    def test_output_wind_close_to_neighbourhood_max(self):
+        """Neighbourhood max (20 m/s) is returned, not centre value (2 m/s)."""
+        ds = _make_single_init_tc_dataset(n_lead=5, n_wind_strong=5)
+        ibt = _make_ibt_for_dataset(ds)
+        result = tropical_cyclone.generate_tc_tracks_by_init_time(
+            sea_level_pressure=ds["air_pressure_at_mean_sea_level"],
+            wind_speed=ds["surface_wind_speed"],
+            geopotential_thickness=ds["geopotential_thickness"],
+            tc_track_analysis_data=ibt,
+            timestep_count_wind_minimum=1,
+            use_contour_validation=False,
+            surface_pressure_threshold=102000.0,
+            wind_search_radius_degrees=2.0,
+        )
+        assert result.sizes.get("valid_time", 0) > 0
+        ws = result["surface_wind_speed"].values
+        ws_detected = ws[~np.isnan(ws)]
+        assert len(ws_detected) > 0, "No non-NaN wind values in output"
+        # All detected timesteps should carry the neighbourhood max (20 m/s)
+        assert np.allclose(ws_detected, 20.0, atol=1.0), (
+            f"Expected neighbourhood max ≈20 m/s, got {ws_detected}"
+        )
+
+
+class TestMinTrackTimestepsWindFilter:
+    """Verify the wind-count filter: track survives iff it has >= timestep_count_wind_minimum
+    detections where the neighbourhood peak wind is >= 10 m/s.
+
+    Setup: n_lead=12, n_wind_strong=10.  The single long-lived track has exactly
+    10 detections with neighbourhood wind=20 m/s and 2 with wind=2 m/s.
+    Independent expectation:
+      min_ts ≤ 10 → track passes → result has valid_time > 0
+      min_ts = 11 → track fails  → result has valid_time == 0
+    """
+
+    N_LEAD = 12
+    N_WIND_STRONG = 10  # independently chosen threshold
+
+    @pytest.fixture(scope="class")
+    def tc_ds(self):
+        return _make_single_init_tc_dataset(self.N_LEAD, self.N_WIND_STRONG)
+
+    @pytest.fixture(scope="class")
+    def ibt(self, tc_ds):
+        return _make_ibt_for_dataset(tc_ds)
+
+    def _run(self, tc_ds, ibt, min_ts):
+        return tropical_cyclone.generate_tc_tracks_by_init_time(
+            sea_level_pressure=tc_ds["air_pressure_at_mean_sea_level"],
+            wind_speed=tc_ds["surface_wind_speed"],
+            geopotential_thickness=tc_ds["geopotential_thickness"],
+            tc_track_analysis_data=ibt,
+            timestep_count_wind_minimum=min_ts,
+            use_contour_validation=False,
+            surface_pressure_threshold=102000.0,
+            wind_search_radius_degrees=2.0,
+        )
+
+    def test_passes_at_exact_threshold(self, tc_ds, ibt):
+        """min_ts == n_wind_strong: track has exactly enough windy steps."""
+        result = self._run(tc_ds, ibt, self.N_WIND_STRONG)
+        assert result.sizes.get("valid_time", 0) > 0, (
+            f"Expected detections with min_ts={self.N_WIND_STRONG}"
+        )
+
+    def test_passes_below_threshold(self, tc_ds, ibt):
+        """min_ts < n_wind_strong: track comfortably passes."""
+        for min_ts in [1, 5, self.N_WIND_STRONG - 1]:
+            result = self._run(tc_ds, ibt, min_ts)
+            assert result.sizes.get("valid_time", 0) > 0, (
+                f"Expected detections with min_ts={min_ts}"
+            )
+
+    def test_fails_above_threshold(self, tc_ds, ibt):
+        """min_ts > n_wind_strong: track lacks sufficient windy steps."""
+        result = self._run(tc_ds, ibt, self.N_WIND_STRONG + 1)
+        assert result.sizes.get("valid_time", 0) == 0, (
+            f"Expected 0 detections with min_ts={self.N_WIND_STRONG + 1}"
+        )
+
+    def test_boundary_is_sharp(self, tc_ds, ibt):
+        """One step above the exact threshold flips pass→fail."""
+        result_pass = self._run(tc_ds, ibt, self.N_WIND_STRONG)
+        result_fail = self._run(tc_ds, ibt, self.N_WIND_STRONG + 1)
+        assert result_pass.sizes.get("valid_time", 0) > 0
+        assert result_fail.sizes.get("valid_time", 0) == 0

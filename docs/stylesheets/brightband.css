@@ -1,0 +1,12 @@
+:root {
+    --md-text-font: "Matter";
+}
+
+[data-md-color-scheme="brightband"] {
+    --md-primary-fg-color: #262620;
+    --md-primary-bg-color: #DFDECB;
+    --md-accent-fg-color: #FF6000;
+    --md-accent-fg-color--transparent: #FF6000;
+    --md-default-fg-color: #262620;
+    --md-default-bg-color: #DFDECB;
+}

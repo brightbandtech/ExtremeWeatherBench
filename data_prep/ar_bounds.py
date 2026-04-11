@@ -17,7 +17,7 @@ import xarray as xr
 from dask.distributed import Client
 from matplotlib.patches import Rectangle
 
-from extremeweatherbench import cases, derived, inputs, regions, utils
+from extremeweatherbench import calc, cases, derived, inputs, regions, utils
 from extremeweatherbench.events import atmospheric_river as ar
 
 logging.basicConfig()
@@ -409,31 +409,6 @@ def find_timestamp_peak_field(
     return peak_time_idx, peak_ivt_value
 
 
-def create_composite_ar_mask(
-    ar_mask: xr.DataArray,
-    land_intersection: Optional[xr.DataArray] = None,
-) -> Tuple[xr.DataArray, Optional[xr.DataArray]]:
-    """Create composite AR masks by taking maximum over time.
-
-    Args:
-        ar_mask: Binary AR mask with time dimension.
-        land_intersection: Optional land intersection mask with time dim.
-
-    Returns:
-        Tuple of (composite_ar_mask, composite_land_intersection).
-    """
-    time_dim = "valid_time" if "valid_time" in ar_mask.dims else "time"
-
-    # Create composite by taking max over time dimension
-    composite_mask = ar_mask.max(dim=time_dim)
-
-    composite_land = None
-    if land_intersection is not None:
-        composite_land = land_intersection.max(dim=time_dim)
-
-    return composite_mask, composite_land
-
-
 def expand_bounds_to_contiguous_ar(
     ar_mask: xr.DataArray,
     land_intersection: xr.DataArray,
@@ -810,8 +785,8 @@ def process_ar_event(
         "\nProcessing: %s (Case %s)", single_case.title, single_case.case_id_number
     )
     # Create a case object for this event
-    case_collection = cases.load_individual_cases({"cases": [single_case]})
-    case = case_collection.cases[0]
+    case_list = cases.load_individual_cases([single_case])
+    case = case_list[0]
     case.start_date = case.start_date - pd.Timedelta(days=3)
     case.end_date = case.end_date + pd.Timedelta(days=3)
 
@@ -831,7 +806,23 @@ def process_ar_event(
     era5_data = era5_data.sel(
         valid_time=era5_data.valid_time.dt.hour.isin([0, 6, 12, 18])
     )
-    era5_data = inputs.maybe_subset_variables(era5_data, variables=era5_ar.variables)
+
+    # Rough check, if you're adding variables beyond AtmosphericRiverVariables or
+    # specific_humidity, u_component..., v_component..., this will fail
+    if isinstance(era5_ar.variables, list):
+        if len(era5_ar.variables) > 1 and isinstance(
+            era5_ar.variables[0], derived.DerivedVariable
+        ):
+            raise ValueError(
+                "Only accepted variables are derived.AtmosphericRiverVariables"
+                " or [specific_humidity, u_component_of_wind, v_component_of_wind]."
+            )
+        elif isinstance(era5_ar.variables[0], derived.DerivedVariable):
+            era5_ar_vars = era5_ar.variables[0].variables
+        else:
+            era5_ar_vars = era5_ar.variables
+
+    era5_data = inputs.maybe_subset_variables(era5_data, variables=era5_ar_vars)
     era5_subset = era5_ar.subset_data_to_case(era5_data, case)
     era5_subset = era5_subset.chunk()
     # Generate IVT
@@ -840,19 +831,17 @@ def process_ar_event(
         specific_humidity=era5_subset["specific_humidity"],
         eastward_wind=era5_subset["eastward_wind"],
         northward_wind=era5_subset["northward_wind"],
-        levels=era5_subset["adjusted_level"],
-    )
+    ).persist()
     ivt_da.name = "integrated_vapor_transport"
     # Compute IVT Laplacian
-    ivt_laplacian = ar.integrated_vapor_transport_laplacian(ivt_da)
+    ivt_laplacian = ar.integrated_vapor_transport_laplacian(ivt_da).compute()
     ivt_laplacian.name = "integrated_vapor_transport_laplacian"
-
     # Compute AR mask
     ar_mask = ar.atmospheric_river_mask(
         ivt=ivt_da,
         ivt_laplacian=ivt_laplacian,
         min_size_gridpoints=AR_OBJECT_CONFIG["min_area_gridpoints"],
-    )
+    ).compute()
 
     # Generate land mask for peak time finding
     logger.info("  Generating land mask...")
@@ -898,20 +887,14 @@ def process_ar_event(
 
     # Create composite AR mask over entire time range (max)
     logger.info("  Creating composite AR mask over time...")
-    composite_ar_mask, composite_land_intersection = create_composite_ar_mask(
-        ar_mask, land_intersection=land_mask
+    composite_ar_mask = ar_mask.max(
+        dim=["valid_time" if "valid_time" in ar_mask.dims else "time"]
     )
 
     logger.info(
         "  Composite AR mask has %s grid points", composite_ar_mask.sum().values
     )
-    logger.info(
-        "  Composite land intersection has %s grid points",
-        composite_land_intersection.sum().values
-        if composite_land_intersection is not None
-        else 0,
-    )
-
+    composite_land_intersection = calc.find_land_intersection(composite_ar_mask)
     # Find bounds using composite mask & expand to contiguous AR
     left_lon, right_lon, bottom_lat, top_lat, largest_obj_metadata = (
         find_ar_bounds_from_largest_object(
@@ -1034,8 +1017,8 @@ def main():
     parallel = True
 
     # Load atmospheric river events from the events.yaml file
-    events_yaml = cases.load_ewb_events_yaml_into_case_collection()
-    ar_events = events_yaml.select_cases(by="event_type", value="atmospheric_river")
+    events_yaml = cases.load_ewb_events_yaml_into_case_list()
+    ar_events = [n for n in events_yaml if n.event_type == "atmospheric_river"]
     logger.info("Found %s atmospheric river events in events.yaml", len(ar_events))
 
     # Process each atmospheric river event with enhanced object-based bounds calculation
@@ -1048,11 +1031,11 @@ def main():
         # shapes
     }
     if parallel:
-        with joblib.parallel_backend("dask"):
-            ar_bounds_results_enhanced = joblib.Parallel(n_jobs=len(ar_events))(
-                joblib.delayed(process_ar_event)(single_case, era5_ar, AR_OBJECT_CONFIG)
-                for single_case in ar_events
-            )
+        # Fixing the n_jobs arbitrarily; change as desired
+        ar_bounds_results_enhanced = joblib.Parallel(n_jobs=8)(
+            joblib.delayed(process_ar_event)(single_case, era5_ar, AR_OBJECT_CONFIG)
+            for single_case in ar_events
+        )
     else:
         # Run in serial using a list comprehension
         ar_bounds_results_enhanced = [

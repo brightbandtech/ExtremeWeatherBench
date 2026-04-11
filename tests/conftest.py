@@ -4,10 +4,28 @@ import tempfile
 import numpy as np
 import pandas as pd
 import pytest
+import sparse
 import xarray as xr
 from click import testing
 
 from extremeweatherbench import calc
+
+
+def make_sample_sparse_target_dataarray() -> xr.DataArray:
+    # Create a simple sparse array with known coordinates
+    coords = ([0, 1, 2], [0, 1, 0])  # (lat_indices, lon_indices)
+    data = [1.0, 2.0, 3.0]  # values at those coordinates
+    shape = (3, 2)  # (lat, lon)
+
+    sparse_array = sparse.COO(coords, data, shape=shape)
+
+    # Create xarray DataArray with sparse data
+    da = xr.DataArray(
+        sparse_array,
+        dims=["latitude", "longitude"],
+        coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+    )
+    return da
 
 
 def make_sample_gridded_obs_dataset():
@@ -421,3 +439,19 @@ def sample_calc_dataset():
     )
 
     return dataset
+
+
+@pytest.fixture
+def sample_sparse_target_dataarray():
+    """Fixture for sample sparse target dataarray."""
+    return make_sample_sparse_target_dataarray()
+
+
+@pytest.fixture
+def sample_sparse_target_dataset():
+    """Fixture for sample sparse target dataset."""
+    return xr.Dataset(
+        {
+            "target": make_sample_sparse_target_dataarray(),
+        },
+    )

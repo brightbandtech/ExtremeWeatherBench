@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Artwork" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 100 100">
+  <!-- Generator: Adobe Illustrator 29.1.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 142)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #dfdecb;
+      }
+    </style>
+  </defs>
+  <path class="st0" d="M50,0C22.38,0,0,22.41,0,50s22.38,50,50,50,50-22.41,50-50S77.62,0,50,0ZM50,99.92V.08c13.11,0,23.72,22.34,23.72,49.92s-10.61,49.92-23.72,49.92Z"/>
+</svg>

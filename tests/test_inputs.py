@@ -1871,6 +1871,447 @@ class TestInputsIntegration:
         # have different time coverage
 
 
+class TestXarrayForecast:
+    """Test the XarrayForecast class for in-memory datasets."""
+
+    def test_xarray_forecast_instantiation_with_defaults(
+        self, sample_forecast_with_valid_time
+    ):
+        """Test creating XarrayForecast with default parameters."""
+        forecast = inputs.XarrayForecast(ds=sample_forecast_with_valid_time)
+
+        assert forecast.ds is sample_forecast_with_valid_time
+        assert forecast.source == "memory"
+        assert forecast.name == "in-memory dataset"
+        assert forecast.variables == []
+        assert forecast.variable_mapping == {}
+        assert forecast.preprocess == inputs._default_preprocess
+
+    def test_xarray_forecast_instantiation_with_custom_params(
+        self, sample_forecast_with_valid_time
+    ):
+        """Test creating XarrayForecast with custom parameters."""
+        custom_mapping = {"temp": "surface_air_temperature"}
+        custom_variables = ["surface_air_temperature"]
+
+        def custom_preprocess(ds):
+            return ds * 2
+
+        forecast = inputs.XarrayForecast(
+            ds=sample_forecast_with_valid_time,
+            variables=custom_variables,
+            variable_mapping=custom_mapping,
+            source="custom_source",
+            name="custom_forecast",
+            preprocess=custom_preprocess,
+        )
+
+        assert forecast.ds is sample_forecast_with_valid_time
+        assert forecast.source == "custom_source"
+        assert forecast.name == "custom_forecast"
+        assert forecast.variables == custom_variables
+        assert forecast.variable_mapping == custom_mapping
+        assert forecast.preprocess == custom_preprocess
+
+    def test_xarray_forecast_open_data_from_source(
+        self, sample_forecast_with_valid_time
+    ):
+        """Test that _open_data_from_source returns the stored dataset."""
+        forecast = inputs.XarrayForecast(ds=sample_forecast_with_valid_time)
+        result = forecast._open_data_from_source()
+
+        assert result is sample_forecast_with_valid_time
+        xr.testing.assert_identical(result, sample_forecast_with_valid_time)
+
+    def test_xarray_forecast_open_and_preprocess(self, sample_forecast_with_valid_time):
+        """Test open_and_maybe_preprocess_data_from_source with preprocessing."""
+
+        def multiply_by_two(ds):
+            return ds * 2
+
+        forecast = inputs.XarrayForecast(
+            ds=sample_forecast_with_valid_time, preprocess=multiply_by_two
+        )
+
+        result = forecast.open_and_maybe_preprocess_data_from_source()
+
+        # Should apply preprocessing
+        assert isinstance(result, xr.Dataset)
+        # Values should be doubled
+        expected = sample_forecast_with_valid_time * 2
+        xr.testing.assert_allclose(result, expected)
+
+    def test_xarray_forecast_no_preprocessing(self, sample_forecast_with_valid_time):
+        """Test that default preprocessing does nothing."""
+        forecast = inputs.XarrayForecast(ds=sample_forecast_with_valid_time)
+        result = forecast.open_and_maybe_preprocess_data_from_source()
+
+        # Should return unchanged dataset
+        xr.testing.assert_identical(result, sample_forecast_with_valid_time)
+
+    def test_xarray_forecast_with_chunks_parameter(
+        self, sample_forecast_with_valid_time
+    ):
+        """Test XarrayForecast accepts chunks parameter from ForecastBase."""
+        custom_chunks = {"valid_time": 10, "latitude": 45, "longitude": 90}
+
+        forecast = inputs.XarrayForecast(
+            ds=sample_forecast_with_valid_time, chunks=custom_chunks
+        )
+
+        # ForecastBase should have chunks attribute
+        assert forecast.chunks == custom_chunks
+
+    def test_xarray_forecast_inherits_subset_data_to_case(
+        self, sample_forecast_dataset
+    ):
+        """Test that XarrayForecast inherits subset_data_to_case from ForecastBase."""
+        # Convert forecast to have init_time and lead_time like ForecastBase expects
+        forecast = inputs.XarrayForecast(
+            ds=sample_forecast_dataset, variables=["surface_air_temperature"]
+        )
+
+        # Create mock case metadata
+        mock_case = mock.Mock()
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-22")
+        mock_case.location.mask.return_value = sample_forecast_dataset
+
+        with (
+            mock.patch(
+                "extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time"
+            ) as mock_derive,
+            mock.patch(
+                "extremeweatherbench.utils.convert_init_time_to_valid_time"
+            ) as mock_convert,
+        ):
+            # Setup mocks
+            mock_derive.return_value = (np.array([0, 1]), np.array([0, 1]))
+            result_data = xr.Dataset(
+                {
+                    "surface_air_temperature": (
+                        ["valid_time", "latitude", "longitude"],
+                        np.random.randn(3, 3, 3),
+                    )
+                },
+                coords={
+                    "valid_time": pd.date_range("2021-06-20", periods=3, freq="6h"),
+                    "latitude": [40, 41, 42],
+                    "longitude": [-100, -101, -102],
+                },
+            )
+            mock_convert.return_value = result_data
+
+            result = forecast.subset_data_to_case(sample_forecast_dataset, mock_case)
+
+            # Should use inherited method from ForecastBase
+            assert isinstance(result, xr.Dataset)
+
+    def test_xarray_forecast_with_variable_mapping(
+        self, sample_forecast_with_valid_time
+    ):
+        """Test XarrayForecast with variable mapping."""
+        # Create dataset with original variable names
+        test_data = sample_forecast_with_valid_time.copy()
+
+        forecast = inputs.XarrayForecast(
+            ds=test_data,
+            variables=["temp"],
+            variable_mapping={"surface_air_temperature": "temp"},
+        )
+
+        # Test that variable mapping is stored
+        assert forecast.variable_mapping == {"surface_air_temperature": "temp"}
+
+        # Test that maybe_map_variable_names works
+        mapped_data = forecast.maybe_map_variable_names(test_data)
+        assert "temp" in mapped_data.data_vars
+        assert "surface_air_temperature" not in mapped_data.data_vars
+
+    def test_xarray_forecast_empty_dataset(self):
+        """Test XarrayForecast with empty dataset."""
+        empty_ds = xr.Dataset()
+        forecast = inputs.XarrayForecast(ds=empty_ds)
+
+        assert forecast.ds.equals(empty_ds)
+        result = forecast._open_data_from_source()
+        assert result.equals(empty_ds)
+
+    def test_xarray_forecast_with_multiple_variables(self):
+        """Test XarrayForecast with dataset containing multiple variables."""
+        # Create dataset with multiple variables
+        ds = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["valid_time", "latitude", "longitude"],
+                    np.random.randn(10, 5, 5),
+                ),
+                "surface_pressure": (
+                    ["valid_time", "latitude", "longitude"],
+                    np.random.randn(10, 5, 5),
+                ),
+                "surface_eastward_wind": (
+                    ["valid_time", "latitude", "longitude"],
+                    np.random.randn(10, 5, 5),
+                ),
+            },
+            coords={
+                "valid_time": pd.date_range("2021-06-20", periods=10, freq="6h"),
+                "latitude": [40, 41, 42, 43, 44],
+                "longitude": [-100, -101, -102, -103, -104],
+            },
+        )
+
+        forecast = inputs.XarrayForecast(
+            ds=ds,
+            variables=["surface_air_temperature", "surface_pressure"],
+            name="multi_var_forecast",
+        )
+
+        assert forecast.name == "multi_var_forecast"
+        assert set(forecast.variables) == {
+            "surface_air_temperature",
+            "surface_pressure",
+        }
+        result = forecast._open_data_from_source()
+        assert "surface_air_temperature" in result.data_vars
+        assert "surface_pressure" in result.data_vars
+        assert "surface_eastward_wind" in result.data_vars
+
+    def test_xarray_forecast_add_source_to_attrs(self, sample_forecast_with_valid_time):
+        """Test adding source name to dataset attributes."""
+        forecast = inputs.XarrayForecast(
+            ds=sample_forecast_with_valid_time, name="test_in_memory"
+        )
+
+        result = forecast.add_source_to_dataset_attrs(sample_forecast_with_valid_time)
+
+        assert result.attrs["source"] == "test_in_memory"
+
+    def test_xarray_forecast_preserves_dataset_attrs(self):
+        """Test that XarrayForecast preserves existing dataset attributes."""
+        ds = xr.Dataset(
+            {
+                "temp": (["time", "x"], np.random.randn(5, 3)),
+            },
+            coords={"time": pd.date_range("2021-06-20", periods=5), "x": [1, 2, 3]},
+        )
+        ds.attrs["existing_attr"] = "test_value"
+        ds.attrs["description"] = "Test dataset"
+
+        forecast = inputs.XarrayForecast(ds=ds)
+        result = forecast._open_data_from_source()
+
+        # Original attributes should be preserved
+        assert result.attrs["existing_attr"] == "test_value"
+        assert result.attrs["description"] == "Test dataset"
+
+    def test_xarray_forecast_complex_preprocessing_pipeline(self):
+        """Test XarrayForecast with complex preprocessing pipeline."""
+        ds = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["valid_time", "latitude", "longitude"],
+                    np.random.randn(10, 5, 5) + 273.15,
+                ),
+            },
+            coords={
+                "valid_time": pd.date_range("2021-06-20", periods=10, freq="6h"),
+                "latitude": [40, 41, 42, 43, 44],
+                "longitude": [-100, -101, -102, -103, -104],
+            },
+        )
+
+        def complex_preprocess(dataset):
+            """Convert Kelvin to Celsius and add metadata."""
+            result = dataset.copy()
+            result["surface_air_temperature"] = (
+                result["surface_air_temperature"] - 273.15
+            )
+            result.attrs["units_converted"] = "K_to_C"
+            return result
+
+        forecast = inputs.XarrayForecast(ds=ds, preprocess=complex_preprocess)
+
+        result = forecast.open_and_maybe_preprocess_data_from_source()
+
+        # Check preprocessing was applied
+        assert result.attrs.get("units_converted") == "K_to_C"
+        # Check values were converted (approximately)
+        assert result["surface_air_temperature"].mean() < 100  # Should be in Celsius
+
+    def test_xarray_forecast_with_storage_options(
+        self, sample_forecast_with_valid_time
+    ):
+        """Test XarrayForecast with storage_options parameter."""
+        storage_opts = {"anon": True, "project": "test-project"}
+
+        forecast = inputs.XarrayForecast(
+            ds=sample_forecast_with_valid_time, storage_options=storage_opts
+        )
+
+        # Storage options should be stored (from InputBase)
+        assert forecast.storage_options == storage_opts
+
+    def test_xarray_forecast_comparison_with_zarr_forecast(
+        self, sample_forecast_with_valid_time
+    ):
+        """Test that XarrayForecast behaves similarly to ZarrForecast."""
+        # Create XarrayForecast
+        xarray_fc = inputs.XarrayForecast(
+            ds=sample_forecast_with_valid_time,
+            name="test_forecast",
+            variables=["surface_air_temperature"],
+        )
+
+        # Both should have same inherited methods
+        assert hasattr(xarray_fc, "subset_data_to_case")
+        assert hasattr(xarray_fc, "maybe_convert_to_dataset")
+        assert hasattr(xarray_fc, "maybe_map_variable_names")
+        assert hasattr(xarray_fc, "add_source_to_dataset_attrs")
+
+        # XarrayForecast should return data directly
+        result = xarray_fc._open_data_from_source()
+        assert result is sample_forecast_with_valid_time
+
+    def test_xarray_forecast_integration_with_evaluation_object(
+        self, sample_forecast_with_valid_time
+    ):
+        """Test XarrayForecast can be used in EvaluationObject."""
+        mock_metric = mock.Mock()
+        mock_target = mock.Mock()
+
+        forecast = inputs.XarrayForecast(
+            ds=sample_forecast_with_valid_time,
+            name="in_memory_forecast",
+            variables=["surface_air_temperature"],
+        )
+
+        # Should be able to create EvaluationObject
+        eval_obj = inputs.EvaluationObject(
+            event_type="test_event",
+            metric_list=[mock_metric],
+            target=mock_target,
+            forecast=forecast,
+        )
+
+        assert eval_obj.forecast is forecast
+        assert isinstance(eval_obj.forecast, inputs.ForecastBase)
+        assert isinstance(eval_obj.forecast, inputs.XarrayForecast)
+
+    def test_xarray_forecast_maybe_convert_to_dataset_passthrough(
+        self, sample_forecast_with_valid_time
+    ):
+        """Test that maybe_convert_to_dataset works correctly."""
+        forecast = inputs.XarrayForecast(ds=sample_forecast_with_valid_time)
+
+        result = forecast.maybe_convert_to_dataset(sample_forecast_with_valid_time)
+
+        # Should return the dataset unchanged (already a Dataset)
+        assert isinstance(result, xr.Dataset)
+        assert result is sample_forecast_with_valid_time
+
+    def test_xarray_forecast_with_derived_variables_placeholder(
+        self, sample_forecast_with_valid_time
+    ):
+        """Test XarrayForecast can specify derived variables (placeholder)."""
+        # This tests that the variables parameter can include derived variable
+        # specifications Note: actual derived variable calculation would happen
+        # in the pipeline
+        forecast = inputs.XarrayForecast(
+            ds=sample_forecast_with_valid_time,
+            variables=["surface_air_temperature", "surface_wind_speed"],
+        )
+
+        assert len(forecast.variables) == 2
+        assert "surface_air_temperature" in forecast.variables
+        assert "surface_wind_speed" in forecast.variables
+
+    def test_xarray_forecast_none_handling_for_optional_params(
+        self, sample_forecast_with_valid_time
+    ):
+        """Test that None values are properly converted to empty defaults."""
+        # Explicitly pass None to test the None handling in __init__
+        forecast = inputs.XarrayForecast(
+            ds=sample_forecast_with_valid_time,
+            variables=None,
+            variable_mapping=None,  # type: ignore
+        )
+
+        # Should be converted to empty containers
+        assert forecast.variables == []
+        assert forecast.variable_mapping == {}
+
+    def test_xarray_forecast_requires_ds_parameter(self):
+        """Test that XarrayForecast raises ValueError when ds is None."""
+        with pytest.raises(
+            ValueError, match="The 'ds' parameter is required for XarrayForecast"
+        ):
+            inputs.XarrayForecast(ds=None)
+
+    def test_xarray_forecast_repr_includes_key_info(
+        self, sample_forecast_with_valid_time
+    ):
+        """Test that XarrayForecast has proper repr from dataclass."""
+        forecast = inputs.XarrayForecast(
+            ds=sample_forecast_with_valid_time,
+            name="test_forecast",
+            source="memory",
+        )
+
+        repr_str = repr(forecast)
+        # Should include class name and key attributes
+        assert "XarrayForecast" in repr_str
+        assert "name=" in repr_str or "test_forecast" in repr_str
+
+    def test_xarray_forecast_dataclass_equality(self, sample_forecast_with_valid_time):
+        """Test that XarrayForecast supports dataclass equality comparison."""
+        forecast1 = inputs.XarrayForecast(
+            ds=sample_forecast_with_valid_time,
+            name="test",
+            source="memory",
+        )
+        forecast2 = inputs.XarrayForecast(
+            ds=sample_forecast_with_valid_time,
+            name="test",
+            source="memory",
+        )
+
+        # Same dataset and parameters should be equal
+        assert forecast1 == forecast2
+
+        # Different name should be not equal
+        forecast3 = inputs.XarrayForecast(
+            ds=sample_forecast_with_valid_time,
+            name="different",
+            source="memory",
+        )
+        assert forecast1 != forecast3
+
+    def test_xarray_forecast_default_source_and_name(
+        self, sample_forecast_with_valid_time
+    ):
+        """Test that XarrayForecast provides sensible defaults for source and name."""
+        forecast = inputs.XarrayForecast(ds=sample_forecast_with_valid_time)
+
+        assert forecast.source == "memory"
+        assert forecast.name == "in-memory dataset"
+
+    def test_xarray_forecast_can_override_parent_defaults(
+        self, sample_forecast_with_valid_time
+    ):
+        """Test that XarrayForecast can override defaults from parent classes."""
+        forecast = inputs.XarrayForecast(
+            ds=sample_forecast_with_valid_time,
+            chunks={"time": 10},
+            storage_options={"anon": True},
+        )
+
+        # Should be able to override ForecastBase defaults
+        assert forecast.chunks == {"time": 10}
+        assert forecast.storage_options == {"anon": True}
+
+
 def test_default_preprocess():
     """Test default preprocess function."""
     # Import the function from inputs module since it was moved there
@@ -1884,3 +2325,266 @@ def test_default_preprocess():
     df = pd.DataFrame({"a": [1, 2, 3]})
     result_df = inputs._default_preprocess(df)
     assert result_df is df
+
+
+class TestGetCIRAIcechunk:
+    """Tests for get_cira_icechunk function."""
+
+    def test_invalid_model_name_raises_value_error(self):
+        """Test that an invalid model name raises ValueError."""
+        with pytest.raises(ValueError) as exc_info:
+            inputs.get_cira_icechunk(model_name="INVALID_MODEL")
+
+        assert "INVALID_MODEL" in str(exc_info.value)
+        assert "CIRA_MODEL_NAMES" in str(exc_info.value)
+
+    def test_empty_model_name_raises_value_error(self):
+        """Test that an empty model name raises ValueError."""
+        with pytest.raises(ValueError):
+            inputs.get_cira_icechunk(model_name="")
+
+    def test_none_model_name_raises_error(self):
+        """Test that None as model name raises appropriate error."""
+        with pytest.raises((ValueError, TypeError)):
+            inputs.get_cira_icechunk(model_name=None)  # type: ignore
+
+    def test_case_sensitive_model_name(self):
+        """Test that model name matching is case-sensitive."""
+        # Lowercase version of a valid model name should fail
+        with pytest.raises(ValueError):
+            inputs.get_cira_icechunk(model_name="four_v200_gfs")
+
+        # Mixed case should fail
+        with pytest.raises(ValueError):
+            inputs.get_cira_icechunk(model_name="Four_V200_GFS")
+
+    def test_partial_model_name_raises_value_error(self):
+        """Test that partial model names are rejected."""
+        with pytest.raises(ValueError):
+            inputs.get_cira_icechunk(model_name="FOUR")
+
+        with pytest.raises(ValueError):
+            inputs.get_cira_icechunk(model_name="GFS")
+
+    def test_model_name_with_extra_chars_raises_value_error(self):
+        """Test that model names with extra characters are rejected."""
+        with pytest.raises(ValueError):
+            inputs.get_cira_icechunk(model_name="FOUR_v200_GFS_extra")
+
+        with pytest.raises(ValueError):
+            inputs.get_cira_icechunk(model_name=" FOUR_v200_GFS")
+
+    def test_error_message_lists_valid_model_names(self):
+        """Test that the error message includes the list of valid model names."""
+        with pytest.raises(ValueError) as exc_info:
+            inputs.get_cira_icechunk(model_name="BAD_MODEL")
+
+        error_msg = str(exc_info.value)
+        # Check that at least some valid model names are shown in the error
+        assert "FOUR_v200_GFS" in error_msg or "CIRA_MODEL_NAMES" in error_msg
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_valid_model_name_four_v200_gfs(
+        self, mock_forecast, mock_open, mock_storage
+    ):
+        """Test that FOUR_v200_GFS is a valid model name."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        result = inputs.get_cira_icechunk(model_name="FOUR_v200_GFS")
+
+        assert result is not None
+        mock_storage.assert_called_once()
+        mock_open.assert_called_once()
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_valid_model_name_auro_v100_gfs(
+        self, mock_forecast, mock_open, mock_storage
+    ):
+        """Test that AURO_v100_GFS is a valid model name."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        result = inputs.get_cira_icechunk(model_name="AURO_v100_GFS")
+
+        assert result is not None
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_all_cira_model_names_are_valid(
+        self, mock_forecast, mock_open, mock_storage
+    ):
+        """Test that all model names in CIRA_MODEL_NAMES are accepted."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        for model_name in inputs.CIRA_MODEL_NAMES:
+            result = inputs.get_cira_icechunk(model_name=model_name)
+            assert result is not None, f"Model {model_name} should be valid"
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_custom_name_parameter(self, mock_forecast, mock_open, mock_storage):
+        """Test that a custom name parameter is passed to XarrayForecast."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        inputs.get_cira_icechunk(model_name="FOUR_v200_GFS", name="CustomName")
+
+        # Check that XarrayForecast was called with the custom name
+        call_kwargs = mock_forecast.call_args[1]
+        assert call_kwargs["name"] == "CustomName"
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_default_name_uses_model_name(self, mock_forecast, mock_open, mock_storage):
+        """Test that name inputs to model_name when not provided."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        inputs.get_cira_icechunk(model_name="FOUR_v200_GFS")
+
+        call_kwargs = mock_forecast.call_args[1]
+        assert call_kwargs["name"] == "FOUR_v200_GFS"
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_empty_variables_list(self, mock_forecast, mock_open, mock_storage):
+        """Test that empty variables list is valid."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        result = inputs.get_cira_icechunk(model_name="FOUR_v200_GFS", variables=[])
+
+        assert result is not None
+        call_kwargs = mock_forecast.call_args[1]
+        assert call_kwargs["variables"] == []
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_custom_variables_list(self, mock_forecast, mock_open, mock_storage):
+        """Test that a custom variables list is passed through."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        variables = ["surface_air_temperature", "air_pressure"]
+        inputs.get_cira_icechunk(model_name="FOUR_v200_GFS", variables=variables)
+
+        call_kwargs = mock_forecast.call_args[1]
+        assert call_kwargs["variables"] == variables
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_custom_preprocess_function(self, mock_forecast, mock_open, mock_storage):
+        """Test that a custom preprocess function is passed through."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        def custom_preprocess(ds: xr.Dataset) -> xr.Dataset:
+            return ds
+
+        inputs.get_cira_icechunk(
+            model_name="FOUR_v200_GFS", preprocess=custom_preprocess
+        )
+
+        call_kwargs = mock_forecast.call_args[1]
+        assert call_kwargs["preprocess"] == custom_preprocess
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_returns_xarray_forecast_object(
+        self, mock_forecast, mock_open, mock_storage
+    ):
+        """Test that the function returns an XarrayForecast object."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        expected_forecast = mock.MagicMock()
+        mock_forecast.return_value = expected_forecast
+
+        result = inputs.get_cira_icechunk(model_name="FOUR_v200_GFS")
+
+        assert result is expected_forecast
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_gcs_storage_configuration(self, mock_forecast, mock_open, mock_storage):
+        """Test that GCS storage is configured with correct parameters."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        inputs.get_cira_icechunk(model_name="FOUR_v200_GFS")
+
+        mock_storage.assert_called_once_with(
+            bucket="extremeweatherbench", prefix="cira-icechunk", anonymous=True
+        )
+
+    @mock.patch("extremeweatherbench.inputs.icechunk.gcs_storage")
+    @mock.patch("extremeweatherbench.inputs.open_icechunk_dataset_from_datatree")
+    @mock.patch("extremeweatherbench.inputs.XarrayForecast")
+    def test_uses_cira_variable_mapping(self, mock_forecast, mock_open, mock_storage):
+        """Test that CIRA metadata variable mapping is used."""
+        mock_storage.return_value = mock.MagicMock()
+        mock_open.return_value = mock.MagicMock()
+        mock_forecast.return_value = mock.MagicMock()
+
+        inputs.get_cira_icechunk(model_name="FOUR_v200_GFS")
+
+        call_kwargs = mock_forecast.call_args[1]
+        assert call_kwargs["variable_mapping"] == inputs.CIRA_metadata_variable_mapping
+
+
+class TestCiraModelNames:
+    """Tests for CIRA_MODEL_NAMES constant."""
+
+    def test_cira_model_names_is_list(self):
+        """Test that CIRA_MODEL_NAMES is a list."""
+        assert isinstance(inputs.CIRA_MODEL_NAMES, list)
+
+    def test_cira_model_names_not_empty(self):
+        """Test that CIRA_MODEL_NAMES is not empty."""
+        assert len(inputs.CIRA_MODEL_NAMES) > 0
+
+    def test_cira_model_names_contains_expected_models(self):
+        """Test that CIRA_MODEL_NAMES contains expected model names."""
+        expected_models = [
+            "FOUR_v200_GFS",
+            "FOUR_v200_IFS",
+            "AURO_v100_GFS",
+            "AURO_v100_IFS",
+            "PANG_v100_GFS",
+            "PANG_v100_IFS",
+            "GRAP_v100_GFS",
+            "GRAP_v100_IFS",
+        ]
+        for model in expected_models:
+            assert model in inputs.CIRA_MODEL_NAMES
+
+    def test_cira_model_names_all_strings(self):
+        """Test that all entries in CIRA_MODEL_NAMES are strings."""
+        for model in inputs.CIRA_MODEL_NAMES:
+            assert isinstance(model, str)
+
+    def test_cira_model_names_no_duplicates(self):
+        """Test that CIRA_MODEL_NAMES has no duplicate entries."""
+        assert len(inputs.CIRA_MODEL_NAMES) == len(set(inputs.CIRA_MODEL_NAMES))

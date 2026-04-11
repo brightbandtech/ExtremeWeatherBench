@@ -62,8 +62,3 @@ Winter weather causes a variety of major impacts to society.  We have collected 
 ### Case studies and data available in v1
 
 * [Major freezes](FreezeEvents.md)- Large-scale freezing events that may or may not include other winter weather
-
-### Cases studies available now, data in future release
-
-* [Major snowstorms]((SnowEvents.md)) - Large-scale impactful snow events   
-
