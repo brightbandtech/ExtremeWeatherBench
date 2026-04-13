@@ -1,5 +1,53 @@
 - case_id_number: 1
-  title: February 2020 Event 0036
+  title: January 2020 Event 0016
+  start_date: 2020-01-30 00:00:00
+  end_date: 2020-02-03 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 5.25
+      latitude_max: 30.25
+      longitude_min: 11.0
+      longitude_max: 38.0
+  event_type: marginal_temperature
+- case_id_number: 2
+  title: February 2020 Event 0018
+  start_date: 2020-02-01 00:00:00
+  end_date: 2020-02-05 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 5.75
+      latitude_max: 29.5
+      longitude_min: 0.0
+      longitude_max: 38.0
+  event_type: marginal_temperature
+- case_id_number: 3
+  title: February 2020 Event 0019
+  start_date: 2020-02-01 00:00:00
+  end_date: 2020-02-05 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 68.75
+      latitude_max: 77.0
+      longitude_min: 87.0
+      longitude_max: 128.75
+  event_type: marginal_temperature
+- case_id_number: 4
+  title: February 2020 Event 0023
+  start_date: 2020-02-05 00:00:00
+  end_date: 2020-02-09 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 63.0
+      latitude_max: 81.0
+      longitude_min: 296.5
+      longitude_max: 324.75
+  event_type: marginal_temperature
+- case_id_number: 5
+  title: February 2020 Event 0025
   start_date: 2020-02-09 00:00:00
   end_date: 2020-02-14 00:00:00
   location:
@@ -10,21 +58,45 @@
       longitude_min: 28.25
       longitude_max: 58.25
   event_type: marginal_temperature
-- case_id_number: 2
-  title: February 2020 Event 0043
-  start_date: 2020-02-17 00:00:00
-  end_date: 2020-02-22 00:00:00
+- case_id_number: 6
+  title: February 2020 Event 0034
+  start_date: 2020-02-22 00:00:00
+  end_date: 2020-02-26 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -90.0
-      latitude_max: -68.0
-      longitude_min: 0.0
-      longitude_max: 359.75
+      latitude_min: 60.25
+      latitude_max: 76.75
+      longitude_min: 296.5
+      longitude_max: 317.5
   event_type: marginal_temperature
-- case_id_number: 3
-  title: April 2020 Event 0074
-  start_date: 2020-04-06 00:00:00
+- case_id_number: 7
+  title: March 2020 Event 0037
+  start_date: 2020-03-01 00:00:00
+  end_date: 2020-03-05 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 42.75
+      latitude_max: 53.5
+      longitude_min: 0.0
+      longitude_max: 16.25
+  event_type: marginal_temperature
+- case_id_number: 8
+  title: April 2020 Event 0047
+  start_date: 2020-04-03 00:00:00
+  end_date: 2020-04-07 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 66.5
+      latitude_max: 77.75
+      longitude_min: 293.5
+      longitude_max: 339.5
+  event_type: marginal_temperature
+- case_id_number: 9
+  title: April 2020 Event 0048
+  start_date: 2020-04-07 00:00:00
   end_date: 2020-04-11 00:00:00
   location:
     type: bounded_region
@@ -34,9 +106,9 @@
       longitude_min: 228.0
       longitude_max: 267.0
   event_type: marginal_temperature
-- case_id_number: 4
-  title: May 2020 Event 0088
-  start_date: 2020-05-09 00:00:00
+- case_id_number: 10
+  title: May 2020 Event 0053
+  start_date: 2020-05-10 00:00:00
   end_date: 2020-05-14 00:00:00
   location:
     type: bounded_region
@@ -46,45 +118,21 @@
       longitude_min: 118.25
       longitude_max: 140.0
   event_type: marginal_temperature
-- case_id_number: 5
-  title: May 2020 Event 0096
-  start_date: 2020-05-21 00:00:00
-  end_date: 2020-05-27 00:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: -84.5
-      latitude_max: -75.25
-      longitude_min: 201.75
-      longitude_max: 237.0
-  event_type: marginal_temperature
-- case_id_number: 6
-  title: May 2020 Event 0099
-  start_date: 2020-05-28 00:00:00
-  end_date: 2020-06-02 00:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: -82.25
-      latitude_max: -74.5
-      longitude_min: 201.75
-      longitude_max: 237.5
-  event_type: marginal_temperature
-- case_id_number: 7
-  title: May 2020 Event 0103
+- case_id_number: 11
+  title: May 2020 Event 0060
   start_date: 2020-05-30 00:00:00
   end_date: 2020-06-07 00:00:00
   location:
     type: bounded_region
     parameters:
       latitude_min: 67.75
-      latitude_max: 78.5
-      longitude_min: 236.0
-      longitude_max: 279.0
+      latitude_max: 75.5
+      longitude_min: 235.0
+      longitude_max: 259.0
   event_type: marginal_temperature
-- case_id_number: 8
-  title: June 2020 Event 0104
-  start_date: 2020-06-02 00:00:00
+- case_id_number: 12
+  title: June 2020 Event 0062
+  start_date: 2020-06-03 00:00:00
   end_date: 2020-06-07 00:00:00
   location:
     type: bounded_region
@@ -94,20 +142,20 @@
       longitude_min: 119.5
       longitude_max: 140.0
   event_type: marginal_temperature
-- case_id_number: 9
-  title: July 2020 Event 0115
-  start_date: 2020-07-13 00:00:00
-  end_date: 2020-07-22 00:00:00
+- case_id_number: 13
+  title: June 2020 Event 0064
+  start_date: 2020-06-11 00:00:00
+  end_date: 2020-06-15 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -78.25
-      latitude_max: -66.0
-      longitude_min: 93.5
-      longitude_max: 162.0
+      latitude_min: 61.0
+      latitude_max: 74.25
+      longitude_min: 71.0
+      longitude_max: 116.75
   event_type: marginal_temperature
-- case_id_number: 10
-  title: July 2020 Event 0116
+- case_id_number: 14
+  title: July 2020 Event 0068
   start_date: 2020-07-13 00:00:00
   end_date: 2020-07-23 00:00:00
   location:
@@ -118,45 +166,33 @@
       longitude_min: 72.25
       longitude_max: 97.25
   event_type: marginal_temperature
-- case_id_number: 11
-  title: August 2020 Event 0126
-  start_date: 2020-08-05 00:00:00
-  end_date: 2020-08-12 00:00:00
+- case_id_number: 15
+  title: September 2020 Event 0076
+  start_date: 2020-09-11 00:00:00
+  end_date: 2020-09-15 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -87.75
-      latitude_max: -67.0
-      longitude_min: 90.75
-      longitude_max: 240.0
+      latitude_min: 54.5
+      latitude_max: 71.0
+      longitude_min: 12.75
+      longitude_max: 50.75
   event_type: marginal_temperature
-- case_id_number: 12
-  title: September 2020 Event 0153
-  start_date: 2020-09-26 00:00:00
-  end_date: 2020-10-04 00:00:00
+- case_id_number: 16
+  title: September 2020 Event 0079
+  start_date: 2020-09-28 00:00:00
+  end_date: 2020-10-02 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -90.0
-      latitude_max: -70.0
-      longitude_min: 0.0
-      longitude_max: 359.75
+      latitude_min: 56.0
+      latitude_max: 64.25
+      longitude_min: 248.75
+      longitude_max: 269.5
   event_type: marginal_temperature
-- case_id_number: 13
-  title: September 2020 Event 0154
-  start_date: 2020-09-26 00:00:00
-  end_date: 2020-10-01 00:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: -85.75
-      latitude_max: -74.5
-      longitude_min: 324.25
-      longitude_max: 359.75
-  event_type: marginal_temperature
-- case_id_number: 14
-  title: October 2020 Event 0160
-  start_date: 2020-10-05 00:00:00
+- case_id_number: 17
+  title: October 2020 Event 0081
+  start_date: 2020-10-06 00:00:00
   end_date: 2020-10-10 00:00:00
   location:
     type: bounded_region
@@ -166,20 +202,20 @@
       longitude_min: 62.25
       longitude_max: 99.0
   event_type: marginal_temperature
-- case_id_number: 15
-  title: October 2020 Event 0166
-  start_date: 2020-10-12 00:00:00
-  end_date: 2020-10-17 00:00:00
+- case_id_number: 18
+  title: October 2020 Event 0082
+  start_date: 2020-10-09 00:00:00
+  end_date: 2020-10-13 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -84.5
-      latitude_max: -75.25
-      longitude_min: 201.75
-      longitude_max: 228.0
+      latitude_min: 19.75
+      latitude_max: 28.25
+      longitude_min: 10.5
+      longitude_max: 24.25
   event_type: marginal_temperature
-- case_id_number: 16
-  title: October 2020 Event 0171
+- case_id_number: 19
+  title: October 2020 Event 0084
   start_date: 2020-10-19 00:00:00
   end_date: 2020-10-24 00:00:00
   location:
@@ -190,21 +226,69 @@
       longitude_min: 281.75
       longitude_max: 299.5
   event_type: marginal_temperature
-- case_id_number: 17
-  title: October 2020 Event 0172
-  start_date: 2020-10-21 00:00:00
-  end_date: 2020-10-26 00:00:00
+- case_id_number: 20
+  title: November 2020 Event 0087
+  start_date: 2020-11-01 00:00:00
+  end_date: 2020-11-06 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -87.0
-      latitude_max: -68.0
+      latitude_min: 14.0
+      latitude_max: 23.75
       longitude_min: 0.0
-      longitude_max: 128.0
+      longitude_max: 11.25
   event_type: marginal_temperature
-- case_id_number: 18
-  title: December 2020 Event 0215
-  start_date: 2020-12-05 00:00:00
+- case_id_number: 21
+  title: November 2020 Event 0088
+  start_date: 2020-11-04 00:00:00
+  end_date: 2020-11-08 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 40.5
+      latitude_max: 54.0
+      longitude_min: 13.25
+      longitude_max: 32.75
+  event_type: marginal_temperature
+- case_id_number: 22
+  title: November 2020 Event 0092
+  start_date: 2020-11-09 00:00:00
+  end_date: 2020-11-13 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 40.25
+      latitude_max: 73.75
+      longitude_min: 12.25
+      longitude_max: 116.75
+  event_type: marginal_temperature
+- case_id_number: 23
+  title: December 2020 Event 0108
+  start_date: 2020-12-03 00:00:00
+  end_date: 2020-12-07 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 37.0
+      latitude_max: 57.75
+      longitude_min: 265.0
+      longitude_max: 294.75
+  event_type: marginal_temperature
+- case_id_number: 24
+  title: December 2020 Event 0109
+  start_date: 2020-12-04 00:00:00
+  end_date: 2020-12-08 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 57.0
+      latitude_max: 71.25
+      longitude_min: 192.25
+      longitude_max: 230.25
+  event_type: marginal_temperature
+- case_id_number: 25
+  title: December 2020 Event 0111
+  start_date: 2020-12-06 00:00:00
   end_date: 2020-12-10 00:00:00
   location:
     type: bounded_region
@@ -214,81 +298,81 @@
       longitude_min: 306.5
       longitude_max: 341.5
   event_type: marginal_temperature
-- case_id_number: 19
-  title: December 2020 Event 0236
+- case_id_number: 26
+  title: December 2020 Event 0115
+  start_date: 2020-12-13 00:00:00
+  end_date: 2020-12-17 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 65.25
+      latitude_max: 81.25
+      longitude_min: 289.5
+      longitude_max: 344.25
+  event_type: marginal_temperature
+- case_id_number: 27
+  title: December 2020 Event 0126
   start_date: 2020-12-27 00:00:00
   end_date: 2021-01-01 00:00:00
   location:
     type: bounded_region
     parameters:
       latitude_min: 43.5
-      latitude_max: 60.0
+      latitude_max: 59.0
       longitude_min: 0.0
       longitude_max: 27.5
   event_type: marginal_temperature
-- case_id_number: 20
-  title: February 2021 Event 0273
-  start_date: 2021-02-09 00:00:00
-  end_date: 2021-02-18 00:00:00
+- case_id_number: 28
+  title: January 2021 Event 0138
+  start_date: 2021-01-20 00:00:00
+  end_date: 2021-01-24 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -81.0
-      latitude_max: -69.5
-      longitude_min: 46.25
-      longitude_max: 76.75
+      latitude_min: 60.25
+      latitude_max: 75.5
+      longitude_min: 306.75
+      longitude_max: 329.75
   event_type: marginal_temperature
-- case_id_number: 21
-  title: March 2021 Event 0315
-  start_date: 2021-03-26 00:00:00
-  end_date: 2021-04-03 00:00:00
+- case_id_number: 29
+  title: February 2021 Event 0157
+  start_date: 2021-02-21 00:00:00
+  end_date: 2021-02-26 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -78.75
-      latitude_max: -66.5
-      longitude_min: 88.0
-      longitude_max: 159.75
+      latitude_min: 68.25
+      latitude_max: 74.0
+      longitude_min: 73.25
+      longitude_max: 118.75
   event_type: marginal_temperature
-- case_id_number: 22
-  title: May 2021 Event 0342
-  start_date: 2021-05-08 00:00:00
-  end_date: 2021-05-17 00:00:00
+- case_id_number: 30
+  title: March 2021 Event 0168
+  start_date: 2021-03-11 00:00:00
+  end_date: 2021-03-15 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -89.75
-      latitude_max: -75.5
-      longitude_min: 0.0
-      longitude_max: 265.25
+      latitude_min: 57.0
+      latitude_max: 74.25
+      longitude_min: 76.75
+      longitude_max: 123.25
   event_type: marginal_temperature
-- case_id_number: 23
-  title: May 2021 Event 0356
-  start_date: 2021-05-29 00:00:00
-  end_date: 2021-06-04 00:00:00
+- case_id_number: 31
+  title: April 2021 Event 0182
+  start_date: 2021-04-18 00:00:00
+  end_date: 2021-04-22 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -86.5
-      latitude_max: -65.75
-      longitude_min: 91.25
-      longitude_max: 147.75
+      latitude_min: 75.0
+      latitude_max: 84.5
+      longitude_min: 292.0
+      longitude_max: 339.75
   event_type: marginal_temperature
-- case_id_number: 24
-  title: June 2021 Event 0364
-  start_date: 2021-06-10 00:00:00
-  end_date: 2021-06-15 00:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: -80.5
-      latitude_max: -72.0
-      longitude_min: 56.0
-      longitude_max: 108.0
-  event_type: marginal_temperature
-- case_id_number: 25
-  title: June 2021 Event 0372
-  start_date: 2021-06-20 00:00:00
+- case_id_number: 32
+  title: June 2021 Event 0208
+  start_date: 2021-06-21 00:00:00
   end_date: 2021-06-25 00:00:00
   location:
     type: bounded_region
@@ -298,44 +382,32 @@
       longitude_min: 70.75
       longitude_max: 94.5
   event_type: marginal_temperature
-- case_id_number: 26
-  title: June 2021 Event 0376
-  start_date: 2021-06-28 00:00:00
-  end_date: 2021-07-03 00:00:00
+- case_id_number: 33
+  title: July 2021 Event 0215
+  start_date: 2021-07-24 00:00:00
+  end_date: 2021-07-28 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -84.75
-      latitude_max: -72.75
-      longitude_min: 201.75
-      longitude_max: 292.75
-  event_type: marginal_temperature
-- case_id_number: 27
-  title: July 2021 Event 0378
-  start_date: 2021-07-03 00:00:00
-  end_date: 2021-07-09 00:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: -89.5
-      latitude_max: -68.25
+      latitude_min: 23.75
+      latitude_max: 35.25
       longitude_min: 0.0
-      longitude_max: 164.5
+      longitude_max: 18.0
   event_type: marginal_temperature
-- case_id_number: 28
-  title: October 2021 Event 0421
-  start_date: 2021-10-03 00:00:00
-  end_date: 2021-10-09 00:00:00
+- case_id_number: 34
+  title: August 2021 Event 0216
+  start_date: 2021-08-22 00:00:00
+  end_date: 2021-08-26 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -90.0
-      latitude_max: -71.5
-      longitude_min: 0.0
-      longitude_max: 359.75
+      latitude_min: 67.75
+      latitude_max: 77.5
+      longitude_min: 80.75
+      longitude_max: 113.75
   event_type: marginal_temperature
-- case_id_number: 29
-  title: November 2021 Event 0450
+- case_id_number: 35
+  title: November 2021 Event 0236
   start_date: 2021-11-09 00:00:00
   end_date: 2021-11-15 00:00:00
   location:
@@ -346,9 +418,33 @@
       longitude_min: 27.0
       longitude_max: 122.5
   event_type: marginal_temperature
-- case_id_number: 30
-  title: December 2021 Event 0483
-  start_date: 2021-12-19 00:00:00
+- case_id_number: 36
+  title: November 2021 Event 0240
+  start_date: 2021-11-19 00:00:00
+  end_date: 2021-11-23 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 43.25
+      latitude_max: 57.5
+      longitude_min: 0.0
+      longitude_max: 26.75
+  event_type: marginal_temperature
+- case_id_number: 37
+  title: December 2021 Event 0248
+  start_date: 2021-12-07 00:00:00
+  end_date: 2021-12-11 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 10.0
+      latitude_max: 21.75
+      longitude_min: 4.0
+      longitude_max: 31.25
+  event_type: marginal_temperature
+- case_id_number: 38
+  title: December 2021 Event 0258
+  start_date: 2021-12-20 00:00:00
   end_date: 2021-12-25 00:00:00
   location:
     type: bounded_region
@@ -358,20 +454,32 @@
       longitude_min: 0.0
       longitude_max: 11.0
   event_type: marginal_temperature
-- case_id_number: 31
-  title: December 2021 Event 0485
-  start_date: 2021-12-21 00:00:00
+- case_id_number: 39
+  title: December 2021 Event 0260
+  start_date: 2021-12-22 00:00:00
   end_date: 2021-12-26 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -80.5
-      latitude_max: -66.75
-      longitude_min: 51.25
-      longitude_max: 159.75
+      latitude_min: 57.5
+      latitude_max: 73.0
+      longitude_min: 16.75
+      longitude_max: 76.75
   event_type: marginal_temperature
-- case_id_number: 32
-  title: January 2022 Event 0500
+- case_id_number: 40
+  title: December 2021 Event 0264
+  start_date: 2021-12-27 00:00:00
+  end_date: 2021-12-31 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 60.75
+      latitude_max: 71.0
+      longitude_min: 5.25
+      longitude_max: 47.0
+  event_type: marginal_temperature
+- case_id_number: 41
+  title: January 2022 Event 0270
   start_date: 2022-01-02 00:00:00
   end_date: 2022-01-07 00:00:00
   location:
@@ -382,20 +490,8 @@
       longitude_min: 280.5
       longitude_max: 298.5
   event_type: marginal_temperature
-- case_id_number: 33
-  title: January 2022 Event 0505
-  start_date: 2022-01-08 00:00:00
-  end_date: 2022-01-13 00:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: -90.0
-      latitude_max: -71.25
-      longitude_min: 0.0
-      longitude_max: 231.5
-  event_type: marginal_temperature
-- case_id_number: 34
-  title: January 2022 Event 0507
+- case_id_number: 42
+  title: January 2022 Event 0273
   start_date: 2022-01-08 00:00:00
   end_date: 2022-01-13 00:00:00
   location:
@@ -403,23 +499,47 @@
     parameters:
       latitude_min: 54.5
       latitude_max: 63.5
-      longitude_min: 281.75
+      longitude_min: 280.75
       longitude_max: 293.0
   event_type: marginal_temperature
-- case_id_number: 35
-  title: January 2022 Event 0520
+- case_id_number: 43
+  title: January 2022 Event 0274
+  start_date: 2022-01-08 00:00:00
+  end_date: 2022-01-12 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 56.25
+      latitude_max: 69.5
+      longitude_min: 105.25
+      longitude_max: 134.75
+  event_type: marginal_temperature
+- case_id_number: 44
+  title: January 2022 Event 0280
+  start_date: 2022-01-14 00:00:00
+  end_date: 2022-01-18 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 35.0
+      latitude_max: 48.25
+      longitude_min: 237.5
+      longitude_max: 252.5
+  event_type: marginal_temperature
+- case_id_number: 45
+  title: January 2022 Event 0282
   start_date: 2022-01-18 00:00:00
   end_date: 2022-01-23 00:00:00
   location:
     type: bounded_region
     parameters:
       latitude_min: 57.75
-      latitude_max: 69.5
+      latitude_max: 80.5
       longitude_min: 247.5
       longitude_max: 275.25
   event_type: marginal_temperature
-- case_id_number: 36
-  title: January 2022 Event 0522
+- case_id_number: 46
+  title: January 2022 Event 0284
   start_date: 2022-01-20 00:00:00
   end_date: 2022-01-25 00:00:00
   location:
@@ -430,20 +550,8 @@
       longitude_min: 348.25
       longitude_max: 359.75
   event_type: marginal_temperature
-- case_id_number: 37
-  title: January 2022 Event 0523
-  start_date: 2022-01-21 00:00:00
-  end_date: 2022-01-26 00:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: -74.25
-      latitude_max: -67.0
-      longitude_min: 116.5
-      longitude_max: 170.5
-  event_type: marginal_temperature
-- case_id_number: 38
-  title: March 2022 Event 0552
+- case_id_number: 47
+  title: March 2022 Event 0306
   start_date: 2022-03-01 00:00:00
   end_date: 2022-03-06 00:00:00
   location:
@@ -454,8 +562,32 @@
       longitude_min: 280.75
       longitude_max: 299.75
   event_type: marginal_temperature
-- case_id_number: 39
-  title: May 2022 Event 0598
+- case_id_number: 48
+  title: March 2022 Event 0309
+  start_date: 2022-03-07 00:00:00
+  end_date: 2022-03-11 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 51.5
+      latitude_max: 61.75
+      longitude_min: 281.75
+      longitude_max: 303.75
+  event_type: marginal_temperature
+- case_id_number: 49
+  title: April 2022 Event 0322
+  start_date: 2022-04-06 00:00:00
+  end_date: 2022-04-10 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 66.25
+      latitude_max: 77.5
+      longitude_min: 73.25
+      longitude_max: 118.75
+  event_type: marginal_temperature
+- case_id_number: 50
+  title: May 2022 Event 0332
   start_date: 2022-05-14 00:00:00
   end_date: 2022-05-21 00:00:00
   location:
@@ -466,45 +598,21 @@
       longitude_min: 280.75
       longitude_max: 291.75
   event_type: marginal_temperature
-- case_id_number: 40
-  title: June 2022 Event 0614
-  start_date: 2022-06-10 00:00:00
-  end_date: 2022-06-15 00:00:00
+- case_id_number: 51
+  title: June 2022 Event 0341
+  start_date: 2022-06-27 00:00:00
+  end_date: 2022-07-01 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -74.5
-      latitude_max: -66.0
-      longitude_min: 99.0
-      longitude_max: 145.0
+      latitude_min: 18.25
+      latitude_max: 26.25
+      longitude_min: 20.0
+      longitude_max: 28.5
   event_type: marginal_temperature
-- case_id_number: 41
-  title: June 2022 Event 0616
-  start_date: 2022-06-16 00:00:00
-  end_date: 2022-06-22 00:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: -86.0
-      latitude_max: -66.25
-      longitude_min: 86.75
-      longitude_max: 153.0
-  event_type: marginal_temperature
-- case_id_number: 42
-  title: July 2022 Event 0628
-  start_date: 2022-07-11 00:00:00
-  end_date: 2022-07-17 00:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: -84.75
-      latitude_max: -75.0
-      longitude_min: 201.75
-      longitude_max: 250.25
-  event_type: marginal_temperature
-- case_id_number: 43
-  title: July 2022 Event 0633
-  start_date: 2022-07-25 00:00:00
+- case_id_number: 52
+  title: July 2022 Event 0345
+  start_date: 2022-07-26 00:00:00
   end_date: 2022-07-30 00:00:00
   location:
     type: bounded_region
@@ -514,21 +622,9 @@
       longitude_min: 33.75
       longitude_max: 66.75
   event_type: marginal_temperature
-- case_id_number: 44
-  title: August 2022 Event 0646
-  start_date: 2022-08-29 00:00:00
-  end_date: 2022-09-03 00:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: 66.75
-      latitude_max: 77.5
-      longitude_min: 73.25
-      longitude_max: 111.0
-  event_type: marginal_temperature
-- case_id_number: 45
-  title: September 2022 Event 0652
-  start_date: 2022-09-10 00:00:00
+- case_id_number: 53
+  title: September 2022 Event 0355
+  start_date: 2022-09-11 00:00:00
   end_date: 2022-09-15 00:00:00
   location:
     type: bounded_region
@@ -538,8 +634,8 @@
       longitude_min: 219.5
       longitude_max: 263.75
   event_type: marginal_temperature
-- case_id_number: 46
-  title: September 2022 Event 0659
+- case_id_number: 54
+  title: September 2022 Event 0358
   start_date: 2022-09-18 00:00:00
   end_date: 2022-09-24 00:00:00
   location:
@@ -550,32 +646,44 @@
       longitude_min: 192.25
       longitude_max: 231.25
   event_type: marginal_temperature
-- case_id_number: 47
-  title: October 2022 Event 0674
-  start_date: 2022-10-06 00:00:00
-  end_date: 2022-10-11 00:00:00
+- case_id_number: 55
+  title: September 2022 Event 0361
+  start_date: 2022-09-29 00:00:00
+  end_date: 2022-10-03 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -89.25
-      latitude_max: -70.75
-      longitude_min: 0.0
-      longitude_max: 118.75
+      latitude_min: 63.75
+      latitude_max: 71.25
+      longitude_min: 193.25
+      longitude_max: 226.75
   event_type: marginal_temperature
-- case_id_number: 48
-  title: October 2022 Event 0675
-  start_date: 2022-10-09 00:00:00
-  end_date: 2022-10-14 00:00:00
+- case_id_number: 56
+  title: October 2022 Event 0372
+  start_date: 2022-10-18 00:00:00
+  end_date: 2022-10-22 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -88.75
-      latitude_max: -74.5
-      longitude_min: 242.75
-      longitude_max: 359.75
+      latitude_min: 49.75
+      latitude_max: 67.5
+      longitude_min: 39.5
+      longitude_max: 74.25
   event_type: marginal_temperature
-- case_id_number: 49
-  title: October 2022 Event 0693
+- case_id_number: 57
+  title: October 2022 Event 0373
+  start_date: 2022-10-19 00:00:00
+  end_date: 2022-10-23 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 13.25
+      latitude_max: 24.25
+      longitude_min: 19.0
+      longitude_max: 31.0
+  event_type: marginal_temperature
+- case_id_number: 58
+  title: October 2022 Event 0378
   start_date: 2022-10-28 00:00:00
   end_date: 2022-11-05 00:00:00
   location:
@@ -586,9 +694,21 @@
       longitude_min: 24.75
       longitude_max: 78.0
   event_type: marginal_temperature
-- case_id_number: 50
-  title: November 2022 Event 0712
-  start_date: 2022-11-23 00:00:00
+- case_id_number: 59
+  title: November 2022 Event 0386
+  start_date: 2022-11-17 00:00:00
+  end_date: 2022-11-21 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 12.5
+      latitude_max: 28.5
+      longitude_min: 0.0
+      longitude_max: 31.5
+  event_type: marginal_temperature
+- case_id_number: 60
+  title: November 2022 Event 0391
+  start_date: 2022-11-25 00:00:00
   end_date: 2022-11-29 00:00:00
   location:
     type: bounded_region
@@ -598,8 +718,20 @@
       longitude_min: 0.0
       longitude_max: 108.0
   event_type: marginal_temperature
-- case_id_number: 51
-  title: December 2022 Event 0732
+- case_id_number: 61
+  title: December 2022 Event 0394
+  start_date: 2022-12-10 00:00:00
+  end_date: 2022-12-14 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 59.5
+      latitude_max: 74.25
+      longitude_min: 73.25
+      longitude_max: 103.5
+  event_type: marginal_temperature
+- case_id_number: 62
+  title: December 2022 Event 0401
   start_date: 2022-12-19 00:00:00
   end_date: 2022-12-27 00:00:00
   location:
@@ -610,8 +742,20 @@
       longitude_min: 231.25
       longitude_max: 302.75
   event_type: marginal_temperature
-- case_id_number: 52
-  title: December 2022 Event 0742
+- case_id_number: 63
+  title: December 2022 Event 0405
+  start_date: 2022-12-21 00:00:00
+  end_date: 2022-12-25 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 40.75
+      latitude_max: 51.5
+      longitude_min: 43.75
+      longitude_max: 72.75
+  event_type: marginal_temperature
+- case_id_number: 64
+  title: December 2022 Event 0408
   start_date: 2022-12-24 00:00:00
   end_date: 2022-12-29 00:00:00
   location:
@@ -622,80 +766,200 @@
       longitude_min: 192.25
       longitude_max: 218.75
   event_type: marginal_temperature
-- case_id_number: 53
-  title: January 2023 Event 0764
-  start_date: 2023-01-14 00:00:00
-  end_date: 2023-01-19 00:00:00
+- case_id_number: 65
+  title: January 2023 Event 0412
+  start_date: 2023-01-01 00:00:00
+  end_date: 2023-01-05 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -78.75
-      latitude_max: -67.25
-      longitude_min: 48.0
-      longitude_max: 114.25
+      latitude_min: 62.0
+      latitude_max: 69.75
+      longitude_min: 166.5
+      longitude_max: 190.0
   event_type: marginal_temperature
-- case_id_number: 54
-  title: February 2023 Event 0778
-  start_date: 2023-02-07 00:00:00
-  end_date: 2023-02-12 00:00:00
+- case_id_number: 66
+  title: January 2023 Event 0427
+  start_date: 2023-01-20 00:00:00
+  end_date: 2023-01-24 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -84.0
-      latitude_max: -72.0
-      longitude_min: 0.0
-      longitude_max: 14.75
+      latitude_min: 42.5
+      latitude_max: 59.5
+      longitude_min: 4.25
+      longitude_max: 31.75
   event_type: marginal_temperature
-- case_id_number: 55
-  title: February 2023 Event 0780
+- case_id_number: 67
+  title: February 2023 Event 0436
   start_date: 2023-02-13 00:00:00
-  end_date: 2023-02-18 00:00:00
+  end_date: 2023-02-17 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -87.75
-      latitude_max: -74.25
-      longitude_min: 0.0
-      longitude_max: 266.25
+      latitude_min: 55.5
+      latitude_max: 67.0
+      longitude_min: 135.0
+      longitude_max: 179.5
   event_type: marginal_temperature
-- case_id_number: 56
-  title: June 2023 Event 0858
-  start_date: 2023-06-11 00:00:00
-  end_date: 2023-06-18 00:00:00
+- case_id_number: 68
+  title: February 2023 Event 0438
+  start_date: 2023-02-21 00:00:00
+  end_date: 2023-02-25 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -90.0
-      latitude_max: -66.5
-      longitude_min: 0.0
-      longitude_max: 359.75
+      latitude_min: 51.5
+      latitude_max: 69.25
+      longitude_min: 5.25
+      longitude_max: 24.75
   event_type: marginal_temperature
-- case_id_number: 57
-  title: August 2023 Event 0879
-  start_date: 2023-08-15 00:00:00
-  end_date: 2023-08-21 00:00:00
+- case_id_number: 69
+  title: February 2023 Event 0439
+  start_date: 2023-02-21 00:00:00
+  end_date: 2023-02-25 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -88.25
-      latitude_max: -67.75
-      longitude_min: 52.0
-      longitude_max: 149.25
+      latitude_min: -26.25
+      latitude_max: -17.75
+      longitude_min: 116.25
+      longitude_max: 137.5
   event_type: marginal_temperature
-- case_id_number: 58
-  title: October 2023 Event 0909
-  start_date: 2023-10-06 00:00:00
-  end_date: 2023-10-11 00:00:00
+- case_id_number: 70
+  title: February 2023 Event 0440
+  start_date: 2023-02-23 00:00:00
+  end_date: 2023-02-27 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: 25.25
-      latitude_max: 35.25
-      longitude_min: 0.0
-      longitude_max: 13.5
+      latitude_min: 75.25
+      latitude_max: 80.5
+      longitude_min: 286.75
+      longitude_max: 331.5
   event_type: marginal_temperature
-- case_id_number: 59
-  title: October 2023 Event 0910
+- case_id_number: 71
+  title: February 2023 Event 0443
+  start_date: 2023-02-28 00:00:00
+  end_date: 2023-03-04 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 52.0
+      latitude_max: 62.25
+      longitude_min: 281.75
+      longitude_max: 300.25
+  event_type: marginal_temperature
+- case_id_number: 72
+  title: March 2023 Event 0458
+  start_date: 2023-03-17 00:00:00
+  end_date: 2023-03-21 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 50.25
+      latitude_max: 62.25
+      longitude_min: 280.5
+      longitude_max: 301.5
+  event_type: marginal_temperature
+- case_id_number: 73
+  title: May 2023 Event 0471
+  start_date: 2023-05-08 00:00:00
+  end_date: 2023-05-12 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: -30.25
+      latitude_max: -20.5
+      longitude_min: 117.0
+      longitude_max: 134.25
+  event_type: marginal_temperature
+- case_id_number: 74
+  title: May 2023 Event 0474
+  start_date: 2023-05-16 00:00:00
+  end_date: 2023-05-20 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 56.0
+      latitude_max: 72.0
+      longitude_min: 283.75
+      longitude_max: 298.0
+  event_type: marginal_temperature
+- case_id_number: 75
+  title: May 2023 Event 0476
+  start_date: 2023-05-17 00:00:00
+  end_date: 2023-05-21 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 54.5
+      latitude_max: 71.25
+      longitude_min: 280.75
+      longitude_max: 298.25
+  event_type: marginal_temperature
+- case_id_number: 76
+  title: May 2023 Event 0480
+  start_date: 2023-05-26 00:00:00
+  end_date: 2023-05-30 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 43.25
+      latitude_max: 51.0
+      longitude_min: 28.75
+      longitude_max: 42.25
+  event_type: marginal_temperature
+- case_id_number: 77
+  title: June 2023 Event 0488
+  start_date: 2023-06-23 00:00:00
+  end_date: 2023-06-27 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 17.0
+      latitude_max: 31.75
+      longitude_min: 15.75
+      longitude_max: 38.25
+  event_type: marginal_temperature
+- case_id_number: 78
+  title: July 2023 Event 0493
+  start_date: 2023-07-30 00:00:00
+  end_date: 2023-08-04 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 66.75
+      latitude_max: 76.75
+      longitude_min: 299.0
+      longitude_max: 336.0
+  event_type: marginal_temperature
+- case_id_number: 79
+  title: August 2023 Event 0495
+  start_date: 2023-08-21 00:00:00
+  end_date: 2023-08-25 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: -21.75
+      latitude_max: -15.0
+      longitude_min: 123.25
+      longitude_max: 133.75
+  event_type: marginal_temperature
+- case_id_number: 80
+  title: September 2023 Event 0499
+  start_date: 2023-09-17 00:00:00
+  end_date: 2023-09-21 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 60.0
+      latitude_max: 70.75
+      longitude_min: 192.25
+      longitude_max: 232.5
+  event_type: marginal_temperature
+- case_id_number: 81
+  title: October 2023 Event 0508
   start_date: 2023-10-06 00:00:00
   end_date: 2023-10-14 00:00:00
   location:
@@ -706,9 +970,21 @@
       longitude_min: 351.5
       longitude_max: 359.75
   event_type: marginal_temperature
-- case_id_number: 60
-  title: October 2023 Event 0914
-  start_date: 2023-10-14 00:00:00
+- case_id_number: 82
+  title: October 2023 Event 0509
+  start_date: 2023-10-06 00:00:00
+  end_date: 2023-10-11 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 25.25
+      latitude_max: 35.25
+      longitude_min: 0.0
+      longitude_max: 13.5
+  event_type: marginal_temperature
+- case_id_number: 83
+  title: October 2023 Event 0512
+  start_date: 2023-10-15 00:00:00
   end_date: 2023-10-21 00:00:00
   location:
     type: bounded_region
@@ -718,8 +994,20 @@
       longitude_min: 121.5
       longitude_max: 133.5
   event_type: marginal_temperature
-- case_id_number: 61
-  title: October 2023 Event 0926
+- case_id_number: 84
+  title: October 2023 Event 0515
+  start_date: 2023-10-24 00:00:00
+  end_date: 2023-10-28 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 51.0
+      latitude_max: 62.5
+      longitude_min: 280.5
+      longitude_max: 297.25
+  event_type: marginal_temperature
+- case_id_number: 85
+  title: October 2023 Event 0517
   start_date: 2023-10-29 00:00:00
   end_date: 2023-11-04 00:00:00
   location:
@@ -730,20 +1018,32 @@
       longitude_min: 240.0
       longitude_max: 276.25
   event_type: marginal_temperature
-- case_id_number: 62
-  title: November 2023 Event 0943
-  start_date: 2023-11-26 00:00:00
-  end_date: 2023-12-01 00:00:00
+- case_id_number: 86
+  title: December 2023 Event 0530
+  start_date: 2023-12-04 00:00:00
+  end_date: 2023-12-08 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -88.25
-      latitude_max: -67.0
-      longitude_min: 32.25
-      longitude_max: 169.25
+      latitude_min: 67.75
+      latitude_max: 73.75
+      longitude_min: 73.25
+      longitude_max: 97.0
   event_type: marginal_temperature
-- case_id_number: 63
-  title: December 2023 Event 0975
+- case_id_number: 87
+  title: December 2023 Event 0537
+  start_date: 2023-12-11 00:00:00
+  end_date: 2023-12-15 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 66.5
+      latitude_max: 72.75
+      longitude_min: 73.25
+      longitude_max: 98.0
+  event_type: marginal_temperature
+- case_id_number: 88
+  title: December 2023 Event 0544
   start_date: 2023-12-24 00:00:00
   end_date: 2023-12-29 00:00:00
   location:
@@ -754,20 +1054,68 @@
       longitude_min: 5.5
       longitude_max: 62.25
   event_type: marginal_temperature
-- case_id_number: 64
-  title: January 2024 Event 1006
-  start_date: 2024-01-26 00:00:00
-  end_date: 2024-02-01 00:00:00
+- case_id_number: 89
+  title: January 2024 Event 0548
+  start_date: 2024-01-01 00:00:00
+  end_date: 2024-01-05 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -79.5
-      latitude_max: -69.0
-      longitude_min: 68.25
-      longitude_max: 107.75
+      latitude_min: 5.5
+      latitude_max: 22.75
+      longitude_min: 20.75
+      longitude_max: 37.5
   event_type: marginal_temperature
-- case_id_number: 65
-  title: February 2024 Event 1041
+- case_id_number: 90
+  title: January 2024 Event 0555
+  start_date: 2024-01-11 00:00:00
+  end_date: 2024-01-15 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 60.0
+      latitude_max: 69.75
+      longitude_min: 163.5
+      longitude_max: 179.25
+  event_type: marginal_temperature
+- case_id_number: 91
+  title: February 2024 Event 0588
+  start_date: 2024-02-24 00:00:00
+  end_date: 2024-02-28 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 62.75
+      latitude_max: 73.5
+      longitude_min: 270.25
+      longitude_max: 298.0
+  event_type: marginal_temperature
+- case_id_number: 92
+  title: February 2024 Event 0590
+  start_date: 2024-02-25 00:00:00
+  end_date: 2024-02-29 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 41.25
+      latitude_max: 59.5
+      longitude_min: 32.5
+      longitude_max: 73.5
+  event_type: marginal_temperature
+- case_id_number: 93
+  title: February 2024 Event 0592
+  start_date: 2024-02-25 00:00:00
+  end_date: 2024-02-29 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 60.25
+      latitude_max: 81.5
+      longitude_min: 296.0
+      longitude_max: 320.25
+  event_type: marginal_temperature
+- case_id_number: 94
+  title: February 2024 Event 0593
   start_date: 2024-02-29 00:00:00
   end_date: 2024-03-08 00:00:00
   location:
@@ -778,20 +1126,8 @@
       longitude_min: 280.75
       longitude_max: 299.5
   event_type: marginal_temperature
-- case_id_number: 66
-  title: March 2024 Event 1050
-  start_date: 2024-03-09 00:00:00
-  end_date: 2024-03-14 00:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: -76.5
-      latitude_max: -71.25
-      longitude_min: 25.5
-      longitude_max: 64.5
-  event_type: marginal_temperature
-- case_id_number: 67
-  title: April 2024 Event 1068
+- case_id_number: 95
+  title: April 2024 Event 0611
   start_date: 2024-04-27 00:00:00
   end_date: 2024-05-02 00:00:00
   location:
@@ -802,20 +1138,32 @@
       longitude_min: 116.0
       longitude_max: 140.25
   event_type: marginal_temperature
-- case_id_number: 68
-  title: May 2024 Event 1081
-  start_date: 2024-05-13 00:00:00
-  end_date: 2024-05-18 00:00:00
+- case_id_number: 96
+  title: May 2024 Event 0614
+  start_date: 2024-05-07 00:00:00
+  end_date: 2024-05-11 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -84.5
-      latitude_max: -75.25
-      longitude_min: 201.75
-      longitude_max: 235.0
+      latitude_min: 67.0
+      latitude_max: 76.25
+      longitude_min: 73.25
+      longitude_max: 138.75
   event_type: marginal_temperature
-- case_id_number: 69
-  title: June 2024 Event 1096
+- case_id_number: 97
+  title: May 2024 Event 0616
+  start_date: 2024-05-19 00:00:00
+  end_date: 2024-05-23 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 53.75
+      latitude_max: 62.5
+      longitude_min: 282.0
+      longitude_max: 297.0
+  event_type: marginal_temperature
+- case_id_number: 98
+  title: June 2024 Event 0621
   start_date: 2024-06-13 00:00:00
   end_date: 2024-06-18 00:00:00
   location:
@@ -826,44 +1174,32 @@
       longitude_min: 299.75
       longitude_max: 347.5
   event_type: marginal_temperature
-- case_id_number: 70
-  title: June 2024 Event 1102
-  start_date: 2024-06-26 00:00:00
-  end_date: 2024-07-03 00:00:00
+- case_id_number: 99
+  title: June 2024 Event 0622
+  start_date: 2024-06-15 00:00:00
+  end_date: 2024-06-19 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -80.25
-      latitude_max: -66.25
-      longitude_min: 84.0
-      longitude_max: 145.25
+      latitude_min: 62.0
+      latitude_max: 77.75
+      longitude_min: 250.25
+      longitude_max: 273.75
   event_type: marginal_temperature
-- case_id_number: 71
-  title: July 2024 Event 1106
-  start_date: 2024-07-19 00:00:00
-  end_date: 2024-07-27 00:00:00
+- case_id_number: 100
+  title: August 2024 Event 0624
+  start_date: 2024-08-07 00:00:00
+  end_date: 2024-08-11 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -79.75
-      latitude_max: -66.5
-      longitude_min: 26.75
-      longitude_max: 131.25
-  event_type: marginal_temperature
-- case_id_number: 72
-  title: August 2024 Event 1125
-  start_date: 2024-08-29 00:00:00
-  end_date: 2024-09-06 00:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: -83.75
-      latitude_max: -65.75
+      latitude_min: 27.5
+      latitude_max: 35.0
       longitude_min: 1.5
-      longitude_max: 161.75
+      longitude_max: 16.5
   event_type: marginal_temperature
-- case_id_number: 73
-  title: September 2024 Event 1135
+- case_id_number: 101
+  title: September 2024 Event 0636
   start_date: 2024-09-19 00:00:00
   end_date: 2024-09-25 00:00:00
   location:
@@ -874,21 +1210,45 @@
       longitude_min: 73.25
       longitude_max: 129.0
   event_type: marginal_temperature
-- case_id_number: 74
-  title: October 2024 Event 1163
-  start_date: 2024-10-29 00:00:00
-  end_date: 2024-11-03 00:00:00
+- case_id_number: 102
+  title: October 2024 Event 0641
+  start_date: 2024-10-06 00:00:00
+  end_date: 2024-10-10 00:00:00
   location:
     type: bounded_region
     parameters:
-      latitude_min: -89.75
-      latitude_max: -71.25
-      longitude_min: 0.0
-      longitude_max: 267.25
+      latitude_min: 61.25
+      latitude_max: 70.75
+      longitude_min: 154.75
+      longitude_max: 190.0
   event_type: marginal_temperature
-- case_id_number: 75
-  title: November 2024 Event 1172
-  start_date: 2024-11-16 00:00:00
+- case_id_number: 103
+  title: October 2024 Event 0646
+  start_date: 2024-10-27 00:00:00
+  end_date: 2024-10-31 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 40.5
+      latitude_max: 61.5
+      longitude_min: 233.0
+      longitude_max: 264.0
+  event_type: marginal_temperature
+- case_id_number: 104
+  title: October 2024 Event 0647
+  start_date: 2024-10-28 00:00:00
+  end_date: 2024-11-01 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 56.0
+      latitude_max: 69.25
+      longitude_min: 192.25
+      longitude_max: 230.25
+  event_type: marginal_temperature
+- case_id_number: 105
+  title: November 2024 Event 0656
+  start_date: 2024-11-17 00:00:00
   end_date: 2024-11-21 00:00:00
   location:
     type: bounded_region
@@ -898,8 +1258,20 @@
       longitude_min: 297.75
       longitude_max: 340.25
   event_type: marginal_temperature
-- case_id_number: 76
-  title: December 2024 Event 1196
+- case_id_number: 106
+  title: November 2024 Event 0659
+  start_date: 2024-11-21 00:00:00
+  end_date: 2024-11-25 00:00:00
+  location:
+    type: bounded_region
+    parameters:
+      latitude_min: 41.25
+      latitude_max: 69.75
+      longitude_min: 237.25
+      longitude_max: 291.0
+  event_type: marginal_temperature
+- case_id_number: 107
+  title: December 2024 Event 0674
   start_date: 2024-12-17 00:00:00
   end_date: 2024-12-22 00:00:00
   location:
