@@ -533,13 +533,15 @@ def detect_events(
 ) -> List[Dict]:
     """Track spatiotemporal events from a filtered boolean mask.
 
-    New events are only seeded for blobs whose area meets or exceeds
-    ``min_seed_area_km2`` on the current day AND on each of the prior
-    ``MIN_CONSECUTIVE_DAYS - 1`` days (strict joint-area check). The
-    overlap of the current-day blob footprint with each previous day's
-    filtered mask must individually satisfy the threshold, ensuring the
-    contiguous region was jointly >= ``min_seed_area_km2`` for all
-    MIN_CONSECUTIVE_DAYS days. Blobs that fail but overlap an already-
+    New events are only seeded when the current-day blob AND the prior
+    ``MIN_CONSECUTIVE_DAYS - 1`` days share a single contiguous region
+    of >= ``min_seed_area_km2``. The joint intersection of the blob
+    footprint with ALL prior filtered masks is computed at once; the
+    largest connected component in that intersection must meet the
+    area threshold. This ensures every seeding point was continuously
+    active for the full window—checking each prior day independently
+    would allow scattered non-contiguous cells to satisfy the threshold
+    across different days. Blobs that fail but overlap an already-
     established event still extend it.
 
     Args:
@@ -618,18 +620,29 @@ def detect_events(
                 if min_seed_area_km2 > 0:
                     if di < MIN_CONSECUTIVE_DAYS - 1:
                         continue
-                    joint_ok = True
+                    # Require a single contiguous region that was active
+                    # on the current day AND every one of the prior
+                    # MIN_CONSECUTIVE_DAYS-1 days. Checking each prior
+                    # day independently would allow non-contiguous,
+                    # scattered cells to satisfy the threshold across
+                    # different days. The joint intersection enforces
+                    # that every point in the qualifying region persisted
+                    # continuously for the full window.
+                    joint_mask = om.copy()
                     for k in range(1, MIN_CONSECUTIVE_DAYS):
-                        overlap = om & filtered_mask[di - k]
-                        prev_area = (
-                            float(area_grid[overlap].sum())
-                            if area_grid is not None
-                            else float(overlap.sum())
-                        )
-                        if prev_area < min_seed_area_km2:
-                            joint_ok = False
-                            break
-                    if not joint_ok:
+                        joint_mask &= filtered_mask[di - k]
+                    if not joint_mask.any():
+                        continue
+                    j_lbl, j_n = ndimage.label(joint_mask)
+                    if j_n == 0:
+                        continue
+                    best_area = max(
+                        float(area_grid[j_lbl == c].sum())
+                        if area_grid is not None
+                        else float((j_lbl == c).sum())
+                        for c in range(1, j_n + 1)
+                    )
+                    if best_area < min_seed_area_km2:
                         continue
                 eid = next_id
                 next_id += 1
@@ -932,7 +945,7 @@ def plot_events_high_consec(
     df: pd.DataFrame,
     title: str,
     output_path: str,
-    min_consec: int = 6,
+    min_consec: int = 5,
 ) -> None:
     """Plot events with >= min_consec days, coloured by consecutive days.
 
@@ -1007,7 +1020,7 @@ def plot_event_consec_maps(
     lats: np.ndarray,
     lons: np.ndarray,
     stem: str,
-    min_consec: int = 6,
+    min_consec: int = 3,
 ) -> None:
     """Plot a per-event consecutive-days map for each qualifying event.
 
@@ -1189,8 +1202,13 @@ def main():
     parser.add_argument(
         "--lat-min",
         type=float,
-        default=-90.0,
-        help="Minimum latitude to include in detection. Default -90.0",
+        default=-60.0,
+        help=(
+            "Minimum latitude to include in detection. Default -60.0 "
+            "(excludes Antarctica, whose polar grid geometry produces "
+            "full-circumference ring blobs that trivially meet the area "
+            "threshold). Pass -90.0 explicitly to include Antarctica."
+        ),
     )
     parser.add_argument(
         "--lat-max",
