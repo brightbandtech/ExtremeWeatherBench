@@ -1542,6 +1542,182 @@ class TestMaybeComputeAndMaybeCache:
         # Should return a dataset
         assert isinstance(result, xr.Dataset)
 
+    def test_cache_netcdf_dataset(self, tmp_path):
+        """Test caching a Dataset in NetCDF format round-trips correctly."""
+        ds = xr.Dataset(
+            {"temp": (["time", "lat"], [[1, 2], [3, 4]])},
+            coords={"time": [0, 1], "lat": [10, 20]},
+        )
+
+        result = utils.maybe_cache_and_compute(
+            ds, name="test", cache_dir=tmp_path, cache_format="netcdf"
+        )
+
+        # Verify .nc file exists
+        assert (tmp_path / "test.nc").exists()
+
+        # Verify round-trip equality
+        xr.testing.assert_equal(result, ds)
+
+    def test_cache_netcdf_dataarray(self, tmp_path):
+        """Test caching a named DataArray in NetCDF format round-trips correctly."""
+        da = xr.DataArray(
+            [[1, 2], [3, 4]],
+            dims=["time", "lat"],
+            coords={"time": [0, 1], "lat": [10, 20]},
+            name="temp",
+        )
+
+        result = utils.maybe_cache_and_compute(
+            da, name="temp", cache_dir=tmp_path, cache_format="netcdf"
+        )
+
+        # Verify .nc file exists
+        assert (tmp_path / "temp.nc").exists()
+
+        # Verify round-trip equality
+        assert isinstance(result, xr.DataArray)
+        xr.testing.assert_equal(result, da)
+
+    def test_cache_netcdf_unnamed_dataarray(self, tmp_path):
+        """Test caching an unnamed DataArray in NetCDF format assigns a name."""
+        da = xr.DataArray(
+            [[1, 2], [3, 4]],
+            dims=["time", "lat"],
+            coords={"time": [0, 1], "lat": [10, 20]},
+        )
+
+        result = utils.maybe_cache_and_compute(
+            da, name="unnamed_test", cache_dir=tmp_path, cache_format="netcdf"
+        )
+
+        # Verify .nc file exists
+        assert (tmp_path / "unnamed_test.nc").exists()
+
+        # Verify round-trip succeeds and returns a DataArray
+        assert isinstance(result, xr.DataArray)
+
+        # The naming guard (utils.py:855-858) should have assigned a name
+        # since NetCDF requires DataArrays to have a name
+        assert result.name is not None
+
+        # Verify data values are preserved (names differ, so compare values directly)
+        np.testing.assert_array_equal(result.values, da.values)
+
+    def test_cache_netcdf_sparse_dataset(self, sample_sparse_target_dataset, tmp_path):
+        """Test caching a sparse Dataset in NetCDF format densifies and round-trips."""
+        result = utils.maybe_cache_and_compute(
+            sample_sparse_target_dataset,
+            name="test",
+            cache_dir=tmp_path,
+            cache_format="netcdf",
+        )
+
+        # Verify .nc file exists
+        assert (tmp_path / "test.nc").exists()
+
+        # Should return a dataset
+        assert isinstance(result, xr.Dataset)
+
+        # Should be densified (no longer sparse)
+        assert not isinstance(result["target"].data, sparse.COO)
+
+    def test_cache_netcdf_sparse_dataarray(
+        self, sample_sparse_target_dataarray, tmp_path
+    ):
+        """Test caching a sparse DataArray in NetCDF format densifies and round-trips."""
+        result = utils.maybe_cache_and_compute(
+            sample_sparse_target_dataarray,
+            name="test",
+            cache_dir=tmp_path,
+            cache_format="netcdf",
+        )
+
+        # Verify .nc file exists
+        assert (tmp_path / "test.nc").exists()
+
+        # Should return a DataArray
+        assert isinstance(result, xr.DataArray)
+
+        # Should be densified (no longer sparse)
+        assert not isinstance(result.data, sparse.COO)
+
+    def test_cache_netcdf_existing_loads_from_cache(self, tmp_path):
+        """Test that calling twice with NetCDF format reuses the cache."""
+        ds = xr.Dataset(
+            {"temp": (["time", "lat"], [[1, 2], [3, 4]])},
+            coords={"time": [0, 1], "lat": [10, 20]},
+        )
+
+        # First call - caches the data
+        result1 = utils.maybe_cache_and_compute(
+            ds, name="test", cache_dir=tmp_path, cache_format="netcdf"
+        )
+
+        # Second call - should load from cache
+        result2 = utils.maybe_cache_and_compute(
+            ds, name="test", cache_dir=tmp_path, cache_format="netcdf"
+        )
+
+        # Both should be equal
+        xr.testing.assert_equal(result1, result2)
+
+    def test_cache_netcdf_string_path(self, tmp_path):
+        """Test that NetCDF caching works with a string path instead of pathlib.Path."""
+        ds = xr.Dataset({"temp": (["x"], [1, 2])}, coords={"x": [0, 1]})
+
+        result = utils.maybe_cache_and_compute(
+            ds, name="test", cache_dir=str(tmp_path), cache_format="netcdf"
+        )
+
+        # Verify .nc file exists
+        assert (tmp_path / "test.nc").exists()
+        assert isinstance(result, xr.Dataset)
+
+    def test_cache_format_default_is_zarr(self, tmp_path):
+        """Test that the default cache_format is zarr (not netcdf)."""
+        ds = xr.Dataset({"temp": (["x"], [1, 2])}, coords={"x": [0, 1]}).chunk()
+
+        # Call without specifying cache_format -- should default to zarr
+        utils.maybe_cache_and_compute(ds, name="test", cache_dir=tmp_path)
+
+        # Zarr directory should exist
+        assert (tmp_path / "test.zarr").exists()
+
+        # NetCDF file should NOT exist
+        assert not (tmp_path / "test.nc").exists()
+
+    def test_cache_format_invalid_raises_valueerror(self, tmp_path):
+        """Test that an invalid cache_format raises ValueError."""
+        ds = xr.Dataset({"temp": (["x"], [1, 2])}, coords={"x": [0, 1]})
+
+        with pytest.raises(ValueError, match="cache_format"):
+            utils.maybe_cache_and_compute(
+                ds, name="test", cache_dir=tmp_path, cache_format="parquet"
+            )
+
+    def test_cache_netcdf_lazy_dask_arrays(self, tmp_path):
+        """Test caching dask-backed Dataset in NetCDF format round-trips correctly."""
+        import dask.array as da
+
+        ds = xr.Dataset(
+            {"temp": (["time", "lat"], da.ones((5, 10), chunks=(2, 5)))},
+            coords={"time": range(5), "lat": range(10)},
+        )
+
+        result = utils.maybe_cache_and_compute(
+            ds, name="lazy", cache_dir=tmp_path, cache_format="netcdf"
+        )
+
+        # Verify .nc file exists
+        assert (tmp_path / "lazy.nc").exists()
+
+        # Should return a dataset
+        assert isinstance(result, xr.Dataset)
+
+        # Verify values round-trip correctly
+        xr.testing.assert_equal(result, ds.compute())
+
 
 class TestCacheMaybeDensifyHelper:
     """Test the _cache_maybe_densify_helper function."""

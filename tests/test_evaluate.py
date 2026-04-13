@@ -368,6 +368,7 @@ class TestExtremeWeatherBench:
             mock_run_evaluation.assert_called_once_with(
                 [sample_case_operator],
                 cache_dir=None,
+                cache_format="zarr",
                 parallel_config=None,
             )
             assert isinstance(result, pd.DataFrame)
@@ -406,6 +407,7 @@ class TestExtremeWeatherBench:
             mock_run_evaluation.assert_called_once_with(
                 [sample_case_operator],
                 cache_dir=None,
+                cache_format="zarr",
                 parallel_config={"backend": "loky", "n_jobs": 2},
             )
             assert isinstance(result, pd.DataFrame)
@@ -561,7 +563,9 @@ class TestRunCaseOperators:
         # Serial mode: don't pass parallel_config
         result = evaluate._run_evaluation([sample_case_operator], cache_dir=None)
 
-        mock_compute_case_operator.assert_called_once_with(sample_case_operator, None)
+        mock_compute_case_operator.assert_called_once_with(
+            sample_case_operator, None, cache_format="zarr"
+        )
         assert len(result) == 1
         assert result[0].equals(mock_results)
 
@@ -582,6 +586,7 @@ class TestRunCaseOperators:
         mock_run_parallel_evaluation.assert_called_once_with(
             [sample_case_operator],
             cache_dir=None,
+            cache_format="zarr",
             parallel_config={"backend": "threading", "n_jobs": 4},
         )
         assert result == mock_results
@@ -652,7 +657,9 @@ class TestRunSerial:
 
         result = evaluate._run_evaluation([sample_case_operator], parallel_config=None)
 
-        mock_compute_case_operator.assert_called_once_with(sample_case_operator, None)
+        mock_compute_case_operator.assert_called_once_with(
+            sample_case_operator, None, cache_format="zarr"
+        )
         assert len(result) == 1
         assert result[0].equals(mock_result)
 

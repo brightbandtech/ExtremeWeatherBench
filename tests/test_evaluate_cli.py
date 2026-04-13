@@ -446,6 +446,128 @@ class TestResultsSaving:
         # Output suppressed - only check exit code
 
 
+class TestCacheFormat:
+    """Test --cache-format CLI option."""
+
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    def test_cache_format_default(
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
+    ):
+        """Test that default cache_format is zarr."""
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = []
+        mock_ewb.run_evaluation.return_value = pd.DataFrame({"test": [1, 2]})
+        mock_ewb_class.return_value = mock_ewb
+        mock_load_cases.return_value = []
+
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            ["--default", "--output-dir", str(temp_config_dir)],
+        )
+
+        assert result.exit_code == 0
+        call_kwargs = mock_ewb_class.call_args[1]
+        assert call_kwargs["cache_format"] == "zarr"
+
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    def test_cache_format_netcdf_option(
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
+    ):
+        """Test that --cache-format netcdf is passed through to ExtremeWeatherBench."""
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = []
+        mock_ewb.run_evaluation.return_value = pd.DataFrame({"test": [1, 2]})
+        mock_ewb_class.return_value = mock_ewb
+        mock_load_cases.return_value = []
+
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            [
+                "--default",
+                "--cache-format",
+                "netcdf",
+                "--output-dir",
+                str(temp_config_dir),
+            ],
+        )
+
+        assert result.exit_code == 0
+        call_kwargs = mock_ewb_class.call_args[1]
+        assert call_kwargs["cache_format"] == "netcdf"
+
+    def test_cache_format_invalid_rejected(self, runner):
+        """Test that an invalid cache_format choice is rejected by Click."""
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            ["--default", "--cache-format", "parquet"],
+        )
+
+        assert result.exit_code != 0
+
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    def test_cache_format_case_insensitive(
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
+    ):
+        """Test that --cache-format accepts uppercase values (case_sensitive=False)."""
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = []
+        mock_ewb.run_evaluation.return_value = pd.DataFrame({"test": [1, 2]})
+        mock_ewb_class.return_value = mock_ewb
+        mock_load_cases.return_value = []
+
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            [
+                "--default",
+                "--cache-format",
+                "NETCDF",
+                "--output-dir",
+                str(temp_config_dir),
+            ],
+        )
+
+        assert result.exit_code == 0
+        call_kwargs = mock_ewb_class.call_args[1]
+        assert call_kwargs["cache_format"] == "netcdf"
+
+    def test_help_shows_cache_format(self, runner):
+        """Test that --help output mentions cache-format."""
+        result = runner.invoke(evaluate_cli.cli_runner, ["--help"])
+
+        assert result.exit_code == 0
+        assert "cache-format" in result.output
+
+
 class TestHelperFunctions:
     """Test helper function functionality."""
 

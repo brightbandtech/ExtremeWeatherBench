@@ -2,7 +2,7 @@ import importlib.util
 import os
 import pathlib
 import pickle
-from typing import Optional
+from typing import Literal, Optional
 
 import click
 import pandas as pd
@@ -34,6 +34,13 @@ import extremeweatherbench.evaluate as evaluate
     help="Optional directory for caching intermediate data",
 )
 @click.option(
+    "--cache-format",
+    type=click.Choice(["zarr", "netcdf"], case_sensitive=False),
+    default="zarr",
+    show_default=True,
+    help="Format for cached intermediate data (default: zarr)",
+)
+@click.option(
     "--n-jobs",
     type=int,
     default=1,
@@ -61,6 +68,7 @@ def cli_runner(
     config_file: Optional[str],
     output_dir: Optional[str],
     cache_dir: Optional[str],
+    cache_format: Literal["zarr", "netcdf"],
     n_jobs: int,
     parallel_config: Optional[dict],
     save_case_operators: Optional[str],
@@ -86,7 +94,9 @@ def cli_runner(
         config_file: Path to a config.py file containing evaluation objects.
         output_dir: Directory for analysis outputs (default: current directory).
         cache_dir: Optional directory for caching intermediate data. When set,
-            datasets or dataarrays are computed and cached as zarrs.
+            datasets or dataarrays are computed and cached in the chosen format.
+        cache_format: Format for cached intermediate data. "zarr" (default) uses
+            Zarr archives, "netcdf" uses NetCDF (.nc) files.
         n_jobs: Number of parallel jobs to run (default: 1 for serial execution).
         parallel_config: Advanced parallel configuration using joblib. Takes
             precedence over n_jobs if provided.
@@ -138,6 +148,7 @@ def cli_runner(
         case_metadata=case_list,
         evaluation_objects=evaluation_objects,
         cache_dir=cache_dir if cache_dir else None,
+        cache_format=cache_format,
     )
 
     # Get case operators

@@ -805,6 +805,7 @@ def maybe_cache_and_compute(
     data: xr.Dataset | xr.DataArray,
     name: str,
     cache_dir: Optional[Union[str, pathlib.Path]] = None,
+    cache_format: Literal["zarr", "netcdf"] = "zarr",
 ) -> xr.Dataset | xr.DataArray:
     """Compute and cache datasets if cache_dir is provided.
 
@@ -817,13 +818,23 @@ def maybe_cache_and_compute(
         data: The dataset or dataarray to compute and cache.
         name: The name of the dataset for naming cached files.
         cache_dir: The directory to cache the datasets. If provided,
-            datasets or dataarrays will be cached as zarrs and loaded from the cache.
+            datasets or dataarrays will be cached and loaded from the cache.
             Default is None.
+        cache_format: The format to use for cached files. "zarr" uses Zarr
+            archives, "netcdf" uses NetCDF (.nc) files. Default is "zarr".
 
     Returns:
         The computed dataset if cache_dir is set, otherwise the
         original dataset.
+
+    Raises:
+        ValueError: If cache_format is not "zarr" or "netcdf".
     """
+    if cache_format not in ("zarr", "netcdf"):
+        raise ValueError(
+            f"cache_format must be 'zarr' or 'netcdf', got '{cache_format}'"
+        )
+
     # If no caching, return as dataset or dataarray
     if cache_dir is None:
         return data
@@ -831,16 +842,24 @@ def maybe_cache_and_compute(
     # Compute and cache dataset or dataarray
     logger.info("Computing datasets and storing at %s...", cache_dir)
     cache_path = pathlib.Path(cache_dir)
+    ext = ".zarr" if cache_format == "zarr" else ".nc"
 
     # If the cache file does not exist, maybe densify the data and cache it. Sparse data
-    # must be densified to be stored in zarrs
-    if not (cache_path / f"{name}.zarr").exists():
-        _cache_maybe_densify_helper(data).to_zarr(
-            cache_path / f"{name}.zarr", zarr_format=2, mode="w"
-        )
+    # must be densified to be stored in zarrs or netcdf files.
+    if not (cache_path / f"{name}{ext}").exists():
+        densified = _cache_maybe_densify_helper(data)
+
+        if cache_format == "zarr":
+            densified.to_zarr(cache_path / f"{name}{ext}", zarr_format=2, mode="w")
+        else:
+            # NetCDF requires DataArrays to have a name
+            if isinstance(densified, xr.DataArray) and densified.name is None:
+                densified = densified.copy()
+                densified.name = name
+            densified.to_netcdf(cache_path / f"{name}{ext}")
 
     # Load the data from the cache, matching the type of the input data
     if isinstance(data, xr.Dataset):
-        return xr.open_dataset(cache_path / f"{name}.zarr")
+        return xr.open_dataset(cache_path / f"{name}{ext}")
     else:
-        return xr.open_dataarray(cache_path / f"{name}.zarr")
+        return xr.open_dataarray(cache_path / f"{name}{ext}")
