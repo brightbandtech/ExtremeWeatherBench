@@ -19,7 +19,7 @@ import logging
 import operator as op_module
 import pathlib
 import time as time_module
-from typing import Callable, Literal, cast
+from typing import Any, Callable, Literal, cast
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -31,8 +31,95 @@ import pandas as pd
 import regionmask
 import xarray as xr
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from xarray.core.indexes import IndexSelResult, PandasIndex, _query_slice
+from xarray.core.indexing import _expand_slice
 
 from extremeweatherbench import cases, defaults, inputs
+
+
+class PeriodicBoundaryIndex(PandasIndex):
+    """
+    An index representing any 1D periodic numberline.
+
+    Implementation subclasses a normal xarray PandasIndex object but intercepts indexer queries.
+    """
+
+    period: float
+    _min: float
+    _max: float
+
+    __slots__ = ("index", "dim", "coord_dtype", "period", "_max", "_min")
+
+    def __init__(self, *args, period=360, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.period = period
+        self._min = self.index.min()
+        self._max = self.index.max()
+
+    @classmethod
+    def from_variables(self, variables, options):
+        obj = super().from_variables(variables, options={})
+        obj.period = options.get("period", obj.period)
+        return obj
+
+    def _wrap_periodically(self, label_value: float) -> float:
+        return self._min + (label_value - self._max) % self.period
+
+    def _split_slice_across_boundary(self, label: slice) -> np.ndarray:
+        """
+        Splits a slice into two slices, one either side of the boundary,
+        finds the corresponding indices, concatenates them, and returns them,
+        ready to be passed to .isel().
+        """
+        first_slice = slice(label.start, self._max, label.step)
+        second_slice = slice(self._min, label.stop, label.step)
+
+        first_as_index_slice = _query_slice(self.index, first_slice)
+        second_as_index_slice = _query_slice(self.index, second_slice)
+
+        first_as_indices = _expand_slice(first_as_index_slice, self.index.size)
+        second_as_indices = _expand_slice(second_as_index_slice, self.index.size)
+
+        wrapped_indices = np.concatenate([first_as_indices, second_as_indices])
+        return wrapped_indices
+
+    def sel(
+        self, labels: dict[Any, Any], method=None, tolerance=None
+    ) -> IndexSelResult:
+        """Remaps labels outside of the indexes' range back to integer indices inside the range."""
+
+        assert len(labels) == 1
+        coord_name, label = next(iter(labels.items()))
+
+        if isinstance(label, slice):
+            start, stop, step = label.start, label.stop, label.step
+            if stop < start:
+                return super().sel({coord_name: []})
+
+            assert self._min < self._max
+
+            wrapped_start = self._wrap_periodically(label.start)
+            wrapped_stop = self._wrap_periodically(label.stop)
+            wrapped_label = slice(wrapped_start, wrapped_stop, step)
+
+            if wrapped_start < wrapped_stop:
+                # simple case of slice not crossing boundary
+                return super().sel({coord_name: wrapped_label})
+            else:  # wrapped_stop < wrapped_start:
+                # nasty case of slice crossing boundary
+                wrapped_indices = self._split_slice_across_boundary(wrapped_label)
+                return IndexSelResult({self.dim: wrapped_indices})
+
+        else:
+            # just a scalar / array of scalars
+            wrapped_label = self._wrap_periodically(label)  # type: ignore
+            return super().sel(
+                {coord_name: wrapped_label}, method=method, tolerance=tolerance
+            )
+
+    def __repr__(self) -> str:
+        return f"PeriodicBoundaryIndex(period={self.period})"
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,9 +155,6 @@ def resolve_op(op_str: str) -> Callable:
     if op_str not in _OP_MAP:
         raise ValueError(f"Unknown operator {op_str!r}; choose from {list(_OP_MAP)}")
     return _OP_MAP[op_str]
-
-
-# ── shared ERA5 utilities ─────────────────────────────────────────────
 
 
 def detect_time_dim(obj: xr.Dataset | xr.DataArray) -> str:
@@ -162,15 +246,10 @@ def _align_climatology(
     return xr.DataArray(selected, dims=daily.dims, coords=daily.coords)
 
 
-# ── constants for bounding-box overview ──────────────────────────────
-
 _HW_COLOR = "#d73027"
 _FZ_COLOR = "#4575b4"
 _BOX_ALPHA = 0.35
 _BOX_EDGE_ALPHA = 0.85
-
-
-# ── shared helpers ───────────────────────────────────────────────────
 
 
 def _to_plot_lon(lon: float) -> float:
@@ -237,9 +316,6 @@ def _add_map_features(ax) -> None:
         linewidth=0.2,
         edgecolor="none",
     )
-
-
-# ── consecutive-days map ─────────────────────────────────────────────
 
 
 def plot_consecutive_map(
@@ -338,9 +414,6 @@ def plot_consecutive_map(
         fig.savefig(output_path, dpi=200, bbox_inches="tight")
         plt.close(fig)
         logger.info("Saved consecutive-days plot to %s", output_path)
-
-
-# ── bounding-box overview ─────────────────────────────────────────────
 
 
 def plot_event_bounds(
@@ -449,9 +522,6 @@ def plot_event_bounds(
     logger.info("Saved bounds plot to %s", out_path)
 
 
-# ── case-level data loading ───────────────────────────────────────────
-
-
 def load_case(case_id_number: int) -> cases.IndividualCase:
     """Load a single case from events.yaml by case_id_number.
 
@@ -515,17 +585,24 @@ def compute_consecutive_field(
     bounds = single_case.location.as_geopandas().total_bounds
     lon_min, lat_min, lon_max, lat_max = bounds
 
-    if lon_min < 0:
+    if lon_min < 0 and lon_max > 0:
         lon_min += 360
+        if lon_max > 0:
+            lon_max += 360
     if lon_max < 0:
         lon_max += 360
 
     logger.info("Opening ERA5 for %s to %s ...", start, end)
     t2m = open_era5_t2m(start, end)
+    t2m = t2m.drop_indexes("longitude").set_xindex(
+        "longitude", index_cls=PeriodicBoundaryIndex, period=360
+    )
+
     t2m = t2m.sel(
         latitude=slice(lat_min, lat_max),
         longitude=slice(lon_min, lon_max),
     )
+
     logger.info("  Subset: %s", dict(t2m.sizes))
 
     tdim = detect_time_dim(t2m)
@@ -536,13 +613,14 @@ def compute_consecutive_field(
         op_str,
     )
     clim = defaults.get_climatology(quantile).sortby("latitude")
-
+    clim = clim.drop_indexes("longitude").set_xindex(
+        "longitude", index_cls=PeriodicBoundaryIndex, period=360
+    )
     clim = clim.sel(
         latitude=t2m.latitude,
         longitude=t2m.longitude,
         method="nearest",
     )
-
     doy = t2m[tdim].dt.dayofyear
     hour = t2m[tdim].dt.hour
     max_clim_doy = int(clim.dayofyear.max())
@@ -555,22 +633,20 @@ def compute_consecutive_field(
 
     logger.info("Computing 6-hourly exceedance...")
     exc_6h = cmp(t2m, clim_aligned)
-
+    print("exc_6h: ")
+    print(exc_6h)
     daily_all_pass = exc_6h.resample({tdim: "1D"}).min().astype(bool)
-
+    print("daily_all_pass: ")
+    print(daily_all_pass)
     logger.info("Building land mask...")
     land = regionmask.defined_regions.natural_earth_v5_0_0.land_110
     land_mask = land.mask(daily_all_pass.longitude, daily_all_pass.latitude) == 0
 
     exc = daily_all_pass & land_mask
     mask_np = exc.compute().values.astype(bool)
-
     logger.info("Computing max consecutive days...")
     consec = max_consecutive_days(mask_np)
     return consec, daily_all_pass.latitude.values, daily_all_pass.longitude.values
-
-
-# ── CLI ───────────────────────────────────────────────────────────────
 
 
 def _default_output(case_id_number: int, event_type: str) -> str:
