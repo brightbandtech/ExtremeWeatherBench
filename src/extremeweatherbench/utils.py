@@ -22,6 +22,9 @@ from joblib import Parallel
 
 logger = logging.getLogger(__name__)
 
+#: Type alias for the supported cache format options.
+CacheFormat = Literal["zarr", "netcdf"]
+
 operators = {
     ">": operator.gt,
     ">=": operator.ge,
@@ -805,7 +808,7 @@ def maybe_cache_and_compute(
     data: xr.Dataset | xr.DataArray,
     name: str,
     cache_dir: Optional[Union[str, pathlib.Path]] = None,
-    cache_format: Literal["zarr", "netcdf"] = "zarr",
+    cache_format: CacheFormat = "zarr",
 ) -> xr.Dataset | xr.DataArray:
     """Compute and cache datasets if cache_dir is provided.
 
@@ -843,23 +846,24 @@ def maybe_cache_and_compute(
     logger.info("Computing datasets and storing at %s...", cache_dir)
     cache_path = pathlib.Path(cache_dir)
     ext = ".zarr" if cache_format == "zarr" else ".nc"
+    cache_file = cache_path / f"{name}{ext}"
 
     # If the cache file does not exist, maybe densify the data and cache it. Sparse data
     # must be densified to be stored in zarrs or netcdf files.
-    if not (cache_path / f"{name}{ext}").exists():
+    if not cache_file.exists():
         densified = _cache_maybe_densify_helper(data)
 
         if cache_format == "zarr":
-            densified.to_zarr(cache_path / f"{name}{ext}", zarr_format=2, mode="w")
+            densified.to_zarr(cache_file, zarr_format=2, mode="w")
         else:
             # NetCDF requires DataArrays to have a name
             if isinstance(densified, xr.DataArray) and densified.name is None:
                 densified = densified.copy()
                 densified.name = name
-            densified.to_netcdf(cache_path / f"{name}{ext}")
+            densified.to_netcdf(cache_file)
 
     # Load the data from the cache, matching the type of the input data
     if isinstance(data, xr.Dataset):
-        return xr.open_dataset(cache_path / f"{name}{ext}")
+        return xr.open_dataset(cache_file)
     else:
-        return xr.open_dataarray(cache_path / f"{name}{ext}")
+        return xr.open_dataarray(cache_file)

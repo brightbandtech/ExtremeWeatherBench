@@ -1559,6 +1559,23 @@ class TestMaybeComputeAndMaybeCache:
         # Verify round-trip equality
         xr.testing.assert_equal(result, ds)
 
+    def test_cache_netcdf_multi_variable_dataset(self, tmp_path):
+        """Test caching a multi-variable Dataset in NetCDF format round-trips correctly."""
+        ds = xr.Dataset(
+            {
+                "temp": (["time", "lat"], [[1.0, 2.0], [3.0, 4.0]]),
+                "humidity": (["time", "lat"], [[50.0, 60.0], [70.0, 80.0]]),
+            },
+            coords={"time": [0, 1], "lat": [10, 20]},
+        )
+
+        result = utils.maybe_cache_and_compute(
+            ds, name="multi_var", cache_dir=tmp_path, cache_format="netcdf"
+        )
+
+        assert (tmp_path / "multi_var.nc").exists()
+        xr.testing.assert_equal(result, ds)
+
     def test_cache_netcdf_dataarray(self, tmp_path):
         """Test caching a named DataArray in NetCDF format round-trips correctly."""
         da = xr.DataArray(
@@ -1597,8 +1614,8 @@ class TestMaybeComputeAndMaybeCache:
         # Verify round-trip succeeds and returns a DataArray
         assert isinstance(result, xr.DataArray)
 
-        # The naming guard (utils.py:855-858) should have assigned a name
-        # since NetCDF requires DataArrays to have a name
+        # NetCDF caching assigns a name to unnamed DataArrays since
+        # the NetCDF format requires DataArrays to have a name
         assert result.name is not None
 
         # Verify data values are preserved (names differ, so compare values directly)

@@ -4,7 +4,7 @@ import copy
 import dataclasses
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Any, Literal, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 import dask.array as da
 import joblib
@@ -21,6 +21,7 @@ import extremeweatherbench.inputs as inputs
 import extremeweatherbench.metrics as metrics
 import extremeweatherbench.sources as sources
 import extremeweatherbench.utils as utils
+from extremeweatherbench.utils import CacheFormat
 
 if TYPE_CHECKING:
     import extremeweatherbench.regions as regions
@@ -66,7 +67,7 @@ class ExtremeWeatherBench:
         case_metadata: Union[list[dict[str, Any]], "list[cases.IndividualCase]"],
         evaluation_objects: list["inputs.EvaluationObject"],
         cache_dir: Optional[Union[str, pathlib.Path]] = None,
-        cache_format: Literal["zarr", "netcdf"] = "zarr",
+        cache_format: CacheFormat = "zarr",
         region_subsetter: Optional["regions.RegionSubsetter"] = None,
     ):
         """Initialize the ExtremeWeatherBench workflow.
@@ -238,7 +239,7 @@ def _parallel_serial_config_check(
 def _run_evaluation(
     case_operators: list["cases.CaseOperator"],
     cache_dir: Optional[pathlib.Path] = None,
-    cache_format: Literal["zarr", "netcdf"] = "zarr",
+    cache_format: CacheFormat = "zarr",
     parallel_config: Optional[dict] = None,
     **kwargs,
 ) -> list[pd.DataFrame]:
@@ -246,7 +247,7 @@ def _run_evaluation(
 
     Args:
         case_operators: List of case operators to run.
-        cache_dir: Optional directory for caching (serial mode only).
+        cache_dir: Optional directory for caching intermediate data.
         cache_format: Format for cached intermediate data. "zarr" (default)
             uses Zarr archives, "netcdf" uses NetCDF (.nc) files.
         parallel_config: Optional dict of joblib parallel configuration.
@@ -271,7 +272,7 @@ def _run_evaluation(
         for case_operator in tqdm(case_operators):
             run_results.append(
                 compute_case_operator(
-                    case_operator, cache_dir, cache_format=cache_format, **kwargs
+                    case_operator, cache_dir=cache_dir, cache_format=cache_format, **kwargs
                 )
             )
 
@@ -282,7 +283,7 @@ def _run_parallel_evaluation(
     case_operators: list["cases.CaseOperator"],
     parallel_config: dict,
     cache_dir: Optional[pathlib.Path] = None,
-    cache_format: Literal["zarr", "netcdf"] = "zarr",
+    cache_format: CacheFormat = "zarr",
     **kwargs,
 ) -> list[pd.DataFrame]:
     """Run the case operators in parallel.
@@ -326,7 +327,6 @@ def _run_parallel_evaluation(
         # TODO(198): return a generator and compute at a higher level
         with joblib.parallel_config(**parallel_config):
             run_results = utils.ParallelTqdm(total_tasks=len(case_operators))(
-                # None is the cache_dir, we can't cache in parallel mode
                 joblib.delayed(compute_case_operator)(
                     case_operator,
                     cache_dir=cache_dir,
@@ -346,7 +346,7 @@ def _run_parallel_evaluation(
 def compute_case_operator(
     case_operator: "cases.CaseOperator",
     cache_dir: Optional[pathlib.Path] = None,
-    cache_format: Literal["zarr", "netcdf"] = "zarr",
+    cache_format: CacheFormat = "zarr",
     **kwargs,
 ) -> pd.DataFrame:
     """Compute the resulting evaluation of a case operator.

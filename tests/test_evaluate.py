@@ -414,6 +414,45 @@ class TestExtremeWeatherBench:
             assert len(result) == 1
 
     @mock.patch("extremeweatherbench.evaluate._run_evaluation")
+    def test_run_evaluation_with_netcdf_cache_format(
+        self,
+        mock_run_evaluation,
+        sample_cases_list,
+        sample_evaluation_object,
+        sample_case_operator,
+    ):
+        """Test that cache_format='netcdf' is passed through to _run_evaluation."""
+        with mock.patch.object(
+            evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
+        ):
+            mock_result = [
+                pd.DataFrame(
+                    {
+                        "value": [1.0],
+                        "metric": ["MockMetric"],
+                        "case_id_number": [1],
+                    }
+                )
+            ]
+            mock_run_evaluation.return_value = mock_result
+
+            ewb = evaluate.ExtremeWeatherBench(
+                case_metadata=sample_cases_list,
+                evaluation_objects=[sample_evaluation_object],
+                cache_format="netcdf",
+            )
+
+            result = ewb.run_evaluation(n_jobs=1)
+
+            mock_run_evaluation.assert_called_once_with(
+                [sample_case_operator],
+                cache_dir=None,
+                cache_format="netcdf",
+                parallel_config=None,
+            )
+            assert isinstance(result, pd.DataFrame)
+
+    @mock.patch("extremeweatherbench.evaluate._run_evaluation")
     def test_run_with_kwargs(
         self,
         mock_run_evaluation,
@@ -488,12 +527,12 @@ class TestExtremeWeatherBench:
                 )
 
                 # Make the mock also perform caching like the real function would
-                def mock_compute_with_caching(case_operator, cache_dir_arg, **kwargs):
-                    if cache_dir_arg:
+                def mock_compute_with_caching(case_operator, cache_dir=None, **kwargs):
+                    if cache_dir:
                         cache_path = (
-                            pathlib.Path(cache_dir_arg)
-                            if isinstance(cache_dir_arg, str)
-                            else cache_dir_arg
+                            pathlib.Path(cache_dir)
+                            if isinstance(cache_dir, str)
+                            else cache_dir
                         )
                         mock_result.to_pickle(cache_path / "case_results.pkl")
                     return mock_result
@@ -564,10 +603,29 @@ class TestRunCaseOperators:
         result = evaluate._run_evaluation([sample_case_operator], cache_dir=None)
 
         mock_compute_case_operator.assert_called_once_with(
-            sample_case_operator, None, cache_format="zarr"
+            sample_case_operator, cache_dir=None, cache_format="zarr"
         )
         assert len(result) == 1
         assert result[0].equals(mock_results)
+
+    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("tqdm.auto.tqdm")
+    def test_run_evaluation_serial_netcdf(
+        self, mock_tqdm, mock_compute_case_operator, sample_case_operator
+    ):
+        """Test _run_evaluation passes cache_format='netcdf' in serial mode."""
+        mock_tqdm.return_value = [sample_case_operator]
+        mock_results = pd.DataFrame({"value": [1.0]})
+        mock_compute_case_operator.return_value = mock_results
+
+        result = evaluate._run_evaluation(
+            [sample_case_operator], cache_dir=None, cache_format="netcdf"
+        )
+
+        mock_compute_case_operator.assert_called_once_with(
+            sample_case_operator, cache_dir=None, cache_format="netcdf"
+        )
+        assert len(result) == 1
 
     @mock.patch("extremeweatherbench.evaluate._run_parallel_evaluation")
     def test_run_evaluation_parallel(
@@ -591,6 +649,29 @@ class TestRunCaseOperators:
         )
         assert result == mock_results
 
+    @mock.patch("extremeweatherbench.evaluate._run_parallel_evaluation")
+    def test_run_evaluation_parallel_netcdf(
+        self, mock_run_parallel_evaluation, sample_case_operator
+    ):
+        """Test _run_evaluation passes cache_format='netcdf' in parallel mode."""
+        mock_results = [pd.DataFrame({"value": [1.0]})]
+        mock_run_parallel_evaluation.return_value = mock_results
+
+        result = evaluate._run_evaluation(
+            [sample_case_operator],
+            cache_dir=None,
+            cache_format="netcdf",
+            parallel_config={"backend": "threading", "n_jobs": 4},
+        )
+
+        mock_run_parallel_evaluation.assert_called_once_with(
+            [sample_case_operator],
+            cache_dir=None,
+            cache_format="netcdf",
+            parallel_config={"backend": "threading", "n_jobs": 4},
+        )
+        assert result == mock_results
+
     @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_evaluation_with_kwargs(
@@ -610,7 +691,7 @@ class TestRunCaseOperators:
 
         call_args = mock_compute_case_operator.call_args
         assert call_args[0][0] == sample_case_operator
-        assert call_args[0][1] is None  # cache_dir
+        assert call_args[1]["cache_dir"] is None
         assert call_args[1]["threshold"] == 0.5
         assert isinstance(result, list)
 
@@ -658,7 +739,7 @@ class TestRunSerial:
         result = evaluate._run_evaluation([sample_case_operator], parallel_config=None)
 
         mock_compute_case_operator.assert_called_once_with(
-            sample_case_operator, None, cache_format="zarr"
+            sample_case_operator, cache_dir=None, cache_format="zarr"
         )
         assert len(result) == 1
         assert result[0].equals(mock_result)
@@ -1059,6 +1140,9 @@ class TestComputeCaseOperator:
 
                 # Called twice: once for forecast, once for target
                 assert mock_compute_cache.call_count == 2
+                # Verify cache_format was passed correctly to both calls
+                for call in mock_compute_cache.call_args_list:
+                    assert call.kwargs["cache_format"] == "zarr"
                 assert isinstance(result, pd.DataFrame)
 
     @mock.patch("extremeweatherbench.evaluate._build_datasets")

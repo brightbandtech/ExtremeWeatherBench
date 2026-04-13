@@ -2,7 +2,7 @@ import importlib.util
 import os
 import pathlib
 import pickle
-from typing import Literal, Optional
+from typing import Optional
 
 import click
 import pandas as pd
@@ -10,6 +10,7 @@ import pandas as pd
 import extremeweatherbench.cases as cases
 import extremeweatherbench.defaults as defaults
 import extremeweatherbench.evaluate as evaluate
+from extremeweatherbench.utils import CacheFormat
 
 
 @click.command()
@@ -38,7 +39,7 @@ import extremeweatherbench.evaluate as evaluate
     type=click.Choice(["zarr", "netcdf"], case_sensitive=False),
     default="zarr",
     show_default=True,
-    help="Format for cached intermediate data (default: zarr)",
+    help="Format for cached intermediate data",
 )
 @click.option(
     "--n-jobs",
@@ -68,7 +69,7 @@ def cli_runner(
     config_file: Optional[str],
     output_dir: Optional[str],
     cache_dir: Optional[str],
-    cache_format: Literal["zarr", "netcdf"],
+    cache_format: CacheFormat,
     n_jobs: int,
     parallel_config: Optional[dict],
     save_case_operators: Optional[str],
@@ -112,7 +113,7 @@ def cli_runner(
         # Save case operators to pickle file
         $ ewb --default --save-case-operators case_ops.pkl
 
-        # Use custom output and cache directories (cache enables zarr storage)
+        # Use custom output and cache directories (cache enables intermediate data storage)
         $ ewb --default --output-dir ./results --cache-dir ./cache
 
         # Use custom parallel configuration
