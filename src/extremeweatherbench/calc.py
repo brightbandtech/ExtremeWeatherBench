@@ -491,57 +491,95 @@ def find_landfalls(
 def find_next_landfall_for_init_time(
     forecast_landfalls: xr.DataArray,
     target_landfalls: xr.DataArray,
+    max_lead_time: Optional[np.timedelta64] = None,
 ) -> xr.DataArray:
-    """Find unique next upcoming landfalls from target data.
+    """Match forecast landfalls to the closest target landfall.
 
-    For each forecast initialization time, finds the next landfall
-    event in the target data that occurs after that init_time. Only
-    unique landfalls are returned (multiple init_times mapping to the
-    same landfall are deduplicated). Init_times without future
-    landfalls are excluded.
+    For each forecast initialization time, finds the target landfall
+    whose valid_time is closest to the forecast's predicted landfall
+    time, constrained to be after init_time (and optionally within
+    max_lead_time). This ensures that multi-landfall storms pair the
+    model's prediction with the observed event it is actually
+    attempting to forecast, rather than a chronologically earlier
+    landfall the model cannot represent.
 
     Args:
         forecast_landfalls: Forecast landfall DataArray with init_time
-            dimension (from find_landfalls)
+            dimension (from find_landfalls). Must have valid_time
+            coordinate indicating when the model predicts landfall.
         target_landfalls: Target landfall DataArray from find_landfalls
-            with return_all=True (has landfall dimension)
+            with landfall dimension and valid_time coordinate.
+        max_lead_time: If provided, only consider target landfalls
+            within this duration after each init_time.
 
     Returns:
-        DataArray with unique next landfalls indexed by init_time. Returns
-        a zero-length DataArray if no future landfalls exist.
+        DataArray with matched target landfalls indexed by init_time.
+        Returns a zero-length DataArray if no matches exist.
     """
-    # Extract init_times from forecast landfalls
     if "init_time" in forecast_landfalls.dims:
         init_times = forecast_landfalls.init_time.values
     elif "init_time" in forecast_landfalls.coords:
-        # init_time as coordinate (scalar case)
         init_times = np.array([forecast_landfalls.coords["init_time"].values])
     else:
         raise KeyError("Missing init_time dimension or coordinate.")
 
-    # Get target landfall times
+    has_forecast_vt = "valid_time" in forecast_landfalls.coords
+    forecast_vt_map: dict[np.datetime64, np.datetime64] = {}
+    if has_forecast_vt:
+        if (
+            "landfall" in forecast_landfalls.dims
+            and "init_time" in forecast_landfalls.dims
+        ):
+            # 2D: valid_time lives on the landfall dim while
+            # init_time is a separate dim. Map each init to
+            # the earliest forecast landfall valid_time.
+            lf_vts = forecast_landfalls.coords["valid_time"].values
+            data = forecast_landfalls.values
+            n_lf = forecast_landfalls.sizes["landfall"]
+            for j in range(n_lf):
+                col = data[:, j]
+                non_nan = np.where(~np.isnan(col))[0]
+                if len(non_nan) == 0:
+                    continue
+                owner = init_times[non_nan[0]]
+                vt = lf_vts[j]
+                if owner not in forecast_vt_map or vt < forecast_vt_map[owner]:
+                    forecast_vt_map[owner] = vt
+        else:
+            # 1D / scalar: valid_time aligns with init_time.
+            fvts = np.atleast_1d(forecast_landfalls.coords["valid_time"].values)
+            for idx, it_val in enumerate(init_times):
+                if idx < len(fvts):
+                    forecast_vt_map[it_val] = fvts[idx]
+
     target_times = target_landfalls.coords["valid_time"].values
 
-    # Use searchsorted to find next landfall index for each init_time
-    next_indices = np.searchsorted(target_times, init_times, side="right")
-
-    # Create mask for init_times with future landfalls
-    valid_mask = next_indices < len(target_times)
-
-    # Build result for all init_times, keeping only unique landfalls
     results = []
 
-    for i, init_time in enumerate(init_times):
-        if valid_mask[i]:
-            # There is a future landfall for this init_time
-            landfall_idx = next_indices[i]
-            landfall = target_landfalls.isel(landfall=landfall_idx)
-            landfall = landfall.expand_dims("init_time", axis=0)
-            landfall = landfall.assign_coords(init_time=("init_time", [init_time]))
+    for init_time in init_times:
+        future_mask = target_times > init_time
 
-            results.append(landfall)
+        if max_lead_time is not None:
+            horizon = init_time + max_lead_time
+            future_mask &= target_times <= horizon
 
-    # Combine landfalls indexed by init_time or return empty if no results
+        if not future_mask.any():
+            continue
+
+        future_indices = np.where(future_mask)[0]
+        future_times = target_times[future_indices]
+
+        fc_vt = forecast_vt_map.get(init_time)
+        if fc_vt is not None:
+            best = future_indices[np.argmin(np.abs(future_times - fc_vt))]
+        else:
+            best = future_indices[0]
+
+        landfall = target_landfalls.isel(landfall=int(best))
+        landfall = landfall.expand_dims("init_time", axis=0)
+        landfall = landfall.assign_coords(init_time=("init_time", [init_time]))
+        results.append(landfall)
+
     if not results:
         return xr.DataArray(
             np.array([], dtype=float),
@@ -549,7 +587,11 @@ def find_next_landfall_for_init_time(
             coords={"init_time": np.array([], dtype="datetime64[ns]")},
         )
     return xr.concat(
-        results, dim="init_time", coords="different", compat="equals", join="outer"
+        results,
+        dim="init_time",
+        coords="different",
+        compat="equals",
+        join="outer",
     )
 
 
