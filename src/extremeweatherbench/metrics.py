@@ -1765,9 +1765,15 @@ class LandfallMetric(CompositeMetric):
             return (nan_landfalls, nan_landfalls.copy())
 
         if return_next_landfall:
-            # Find next target landfall for each init_time
+            max_lead = None
+            if "lead_time" in forecast.dims:
+                max_lead = forecast.lead_time.values.max()
+                if not isinstance(max_lead, np.timedelta64):
+                    max_lead = np.timedelta64(int(max_lead), "h")
             target_landfalls = calc.find_next_landfall_for_init_time(
-                forecast_landfalls, target_landfalls
+                forecast_landfalls,
+                target_landfalls,
+                max_lead_time=max_lead,
             )
             if len(target_landfalls) == 0:
                 nan_landfalls = utils._create_nan_dataarray(self.preserve_dims)
