@@ -20,6 +20,22 @@ logger = logging.getLogger(__name__)
 Location = namedtuple("Location", ["latitude", "longitude"])
 
 
+def _neighbourhood_max_wind(
+    wind_slice: npt.NDArray,
+    row: int,
+    col: int,
+    radius_gridpts: int,
+) -> float:
+    """Return max wind speed in a box of ±radius around (row, col)."""
+    nr, nc = wind_slice.shape
+    return float(
+        wind_slice[
+            max(0, row - radius_gridpts) : min(nr, row + radius_gridpts + 1),
+            max(0, col - radius_gridpts) : min(nc, col + radius_gridpts + 1),
+        ].max()
+    )
+
+
 def _degrees_to_gridpoints(
     degrees: float,
     lat_coords: npt.NDArray,
@@ -56,13 +72,13 @@ def generate_tc_tracks_by_init_time(
     tc_track_analysis_data: xr.DataArray,
     slp_contour_magnitude: float = 200.0,
     dz_contour_magnitude: float = -6.0,
-    min_distance_between_peaks: int = 5,
+    min_distance_between_peaks_degrees: float = 1.0,
     max_spatial_distance_degrees: float = 5.0,
     max_temporal_hours: float = 48.0,
     use_contour_validation: bool = True,
     timestep_count_wind_minimum: int = 10,
     latitude_max_degrees: float = 50.0,
-    surface_pressure_threshold: float = 100500.0,
+    surface_pressure_threshold: float = 101000.0,
     orography: Optional[xr.DataArray] = None,
     max_gc_distance_slp_contour_degrees: float = 5.5,
     max_gc_distance_dz_contour_degrees: float = 6.5,
@@ -94,8 +110,8 @@ def generate_tc_tracks_by_init_time(
             200.0 Pa
         dz_contour_magnitude: DZ contour threshold for validation in m. Defaults to
             -6.0 m
-        min_distance_between_peaks: Minimum distance between detected peaks in grid
-            points. Defaults to 5
+        min_distance_between_peaks_degrees: Minimum distance
+            between detected peaks in degrees. Defaults to 1.0
         max_spatial_distance_degrees: Max spatial distance for TC track data filtering
             in degrees. Defaults to 5.0 degrees
         max_temporal_hours: Maximum temporal window from init_time in hours. Defaults
@@ -176,7 +192,7 @@ def generate_tc_tracks_by_init_time(
             "latitude": latitude.values,
             "longitude": longitude.values,
             "tc_track_data_df": tc_track_data_df,
-            "min_distance_between_peaks": min_distance_between_peaks,
+            "min_distance_between_peaks": min_distance_between_peaks_degrees,
             "max_spatial_distance_degrees": max_spatial_distance_degrees,
             "max_temporal_hours": max_temporal_hours,
             "slp_contour_magnitude": slp_contour_magnitude,
@@ -396,17 +412,14 @@ def _process_single_init_time(
             peak_lats = latitude[peaks[:, 0]]
             peak_lons = longitude[peaks[:, 1]]
             peak_slps = slp_slice[peaks[:, 0], peaks[:, 1]]
-            # Sample max wind within wind_search_radius_degrees of each
-            # detected peak (per TempestExtremes 2.1) to capture the eyewall
-            # rather than the low-wind eye at the SLP minimum.
-            _nrows, _ncols = wind_slice.shape
-            _nb = wind_search_radius_gridpts
             peak_winds = np.array(
                 [
-                    wind_slice[
-                        max(0, r - _nb) : min(_nrows, r + _nb + 1),
-                        max(0, c - _nb) : min(_ncols, c + _nb + 1),
-                    ].max()
+                    _neighbourhood_max_wind(
+                        wind_slice,
+                        r,
+                        c,
+                        wind_search_radius_gridpts,
+                    )
                     for r, c in peaks
                 ]
             )
@@ -505,6 +518,20 @@ def _process_single_init_time(
             timestep_count_wind_minimum,
         )
         detections = filtered_detections
+
+    # Fill gaps in surviving tracks using SLP minima from
+    # the forecast fields as a fallback when the standard
+    # peak-finding/validation failed at intermediate leads.
+    detections = _fill_track_gaps_from_fields(
+        detections,
+        slp_data,
+        wind_data,
+        lead_time_indices_seq,
+        valid_time_indices_seq,
+        latitude,
+        longitude,
+        wind_search_radius_gridpts,
+    )
 
     return {"detections": detections}
 
@@ -736,7 +763,7 @@ def _find_peaks_for_time_slice(
     dz_contour_magnitude: float = -6.0,
     use_contour_validation: bool = True,
     is_first_timestep: bool = False,
-    surface_pressure_threshold: float = 100500.0,
+    surface_pressure_threshold: float = 101000.0,
     latitude_max_degrees: float = 50.0,
     max_gc_distance_slp_contour_degrees: float = 5.5,
     max_gc_distance_dz_contour_degrees: float = 6.5,
@@ -921,6 +948,141 @@ def _create_spatial_mask(
         spatial_mask |= distances <= max_distance_degrees
 
     return spatial_mask
+
+
+def _fill_track_gaps_from_fields(
+    detections: list[dict],
+    slp_data: npt.NDArray,
+    wind_data: npt.NDArray,
+    lead_time_indices_seq: npt.NDArray,
+    valid_time_indices_seq: npt.NDArray,
+    latitude: npt.NDArray,
+    longitude: npt.NDArray,
+    wind_search_radius_gridpts: int,
+    search_radius_degrees: float = 8.0,
+) -> list[dict]:
+    """Fill track gaps using SLP minima from forecast fields.
+
+    When the tracker loses a storm (e.g. over land), this
+    finds the nearest SLP minimum to the expected track
+    position for each missing timestep, ensuring continuous
+    tracks between the first and last detection.
+
+    Args:
+        detections: Existing detections from the tracking pass.
+        slp_data: Full SLP array (lead_time, lat, lon) in Pa.
+        wind_data: Full wind array (lead_time, lat, lon) in m/s.
+        lead_time_indices_seq: Ordered lead_time indices for
+            each timestep of this init_time.
+        valid_time_indices_seq: Ordered valid_time indices for
+            each timestep.
+        latitude: 1-D latitude coordinate array (degrees).
+        longitude: 1-D longitude coordinate array (degrees).
+        wind_search_radius_gridpts: Neighbourhood radius in
+            grid points for sampling peak wind.
+        search_radius_degrees: Max distance from the expected
+            position to search for SLP minima (degrees).
+
+    Returns:
+        detections list with gap-fill entries appended.
+    """
+    if not detections:
+        return detections
+
+    ts_lookup: dict[tuple[int, int], int] = {}
+    for ts_idx in range(len(lead_time_indices_seq)):
+        key = (
+            int(lead_time_indices_seq[ts_idx]),
+            int(valid_time_indices_seq[ts_idx]),
+        )
+        ts_lookup[key] = ts_idx
+
+    # Group detections by track_id -> [(ts_idx, det), ...]
+    track_timeline: dict[int, list[tuple[int, dict]]] = {}
+    for det in detections:
+        key = (
+            int(det["lead_time_index"]),
+            int(det["valid_time_index"]),
+        )
+        maybe_ts = ts_lookup.get(key)
+        if maybe_ts is not None:
+            track_timeline.setdefault(det["track_id"], []).append((maybe_ts, det))
+
+    new_detections: list[dict] = []
+
+    for tid, ts_dets in track_timeline.items():
+        ts_dets.sort(key=lambda x: x[0])
+        first_ts = ts_dets[0][0]
+        last_ts = ts_dets[-1][0]
+        detected_set = {ts for ts, _ in ts_dets}
+
+        if last_ts - first_ts <= 1:
+            continue
+
+        for ts_idx in range(first_ts + 1, last_ts):
+            if ts_idx in detected_set:
+                continue
+
+            # Find bracketing detections
+            prev_det = next_det = None
+            for ts, det in ts_dets:
+                if ts < ts_idx:
+                    prev_det = (ts, det)
+                if ts > ts_idx:
+                    next_det = (ts, det)
+                    break
+
+            if prev_det is None or next_det is None:
+                continue
+
+            p_ts, p_d = prev_det
+            n_ts, n_d = next_det
+            frac = (ts_idx - p_ts) / (n_ts - p_ts)
+            exp_lat = p_d["latitude"] + frac * (n_d["latitude"] - p_d["latitude"])
+            exp_lon = p_d["longitude"] + frac * (n_d["longitude"] - p_d["longitude"])
+
+            _lt_idx = lead_time_indices_seq[ts_idx]
+            slp_slice = slp_data[_lt_idx]
+            wind_slice = wind_data[_lt_idx]
+
+            # Approx distance in degrees from each grid
+            # point to expected position.
+            dlat = latitude[:, np.newaxis] - exp_lat
+            dlon = longitude[np.newaxis, :] - exp_lon
+            dlon = np.where(dlon > 180, dlon - 360, dlon)
+            dlon = np.where(dlon < -180, dlon + 360, dlon)
+            cos_lat = np.cos(np.radians(exp_lat))
+            dist = np.sqrt(dlat**2 + (dlon * cos_lat) ** 2)
+
+            mask = dist <= search_radius_degrees
+            if not mask.any():
+                continue
+
+            slp_masked = np.where(mask, slp_slice, np.inf)
+
+            r, c = np.unravel_index(np.argmin(slp_masked), slp_masked.shape)
+
+            peak_wind = _neighbourhood_max_wind(
+                wind_slice,
+                r,
+                c,
+                wind_search_radius_gridpts,
+            )
+
+            new_detections.append(
+                {
+                    "lead_time_index": int(_lt_idx),
+                    "valid_time_index": int(valid_time_indices_seq[ts_idx]),
+                    "track_id": tid,
+                    "latitude": float(latitude[r]),
+                    "longitude": float(longitude[c]),
+                    "slp": float(slp_slice[r, c]),
+                    "wind": float(peak_wind),
+                }
+            )
+
+    detections.extend(new_detections)
+    return detections
 
 
 def _convert_detections_to_dataset(
