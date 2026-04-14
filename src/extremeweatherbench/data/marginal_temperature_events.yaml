@@ -9,7 +9,7 @@
       latitude_max: 30.25
       longitude_min: 11.0
       longitude_max: 38.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 2
   title: February 2020 Event 0018
   start_date: 2020-02-01 00:00:00
@@ -21,7 +21,7 @@
       latitude_max: 29.5
       longitude_min: 0.0
       longitude_max: 38.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 3
   title: February 2020 Event 0019
   start_date: 2020-02-01 00:00:00
@@ -33,7 +33,7 @@
       latitude_max: 77.0
       longitude_min: 87.0
       longitude_max: 128.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 4
   title: February 2020 Event 0023
   start_date: 2020-02-05 00:00:00
@@ -45,7 +45,7 @@
       latitude_max: 81.0
       longitude_min: 296.5
       longitude_max: 324.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 5
   title: February 2020 Event 0025
   start_date: 2020-02-09 00:00:00
@@ -57,7 +57,7 @@
       latitude_max: 60.5
       longitude_min: 28.25
       longitude_max: 58.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 6
   title: February 2020 Event 0034
   start_date: 2020-02-22 00:00:00
@@ -69,7 +69,7 @@
       latitude_max: 76.75
       longitude_min: 296.5
       longitude_max: 317.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 7
   title: March 2020 Event 0037
   start_date: 2020-03-01 00:00:00
@@ -81,7 +81,7 @@
       latitude_max: 53.5
       longitude_min: 0.0
       longitude_max: 16.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 8
   title: April 2020 Event 0047
   start_date: 2020-04-03 00:00:00
@@ -93,7 +93,7 @@
       latitude_max: 77.75
       longitude_min: 293.5
       longitude_max: 339.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 9
   title: April 2020 Event 0048
   start_date: 2020-04-07 00:00:00
@@ -105,7 +105,7 @@
       latitude_max: 70.25
       longitude_min: 228.0
       longitude_max: 267.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 10
   title: May 2020 Event 0053
   start_date: 2020-05-10 00:00:00
@@ -117,7 +117,7 @@
       latitude_max: -14.75
       longitude_min: 118.25
       longitude_max: 140.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 11
   title: May 2020 Event 0060
   start_date: 2020-05-30 00:00:00
@@ -129,7 +129,7 @@
       latitude_max: 75.5
       longitude_min: 235.0
       longitude_max: 259.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 12
   title: June 2020 Event 0062
   start_date: 2020-06-03 00:00:00
@@ -141,7 +141,7 @@
       latitude_max: -15.5
       longitude_min: 119.5
       longitude_max: 140.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 13
   title: June 2020 Event 0064
   start_date: 2020-06-11 00:00:00
@@ -153,7 +153,7 @@
       latitude_max: 74.25
       longitude_min: 71.0
       longitude_max: 116.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 14
   title: July 2020 Event 0068
   start_date: 2020-07-13 00:00:00
@@ -165,7 +165,7 @@
       latitude_max: 75.5
       longitude_min: 72.25
       longitude_max: 97.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 15
   title: September 2020 Event 0076
   start_date: 2020-09-11 00:00:00
@@ -177,7 +177,7 @@
       latitude_max: 71.0
       longitude_min: 12.75
       longitude_max: 50.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 16
   title: September 2020 Event 0079
   start_date: 2020-09-28 00:00:00
@@ -189,7 +189,7 @@
       latitude_max: 64.25
       longitude_min: 248.75
       longitude_max: 269.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 17
   title: October 2020 Event 0081
   start_date: 2020-10-06 00:00:00
@@ -201,7 +201,7 @@
       latitude_max: 71.5
       longitude_min: 62.25
       longitude_max: 99.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 18
   title: October 2020 Event 0082
   start_date: 2020-10-09 00:00:00
@@ -213,7 +213,7 @@
       latitude_max: 28.25
       longitude_min: 10.5
       longitude_max: 24.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 19
   title: October 2020 Event 0084
   start_date: 2020-10-19 00:00:00
@@ -225,7 +225,7 @@
       latitude_max: 67.5
       longitude_min: 281.75
       longitude_max: 299.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 20
   title: November 2020 Event 0087
   start_date: 2020-11-01 00:00:00
@@ -237,7 +237,7 @@
       latitude_max: 23.75
       longitude_min: 0.0
       longitude_max: 11.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 21
   title: November 2020 Event 0088
   start_date: 2020-11-04 00:00:00
@@ -249,7 +249,7 @@
       latitude_max: 54.0
       longitude_min: 13.25
       longitude_max: 32.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 22
   title: November 2020 Event 0092
   start_date: 2020-11-09 00:00:00
@@ -261,7 +261,7 @@
       latitude_max: 73.75
       longitude_min: 12.25
       longitude_max: 116.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 23
   title: December 2020 Event 0108
   start_date: 2020-12-03 00:00:00
@@ -273,7 +273,7 @@
       latitude_max: 57.75
       longitude_min: 265.0
       longitude_max: 294.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 24
   title: December 2020 Event 0109
   start_date: 2020-12-04 00:00:00
@@ -285,7 +285,7 @@
       latitude_max: 71.25
       longitude_min: 192.25
       longitude_max: 230.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 25
   title: December 2020 Event 0111
   start_date: 2020-12-06 00:00:00
@@ -297,7 +297,7 @@
       latitude_max: 78.5
       longitude_min: 306.5
       longitude_max: 341.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 26
   title: December 2020 Event 0115
   start_date: 2020-12-13 00:00:00
@@ -309,7 +309,7 @@
       latitude_max: 81.25
       longitude_min: 289.5
       longitude_max: 344.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 27
   title: December 2020 Event 0126
   start_date: 2020-12-27 00:00:00
@@ -321,7 +321,7 @@
       latitude_max: 59.0
       longitude_min: 0.0
       longitude_max: 27.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 28
   title: January 2021 Event 0138
   start_date: 2021-01-20 00:00:00
@@ -333,7 +333,7 @@
       latitude_max: 75.5
       longitude_min: 306.75
       longitude_max: 329.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 29
   title: February 2021 Event 0157
   start_date: 2021-02-21 00:00:00
@@ -345,7 +345,7 @@
       latitude_max: 74.0
       longitude_min: 73.25
       longitude_max: 118.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 30
   title: March 2021 Event 0168
   start_date: 2021-03-11 00:00:00
@@ -357,7 +357,7 @@
       latitude_max: 74.25
       longitude_min: 76.75
       longitude_max: 123.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 31
   title: April 2021 Event 0182
   start_date: 2021-04-18 00:00:00
@@ -369,7 +369,7 @@
       latitude_max: 84.5
       longitude_min: 292.0
       longitude_max: 339.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 32
   title: June 2021 Event 0208
   start_date: 2021-06-21 00:00:00
@@ -381,7 +381,7 @@
       latitude_max: 74.0
       longitude_min: 70.75
       longitude_max: 94.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 33
   title: July 2021 Event 0215
   start_date: 2021-07-24 00:00:00
@@ -393,7 +393,7 @@
       latitude_max: 35.25
       longitude_min: 0.0
       longitude_max: 18.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 34
   title: August 2021 Event 0216
   start_date: 2021-08-22 00:00:00
@@ -405,7 +405,7 @@
       latitude_max: 77.5
       longitude_min: 80.75
       longitude_max: 113.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 35
   title: November 2021 Event 0236
   start_date: 2021-11-09 00:00:00
@@ -417,7 +417,7 @@
       latitude_max: 74.0
       longitude_min: 27.0
       longitude_max: 122.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 36
   title: November 2021 Event 0240
   start_date: 2021-11-19 00:00:00
@@ -429,7 +429,7 @@
       latitude_max: 57.5
       longitude_min: 0.0
       longitude_max: 26.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 37
   title: December 2021 Event 0248
   start_date: 2021-12-07 00:00:00
@@ -441,7 +441,7 @@
       latitude_max: 21.75
       longitude_min: 4.0
       longitude_max: 31.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 38
   title: December 2021 Event 0258
   start_date: 2021-12-20 00:00:00
@@ -453,7 +453,7 @@
       latitude_max: 23.75
       longitude_min: 0.0
       longitude_max: 11.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 39
   title: December 2021 Event 0260
   start_date: 2021-12-22 00:00:00
@@ -465,7 +465,7 @@
       latitude_max: 73.0
       longitude_min: 16.75
       longitude_max: 76.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 40
   title: December 2021 Event 0264
   start_date: 2021-12-27 00:00:00
@@ -477,7 +477,7 @@
       latitude_max: 71.0
       longitude_min: 5.25
       longitude_max: 47.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 41
   title: January 2022 Event 0270
   start_date: 2022-01-02 00:00:00
@@ -489,7 +489,7 @@
       latitude_max: 62.5
       longitude_min: 280.5
       longitude_max: 298.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 42
   title: January 2022 Event 0273
   start_date: 2022-01-08 00:00:00
@@ -501,7 +501,7 @@
       latitude_max: 63.5
       longitude_min: 280.75
       longitude_max: 293.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 43
   title: January 2022 Event 0274
   start_date: 2022-01-08 00:00:00
@@ -513,7 +513,7 @@
       latitude_max: 69.5
       longitude_min: 105.25
       longitude_max: 134.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 44
   title: January 2022 Event 0280
   start_date: 2022-01-14 00:00:00
@@ -525,7 +525,7 @@
       latitude_max: 48.25
       longitude_min: 237.5
       longitude_max: 252.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 45
   title: January 2022 Event 0282
   start_date: 2022-01-18 00:00:00
@@ -537,7 +537,7 @@
       latitude_max: 80.5
       longitude_min: 247.5
       longitude_max: 275.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 46
   title: January 2022 Event 0284
   start_date: 2022-01-20 00:00:00
@@ -549,7 +549,7 @@
       latitude_max: 23.5
       longitude_min: 348.25
       longitude_max: 359.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 47
   title: March 2022 Event 0306
   start_date: 2022-03-01 00:00:00
@@ -561,7 +561,7 @@
       latitude_max: 68.5
       longitude_min: 280.75
       longitude_max: 299.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 48
   title: March 2022 Event 0309
   start_date: 2022-03-07 00:00:00
@@ -573,7 +573,7 @@
       latitude_max: 61.75
       longitude_min: 281.75
       longitude_max: 303.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 49
   title: April 2022 Event 0322
   start_date: 2022-04-06 00:00:00
@@ -585,7 +585,7 @@
       latitude_max: 77.5
       longitude_min: 73.25
       longitude_max: 118.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 50
   title: May 2022 Event 0332
   start_date: 2022-05-14 00:00:00
@@ -597,7 +597,7 @@
       latitude_max: 69.5
       longitude_min: 280.75
       longitude_max: 291.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 51
   title: June 2022 Event 0341
   start_date: 2022-06-27 00:00:00
@@ -609,7 +609,7 @@
       latitude_max: 26.25
       longitude_min: 20.0
       longitude_max: 28.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 52
   title: July 2022 Event 0345
   start_date: 2022-07-26 00:00:00
@@ -621,7 +621,7 @@
       latitude_max: 57.75
       longitude_min: 33.75
       longitude_max: 66.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 53
   title: September 2022 Event 0355
   start_date: 2022-09-11 00:00:00
@@ -633,7 +633,7 @@
       latitude_max: 75.25
       longitude_min: 219.5
       longitude_max: 263.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 54
   title: September 2022 Event 0358
   start_date: 2022-09-18 00:00:00
@@ -645,7 +645,7 @@
       latitude_max: 71.25
       longitude_min: 192.25
       longitude_max: 231.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 55
   title: September 2022 Event 0361
   start_date: 2022-09-29 00:00:00
@@ -657,7 +657,7 @@
       latitude_max: 71.25
       longitude_min: 193.25
       longitude_max: 226.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 56
   title: October 2022 Event 0372
   start_date: 2022-10-18 00:00:00
@@ -669,7 +669,7 @@
       latitude_max: 67.5
       longitude_min: 39.5
       longitude_max: 74.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 57
   title: October 2022 Event 0373
   start_date: 2022-10-19 00:00:00
@@ -681,7 +681,7 @@
       latitude_max: 24.25
       longitude_min: 19.0
       longitude_max: 31.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 58
   title: October 2022 Event 0378
   start_date: 2022-10-28 00:00:00
@@ -693,7 +693,7 @@
       latitude_max: 69.75
       longitude_min: 24.75
       longitude_max: 78.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 59
   title: November 2022 Event 0386
   start_date: 2022-11-17 00:00:00
@@ -705,7 +705,7 @@
       latitude_max: 28.5
       longitude_min: 0.0
       longitude_max: 31.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 60
   title: November 2022 Event 0391
   start_date: 2022-11-25 00:00:00
@@ -717,7 +717,7 @@
       latitude_max: 70.25
       longitude_min: 0.0
       longitude_max: 108.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 61
   title: December 2022 Event 0394
   start_date: 2022-12-10 00:00:00
@@ -729,7 +729,7 @@
       latitude_max: 74.25
       longitude_min: 73.25
       longitude_max: 103.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 62
   title: December 2022 Event 0401
   start_date: 2022-12-19 00:00:00
@@ -741,7 +741,7 @@
       latitude_max: 69.0
       longitude_min: 231.25
       longitude_max: 302.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 63
   title: December 2022 Event 0405
   start_date: 2022-12-21 00:00:00
@@ -753,7 +753,7 @@
       latitude_max: 51.5
       longitude_min: 43.75
       longitude_max: 72.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 64
   title: December 2022 Event 0408
   start_date: 2022-12-24 00:00:00
@@ -765,7 +765,7 @@
       latitude_max: 71.25
       longitude_min: 192.25
       longitude_max: 218.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 65
   title: January 2023 Event 0412
   start_date: 2023-01-01 00:00:00
@@ -777,7 +777,7 @@
       latitude_max: 69.75
       longitude_min: 166.5
       longitude_max: 190.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 66
   title: January 2023 Event 0427
   start_date: 2023-01-20 00:00:00
@@ -789,7 +789,7 @@
       latitude_max: 59.5
       longitude_min: 4.25
       longitude_max: 31.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 67
   title: February 2023 Event 0436
   start_date: 2023-02-13 00:00:00
@@ -801,7 +801,7 @@
       latitude_max: 67.0
       longitude_min: 135.0
       longitude_max: 179.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 68
   title: February 2023 Event 0438
   start_date: 2023-02-21 00:00:00
@@ -813,7 +813,7 @@
       latitude_max: 69.25
       longitude_min: 5.25
       longitude_max: 24.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 69
   title: February 2023 Event 0439
   start_date: 2023-02-21 00:00:00
@@ -825,7 +825,7 @@
       latitude_max: -17.75
       longitude_min: 116.25
       longitude_max: 137.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 70
   title: February 2023 Event 0440
   start_date: 2023-02-23 00:00:00
@@ -837,7 +837,7 @@
       latitude_max: 80.5
       longitude_min: 286.75
       longitude_max: 331.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 71
   title: February 2023 Event 0443
   start_date: 2023-02-28 00:00:00
@@ -849,7 +849,7 @@
       latitude_max: 62.25
       longitude_min: 281.75
       longitude_max: 300.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 72
   title: March 2023 Event 0458
   start_date: 2023-03-17 00:00:00
@@ -861,7 +861,7 @@
       latitude_max: 62.25
       longitude_min: 280.5
       longitude_max: 301.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 73
   title: May 2023 Event 0471
   start_date: 2023-05-08 00:00:00
@@ -873,7 +873,7 @@
       latitude_max: -20.5
       longitude_min: 117.0
       longitude_max: 134.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 74
   title: May 2023 Event 0474
   start_date: 2023-05-16 00:00:00
@@ -885,7 +885,7 @@
       latitude_max: 72.0
       longitude_min: 283.75
       longitude_max: 298.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 75
   title: May 2023 Event 0476
   start_date: 2023-05-17 00:00:00
@@ -897,7 +897,7 @@
       latitude_max: 71.25
       longitude_min: 280.75
       longitude_max: 298.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 76
   title: May 2023 Event 0480
   start_date: 2023-05-26 00:00:00
@@ -909,7 +909,7 @@
       latitude_max: 51.0
       longitude_min: 28.75
       longitude_max: 42.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 77
   title: June 2023 Event 0488
   start_date: 2023-06-23 00:00:00
@@ -921,7 +921,7 @@
       latitude_max: 31.75
       longitude_min: 15.75
       longitude_max: 38.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 78
   title: July 2023 Event 0493
   start_date: 2023-07-30 00:00:00
@@ -933,7 +933,7 @@
       latitude_max: 76.75
       longitude_min: 299.0
       longitude_max: 336.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 79
   title: August 2023 Event 0495
   start_date: 2023-08-21 00:00:00
@@ -945,7 +945,7 @@
       latitude_max: -15.0
       longitude_min: 123.25
       longitude_max: 133.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 80
   title: September 2023 Event 0499
   start_date: 2023-09-17 00:00:00
@@ -957,7 +957,7 @@
       latitude_max: 70.75
       longitude_min: 192.25
       longitude_max: 232.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 81
   title: October 2023 Event 0508
   start_date: 2023-10-06 00:00:00
@@ -969,7 +969,7 @@
       latitude_max: 32.25
       longitude_min: 351.5
       longitude_max: 359.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 82
   title: October 2023 Event 0509
   start_date: 2023-10-06 00:00:00
@@ -981,7 +981,7 @@
       latitude_max: 35.25
       longitude_min: 0.0
       longitude_max: 13.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 83
   title: October 2023 Event 0512
   start_date: 2023-10-15 00:00:00
@@ -993,7 +993,7 @@
       latitude_max: -21.25
       longitude_min: 121.5
       longitude_max: 133.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 84
   title: October 2023 Event 0515
   start_date: 2023-10-24 00:00:00
@@ -1005,7 +1005,7 @@
       latitude_max: 62.5
       longitude_min: 280.5
       longitude_max: 297.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 85
   title: October 2023 Event 0517
   start_date: 2023-10-29 00:00:00
@@ -1017,7 +1017,7 @@
       latitude_max: 67.25
       longitude_min: 240.0
       longitude_max: 276.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 86
   title: December 2023 Event 0530
   start_date: 2023-12-04 00:00:00
@@ -1029,7 +1029,7 @@
       latitude_max: 73.75
       longitude_min: 73.25
       longitude_max: 97.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 87
   title: December 2023 Event 0537
   start_date: 2023-12-11 00:00:00
@@ -1041,7 +1041,7 @@
       latitude_max: 72.75
       longitude_min: 73.25
       longitude_max: 98.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 88
   title: December 2023 Event 0544
   start_date: 2023-12-24 00:00:00
@@ -1053,7 +1053,7 @@
       latitude_max: 71.0
       longitude_min: 5.5
       longitude_max: 62.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 89
   title: January 2024 Event 0548
   start_date: 2024-01-01 00:00:00
@@ -1065,7 +1065,7 @@
       latitude_max: 22.75
       longitude_min: 20.75
       longitude_max: 37.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 90
   title: January 2024 Event 0555
   start_date: 2024-01-11 00:00:00
@@ -1077,7 +1077,7 @@
       latitude_max: 69.75
       longitude_min: 163.5
       longitude_max: 179.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 91
   title: February 2024 Event 0588
   start_date: 2024-02-24 00:00:00
@@ -1089,7 +1089,7 @@
       latitude_max: 73.5
       longitude_min: 270.25
       longitude_max: 298.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 92
   title: February 2024 Event 0590
   start_date: 2024-02-25 00:00:00
@@ -1101,7 +1101,7 @@
       latitude_max: 59.5
       longitude_min: 32.5
       longitude_max: 73.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 93
   title: February 2024 Event 0592
   start_date: 2024-02-25 00:00:00
@@ -1113,7 +1113,7 @@
       latitude_max: 81.5
       longitude_min: 296.0
       longitude_max: 320.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 94
   title: February 2024 Event 0593
   start_date: 2024-02-29 00:00:00
@@ -1125,7 +1125,7 @@
       latitude_max: 63.5
       longitude_min: 280.75
       longitude_max: 299.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 95
   title: April 2024 Event 0611
   start_date: 2024-04-27 00:00:00
@@ -1137,7 +1137,7 @@
       latitude_max: -14.0
       longitude_min: 116.0
       longitude_max: 140.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 96
   title: May 2024 Event 0614
   start_date: 2024-05-07 00:00:00
@@ -1149,7 +1149,7 @@
       latitude_max: 76.25
       longitude_min: 73.25
       longitude_max: 138.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 97
   title: May 2024 Event 0616
   start_date: 2024-05-19 00:00:00
@@ -1161,7 +1161,7 @@
       latitude_max: 62.5
       longitude_min: 282.0
       longitude_max: 297.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 98
   title: June 2024 Event 0621
   start_date: 2024-06-13 00:00:00
@@ -1173,7 +1173,7 @@
       latitude_max: 84.5
       longitude_min: 299.75
       longitude_max: 347.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 99
   title: June 2024 Event 0622
   start_date: 2024-06-15 00:00:00
@@ -1185,7 +1185,7 @@
       latitude_max: 77.75
       longitude_min: 250.25
       longitude_max: 273.75
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 100
   title: August 2024 Event 0624
   start_date: 2024-08-07 00:00:00
@@ -1197,7 +1197,7 @@
       latitude_max: 35.0
       longitude_min: 1.5
       longitude_max: 16.5
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 101
   title: September 2024 Event 0636
   start_date: 2024-09-19 00:00:00
@@ -1209,7 +1209,7 @@
       latitude_max: 77.5
       longitude_min: 73.25
       longitude_max: 129.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 102
   title: October 2024 Event 0641
   start_date: 2024-10-06 00:00:00
@@ -1221,7 +1221,7 @@
       latitude_max: 70.75
       longitude_min: 154.75
       longitude_max: 190.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 103
   title: October 2024 Event 0646
   start_date: 2024-10-27 00:00:00
@@ -1233,7 +1233,7 @@
       latitude_max: 61.5
       longitude_min: 233.0
       longitude_max: 264.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 104
   title: October 2024 Event 0647
   start_date: 2024-10-28 00:00:00
@@ -1245,7 +1245,7 @@
       latitude_max: 69.25
       longitude_min: 192.25
       longitude_max: 230.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 105
   title: November 2024 Event 0656
   start_date: 2024-11-17 00:00:00
@@ -1257,7 +1257,7 @@
       latitude_max: 78.5
       longitude_min: 297.75
       longitude_max: 340.25
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 106
   title: November 2024 Event 0659
   start_date: 2024-11-21 00:00:00
@@ -1269,7 +1269,7 @@
       latitude_max: 69.75
       longitude_min: 237.25
       longitude_max: 291.0
-  event_type: marginal_temperature
+  event_type: heat_wave
 - case_id_number: 107
   title: December 2024 Event 0674
   start_date: 2024-12-17 00:00:00
@@ -1281,4 +1281,4 @@
       latitude_max: 51.25
       longitude_min: 48.0
       longitude_max: 75.0
-  event_type: marginal_temperature
+  event_type: heat_wave
