@@ -329,10 +329,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: -46.5
-      latitude_max: -41.5
-      longitude_min: 149.0
-      longitude_max: 149.0
+      latitude_min: -48
+      latitude_max: -35.75
+      longitude_min: 165.5
+      longitude_max: 178.25
   event_type: heat_wave
 - case_id_number: 29
   title: 2020 Australia
