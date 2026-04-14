@@ -959,14 +959,21 @@ def _fill_track_gaps_from_fields(
     latitude: npt.NDArray,
     longitude: npt.NDArray,
     wind_search_radius_gridpts: int,
-    search_radius_degrees: float = 8.0,
+    search_radius_degrees: float = 3.0,
+    n_candidates: int = 5,
 ) -> list[dict]:
     """Fill track gaps using SLP minima from forecast fields.
 
     When the tracker loses a storm (e.g. over land), this
-    finds the nearest SLP minimum to the expected track
+    finds the SLP minimum closest to the expected track
     position for each missing timestep, ensuring continuous
     tracks between the first and last detection.
+
+    The algorithm picks the top-N lowest-SLP cells within
+    the search radius, then selects the one nearest to the
+    interpolated expected position. Each filled point
+    updates the "previous" anchor so successive gap fills
+    stay physically consistent along the track.
 
     Args:
         detections: Existing detections from the tracking pass.
@@ -982,6 +989,8 @@ def _fill_track_gaps_from_fields(
             grid points for sampling peak wind.
         search_radius_degrees: Max distance from the expected
             position to search for SLP minima (degrees).
+        n_candidates: Number of lowest-SLP cells to consider
+            when choosing the closest to expected position.
 
     Returns:
         detections list with gap-fill entries appended.
@@ -1014,22 +1023,28 @@ def _fill_track_gaps_from_fields(
         ts_dets.sort(key=lambda x: x[0])
         first_ts = ts_dets[0][0]
         last_ts = ts_dets[-1][0]
-        detected_set = {ts for ts, _ in ts_dets}
 
         if last_ts - first_ts <= 1:
             continue
 
+        # Mutable map so gap-fills update the "previous"
+        # anchor for subsequent gaps.
+        ts_to_det: dict[int, dict] = {
+            ts: d for ts, d in ts_dets
+        }
+
         for ts_idx in range(first_ts + 1, last_ts):
-            if ts_idx in detected_set:
+            if ts_idx in ts_to_det:
                 continue
 
-            # Find bracketing detections
             prev_det = next_det = None
-            for ts, det in ts_dets:
-                if ts < ts_idx:
-                    prev_det = (ts, det)
-                if ts > ts_idx:
-                    next_det = (ts, det)
+            for lb in range(ts_idx - 1, first_ts - 1, -1):
+                if lb in ts_to_det:
+                    prev_det = (lb, ts_to_det[lb])
+                    break
+            for lf in range(ts_idx + 1, last_ts + 1):
+                if lf in ts_to_det:
+                    next_det = (lf, ts_to_det[lf])
                     break
 
             if prev_det is None or next_det is None:
@@ -1045,22 +1060,24 @@ def _fill_track_gaps_from_fields(
             slp_slice = slp_data[_lt_idx]
             wind_slice = wind_data[_lt_idx]
 
-            # Approx distance in degrees from each grid
-            # point to expected position.
             dlat = latitude[:, np.newaxis] - exp_lat
             dlon = longitude[np.newaxis, :] - exp_lon
-            dlon = np.where(dlon > 180, dlon - 360, dlon)
-            dlon = np.where(dlon < -180, dlon + 360, dlon)
+            dlon = np.mod(dlon + 180, 360) - 180
             cos_lat = np.cos(np.radians(exp_lat))
             dist = np.sqrt(dlat**2 + (dlon * cos_lat) ** 2)
 
             mask = dist <= search_radius_degrees
-            if not mask.any():
+            n_valid = int(np.count_nonzero(mask))
+            if n_valid == 0:
                 continue
 
             slp_masked = np.where(mask, slp_slice, np.inf)
 
-            r, c = np.unravel_index(np.argmin(slp_masked), slp_masked.shape)
+            k = min(n_candidates, n_valid)
+            flat_idx = np.argpartition(slp_masked.ravel(), k)[:k]
+            cand_r, cand_c = np.unravel_index(flat_idx, slp_masked.shape)
+            best = int(np.argmin(dist[cand_r, cand_c]))
+            r, c = int(cand_r[best]), int(cand_c[best])
 
             peak_wind = _neighbourhood_max_wind(
                 wind_slice,
@@ -1069,17 +1086,17 @@ def _fill_track_gaps_from_fields(
                 wind_search_radius_gridpts,
             )
 
-            new_detections.append(
-                {
-                    "lead_time_index": int(_lt_idx),
-                    "valid_time_index": int(valid_time_indices_seq[ts_idx]),
-                    "track_id": tid,
-                    "latitude": float(latitude[r]),
-                    "longitude": float(longitude[c]),
-                    "slp": float(slp_slice[r, c]),
-                    "wind": float(peak_wind),
-                }
-            )
+            filled = {
+                "lead_time_index": int(_lt_idx),
+                "valid_time_index": int(valid_time_indices_seq[ts_idx]),
+                "track_id": tid,
+                "latitude": float(latitude[r]),
+                "longitude": float(longitude[c]),
+                "slp": float(slp_slice[r, c]),
+                "wind": float(peak_wind),
+            }
+            new_detections.append(filled)
+            ts_to_det[ts_idx] = filled
 
     detections.extend(new_detections)
     return detections
