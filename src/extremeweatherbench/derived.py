@@ -129,13 +129,13 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         name: Optional[str] = None,
         slp_contour_magnitude: float = 200.0,
         dz_contour_magnitude: float = -6.0,
-        min_distance_between_peaks_degrees: float = 1.0,
+        min_distance_between_peaks: int = 5,
         max_spatial_distance_degrees: float = 5.0,
         max_temporal_hours: float = 48.0,
         use_contour_validation: bool = True,
         timestep_count_wind_minimum: int = 10,
         latitude_max_degrees: float = 50.0,
-        surface_pressure_threshold: float = 102000.0,
+        surface_pressure_threshold: float = 100500.0,
         orography: Optional[xr.DataArray] = None,
         max_gc_distance_slp_contour_degrees: float = 5.5,
         max_gc_distance_dz_contour_degrees: float = 6.5,
@@ -153,24 +153,20 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 Defaults to 200.0.
             dz_contour_magnitude: Geopotential thickness contour threshold in m.
                 Defaults to -6.0.
-            min_distance_between_peaks_degrees: Minimum GCD distance between
-                detected peaks in degrees. Converted to grid points at runtime
-                using the actual model resolution. Defaults to 1.0 degree.
+            min_distance_between_peaks: Minimum grid points between detected peaks.
+                Defaults to 5.
             max_spatial_distance_degrees: Maximum distance in degrees for track matching.
                 Defaults to 5.0.
             max_temporal_hours: Maximum hours between detections for track continuity.
                 Defaults to 48.0.
             use_contour_validation: Whether to apply closed contour validation.
                 Defaults to True.
-            timestep_count_wind_minimum: Minimum number of lead times where the
-                neighbourhood peak wind (max within wind_search_radius_degrees)
-                is >= 10 m/s for a track to be retained. Defaults to 10.
+            min_track_timesteps: Minimum number of timesteps required for a valid track.
+                Defaults to 10.
             latitude_max_degrees: Maximum latitude in degrees for TC detection.
                 Defaults to 50.0.
-            surface_pressure_threshold: Maximum SLP (Pa) a candidate grid
-                point may have to be considered for peak detection. Defaults
-                to 101325.0 Pa (standard atmosphere), so only below-average
-                pressure cells are examined.
+            surface_pressure_threshold: Surface pressure threshold in Pa.
+                Defaults to 100500.0.
             orography: Optional orography DataArray for terrain filtering.
                 Defaults to None.
             max_gc_distance_slp_contour_degrees: Maximum great circle distance for
@@ -180,14 +176,11 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 degrees.
             orography_filter_threshold: Orography filter threshold in meters.
                 Defaults to 150.0.
-            wind_search_radius_degrees: GCD radius in degrees for neighbourhood
-                wind sampling, per TempestExtremes 2.1. Converted to grid
-                points at runtime. Defaults to 2.0 degrees.
         """
         super().__init__(output_variables=output_variables, name=name)
         self.slp_contour_magnitude = slp_contour_magnitude
         self.dz_contour_magnitude = dz_contour_magnitude
-        self.min_distance_between_peaks_degrees = min_distance_between_peaks_degrees
+        self.min_distance_between_peaks = min_distance_between_peaks
         self.max_spatial_distance_degrees = max_spatial_distance_degrees
         self.max_temporal_hours = max_temporal_hours
         self.use_contour_validation = use_contour_validation
@@ -262,7 +255,7 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             geopotential_thickness=prepared_data.get("geopotential_thickness", None),
             slp_contour_magnitude=self.slp_contour_magnitude,
             dz_contour_magnitude=self.dz_contour_magnitude,
-            min_distance_between_peaks_degrees=self.min_distance_between_peaks_degrees,
+            min_distance_between_peaks=self.min_distance_between_peaks,
             max_spatial_distance_degrees=self.max_spatial_distance_degrees,
             max_temporal_hours=self.max_temporal_hours,
             use_contour_validation=self.use_contour_validation,

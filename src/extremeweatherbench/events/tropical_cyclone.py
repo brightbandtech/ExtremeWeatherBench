@@ -56,13 +56,13 @@ def generate_tc_tracks_by_init_time(
     tc_track_analysis_data: xr.DataArray,
     slp_contour_magnitude: float = 200.0,
     dz_contour_magnitude: float = -6.0,
-    min_distance_between_peaks_degrees: float = 1.0,
+    min_distance_between_peaks: int = 5,
     max_spatial_distance_degrees: float = 5.0,
     max_temporal_hours: float = 48.0,
     use_contour_validation: bool = True,
     timestep_count_wind_minimum: int = 10,
     latitude_max_degrees: float = 50.0,
-    surface_pressure_threshold: float = 102000.0,
+    surface_pressure_threshold: float = 100500.0,
     orography: Optional[xr.DataArray] = None,
     max_gc_distance_slp_contour_degrees: float = 5.5,
     max_gc_distance_dz_contour_degrees: float = 6.5,
@@ -94,17 +94,15 @@ def generate_tc_tracks_by_init_time(
             200.0 Pa
         dz_contour_magnitude: DZ contour threshold for validation in m. Defaults to
             -6.0 m
-        min_distance_between_peaks_degrees: Minimum GCD distance between detected
-            peaks in degrees. Converted to grid points at runtime using the
-            actual grid resolution. Defaults to 1.0 degree
+        min_distance_between_peaks: Minimum distance between detected peaks in grid
+            points. Defaults to 5
         max_spatial_distance_degrees: Max spatial distance for TC track data filtering
             in degrees. Defaults to 5.0 degrees
         max_temporal_hours: Maximum temporal window from init_time in hours. Defaults
             to 48.0 hours
         use_contour_validation: Whether to use contour validation. Defaults to True
-        timestep_count_wind_minimum: Minimum number of lead times where the neighbourhood
-            peak wind speed (max within wind_search_radius_degrees) is >= 10 m/s
-            for a track to be considered valid. Defaults to 2
+        min_track_timesteps: Minimum consecutive lead times for valid tracks. Defaults
+            to 10
         latitude_max_degrees: Maximum latitude for valid tracks in degrees. Defaults
             to 50.0 degrees
         surface_pressure_threshold: Maximum surface pressure threshold for valid peaks
@@ -116,10 +114,6 @@ def generate_tc_tracks_by_init_time(
             in degrees. Defaults to 6.5 degrees
         orography_filter_threshold: Threshold for the orography filter's max height
             in m. Defaults to 150.0 m
-        wind_search_radius_degrees: GCD radius in degrees used to sample the
-            neighbourhood maximum wind speed around each detected peak, following
-            TempestExtremes 2.1. Converted to grid points at runtime. Defaults
-            to 2.0 degrees
 
     Returns:
         xarray Dataset with detected tropical cyclone tracks
@@ -182,7 +176,7 @@ def generate_tc_tracks_by_init_time(
             "latitude": latitude.values,
             "longitude": longitude.values,
             "tc_track_data_df": tc_track_data_df,
-            "min_distance_between_peaks_degrees": min_distance_between_peaks_degrees,
+            "min_distance_between_peaks": min_distance_between_peaks,
             "max_spatial_distance_degrees": max_spatial_distance_degrees,
             "max_temporal_hours": max_temporal_hours,
             "slp_contour_magnitude": slp_contour_magnitude,
@@ -195,7 +189,6 @@ def generate_tc_tracks_by_init_time(
             "max_gc_distance_slp_contour_degrees": max_gc_distance_slp_contour_degrees,
             "max_gc_distance_dz_contour_degrees": max_gc_distance_dz_contour_degrees,
             "orography_filter_threshold": orography_filter_threshold,
-            "wind_search_radius_degrees": wind_search_radius_degrees,
         },
         input_core_dims=[
             ["lead_time", "latitude", "longitude"],
@@ -260,7 +253,7 @@ def _process_single_init_time(
     latitude: npt.NDArray,
     longitude: npt.NDArray,
     tc_track_data_df: pd.DataFrame,
-    min_distance_between_peaks_degrees: float,
+    min_distance_between_peaks: float,
     max_spatial_distance_degrees: float,
     max_temporal_hours: float,
     slp_contour_magnitude: float,
@@ -321,7 +314,7 @@ def _process_single_init_time(
     # Convert degree-based spatial parameters to grid points using the
     # actual grid resolution so the code is resolution-agnostic.
     min_distance_between_peaks_gridpts = _degrees_to_gridpoints(
-        min_distance_between_peaks_degrees, latitude, longitude
+        min_distance_between_peaks, latitude, longitude
     )
     wind_search_radius_gridpts = _degrees_to_gridpoints(
         wind_search_radius_degrees, latitude, longitude
@@ -735,18 +728,18 @@ def _find_peaks_for_time_slice(
     current_valid_time: pd.Timestamp,
     tc_track_data_df: pd.DataFrame,
     min_distance_between_peaks: int,
-    lat_coords: npt.NDArray,
-    lon_coords: npt.NDArray,
-    max_spatial_distance_degrees: float,
-    max_temporal_hours: float,
-    slp_contour_magnitude: float,
-    dz_contour_magnitude: float,
-    use_contour_validation: bool,
-    is_first_timestep: bool,
-    surface_pressure_threshold: float,
-    latitude_max_degrees: float,
-    max_gc_distance_slp_contour_degrees: float,
-    max_gc_distance_dz_contour_degrees: float,
+    lat_coords: Optional[npt.NDArray] = None,
+    lon_coords: Optional[npt.NDArray] = None,
+    max_spatial_distance_degrees: float = 5.0,
+    max_temporal_hours: float = 48.0,
+    slp_contour_magnitude: float = 200.0,
+    dz_contour_magnitude: float = -6.0,
+    use_contour_validation: bool = True,
+    is_first_timestep: bool = False,
+    surface_pressure_threshold: float = 100500.0,
+    latitude_max_degrees: float = 50.0,
+    max_gc_distance_slp_contour_degrees: float = 5.5,
+    max_gc_distance_dz_contour_degrees: float = 6.5,
 ) -> npt.NDArray:
     """Find peaks with tropical cyclone track data filtering.
 
@@ -808,6 +801,10 @@ def _find_peaks_for_time_slice(
     low_pressure_mask = slp_slice < surface_pressure_threshold
 
     if not np.any(low_pressure_mask):
+        return np.array([])
+
+    # OPTIMIZED: Vectorized spatial masking
+    if lat_coords is None or lon_coords is None:
         return np.array([])
 
     spatial_mask = _create_spatial_mask(
