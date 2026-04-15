@@ -1029,9 +1029,7 @@ def _fill_track_gaps_from_fields(
 
         # Mutable map so gap-fills update the "previous"
         # anchor for subsequent gaps.
-        ts_to_det: dict[int, dict] = {
-            ts: d for ts, d in ts_dets
-        }
+        ts_to_det: dict[int, dict] = {ts: d for ts, d in ts_dets}
 
         for ts_idx in range(first_ts + 1, last_ts):
             if ts_idx in ts_to_det:

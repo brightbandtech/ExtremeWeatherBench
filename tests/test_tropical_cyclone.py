@@ -1236,12 +1236,12 @@ class TestFillTrackGapsFromFields:
         )
 
         assert len(result) == 4
-        ts2_fill = [
-            d for d in result if d["lead_time_index"] == 2
-        ]
+        ts2_fill = [d for d in result if d["lead_time_index"] == 2]
         assert len(ts2_fill) == 1
         np.testing.assert_allclose(
-            ts2_fill[0]["latitude"], lat[r_ts2], atol=0.5,
+            ts2_fill[0]["latitude"],
+            lat[r_ts2],
+            atol=0.5,
         )
 
     def test_single_detection_no_fill(self):
