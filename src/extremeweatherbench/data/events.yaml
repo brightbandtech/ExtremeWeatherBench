@@ -1870,18 +1870,6 @@
       longitude_min: 254.5
       longitude_max: 263.9
   event_type: tropical_cyclone
-- case_id_number: 157
-  title: Hone
-  start_date: 2024-08-20 00:00:00
-  end_date: 2024-09-03 06:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: 13.2
-      latitude_max: 32.0
-      longitude_min: 175.8
-      longitude_max: 224.8
-  event_type: tropical_cyclone
 - case_id_number: 158
   title: Trami
   start_date: 2024-10-18 00:00:00
@@ -1977,18 +1965,6 @@
       latitude_max: 26.3
       longitude_min: 116.8
       longitude_max: 130.6
-  event_type: tropical_cyclone
-- case_id_number: 166
-  title: Asna
-  start_date: 2024-08-23 00:00:00
-  end_date: 2024-09-05 06:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: 17.5
-      latitude_max: 26.8
-      longitude_min: 58.3
-      longitude_max: 79.7
   event_type: tropical_cyclone
 - case_id_number: 167
   title: Kirrily
@@ -2302,18 +2278,6 @@
       longitude_min: 28.8
       longitude_max: 121.4
   event_type: tropical_cyclone
-- case_id_number: 193
-  title: Jasper
-  start_date: 2023-11-30 12:00:00
-  end_date: 2023-12-19 00:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: -20.0
-      latitude_max: -5.3
-      longitude_min: 139.0
-      longitude_max: 167.2
-  event_type: tropical_cyclone
 - case_id_number: 194
   title: Alex
   start_date: 2022-05-31 18:00:00
@@ -2542,18 +2506,6 @@
       longitude_min: 127.3
       longitude_max: 161.5
   event_type: tropical_cyclone
-- case_id_number: 213
-  title: Blas
-  start_date: 2022-06-12 06:00:00
-  end_date: 2022-06-24 18:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: 11.4
-      latitude_max: 21.5
-      longitude_min: 240.9
-      longitude_max: 260.3
-  event_type: tropical_cyclone
 - case_id_number: 214
   title: Elsa
   start_date: 2021-06-28 18:00:00
@@ -2686,18 +2638,6 @@
       longitude_min: 248.4
       longitude_max: 259.9
   event_type: tropical_cyclone
-- case_id_number: 225
-  title: Surigae (Bising)
-  start_date: 2021-04-09 12:00:00
-  end_date: 2021-05-02 18:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: 3.3
-      latitude_max: 49.7
-      longitude_min: 122.5
-      longitude_max: 186.8
-  event_type: tropical_cyclone
 - case_id_number: 226
   title: In-fa (Fabian)
   start_date: 2021-07-14 00:00:00
@@ -2722,18 +2662,6 @@
       longitude_min: 103.4
       longitude_max: 136.5
   event_type: tropical_cyclone
-- case_id_number: 228
-  title: Rai
-  start_date: 2021-12-09 12:00:00
-  end_date: 2021-12-23 12:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: 3.1
-      latitude_max: 23.9
-      longitude_min: 108.3
-      longitude_max: 147.3
-  event_type: tropical_cyclone
 - case_id_number: 229
   title: Tauktae
   start_date: 2021-05-11 06:00:00
@@ -2757,18 +2685,6 @@
       latitude_max: 26.9
       longitude_min: 82.5
       longitude_max: 92.3
-  event_type: tropical_cyclone
-- case_id_number: 231
-  title: Gulab and Shaheen
-  start_date: 2021-09-21 18:00:00
-  end_date: 2021-10-06 06:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: 15.9
-      latitude_max: 26.6
-      longitude_min: 53.7
-      longitude_max: 96.5
   event_type: tropical_cyclone
 - case_id_number: 232
   title: Eloise
@@ -2925,18 +2841,6 @@
       latitude_max: 17.7
       longitude_min: 268.7
       longitude_max: 291.4
-  event_type: tropical_cyclone
-- case_id_number: 245
-  title: Genevieve
-  start_date: 2020-08-14 12:00:00
-  end_date: 2020-08-24 06:00:00
-  location:
-    type: bounded_region
-    parameters:
-      latitude_min: 9.1
-      latitude_max: 29.2
-      longitude_min: 240.3
-      longitude_max: 265.8
   event_type: tropical_cyclone
 - case_id_number: 246
   title: Hagupit (Dindo)
