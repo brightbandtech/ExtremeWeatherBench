@@ -16,7 +16,7 @@ from extremeweatherbench import utils
 epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
 sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
 g0: float = 9.80665  # Standard gravity (m/s^2)
-
+_ns_per_hour = 3_600_000_000_000
 logger = logging.getLogger("extremeweatherbench.calc")
 logger.setLevel(logging.INFO)
 
@@ -488,20 +488,75 @@ def find_landfalls(
     return _deduplicate_landfalls(landfalls)
 
 
+def _filter_minor_landfalls(
+    target_landfalls: xr.DataArray,
+    min_separation_hours: float,
+) -> xr.DataArray:
+    """Remove target landfalls within min_separation_hours of the prior one.
+
+    For multi-landfall storms, rapid sequential crossings (e.g., a TC
+    clipping several Caribbean islands within hours of each other) are
+    treated as a single landfall event. Only the first crossing in each
+    rapid sequence is kept; later crossings within min_separation_hours
+    are dropped.
+
+    Args:
+        target_landfalls: DataArray with ``landfall`` dim and
+            ``valid_time`` coord, as returned by find_landfalls.
+        min_separation_hours: Minimum gap (hours) between consecutive
+            retained landfalls.
+
+    Returns:
+        Filtered DataArray with minor landfalls removed.
+    """
+    if len(target_landfalls) <= 1:
+        return target_landfalls
+    times = target_landfalls.coords["valid_time"].values.astype("datetime64[ns]")
+    keep_idx = [0]
+    last_kept = times[0]
+    for i in range(1, len(times)):
+        gap_h = (np.int64(times[i]) - np.int64(last_kept)) / _ns_per_hour
+        if gap_h >= min_separation_hours:
+            keep_idx.append(i)
+            last_kept = times[i]
+    return target_landfalls.isel(landfall=keep_idx)
+
+
+def _landfall_point_to_init_row(
+    da: xr.DataArray,
+    init_time: np.datetime64,
+) -> xr.DataArray:
+    """Promote a scalar landfall point to (init_time,) with coords."""
+    lat = float(da.coords["latitude"].values)
+    lon = float(da.coords["longitude"].values)
+    vt = da.coords["valid_time"].values
+    da = da.expand_dims("init_time")
+    return da.assign_coords(
+        init_time=("init_time", [init_time]),
+        latitude=("init_time", [lat]),
+        longitude=("init_time", [lon]),
+        valid_time=("init_time", [vt]),
+    )
+
+
 def find_next_landfall_for_init_time(
     forecast_landfalls: xr.DataArray,
     target_landfalls: xr.DataArray,
     max_lead_time: Optional[np.timedelta64] = None,
+    min_target_separation_hours: float = 0.0,
+    max_time_mismatch_hours: Optional[float] = None,
+    track_start_times: Optional[dict[np.datetime64, np.datetime64]] = None,
 ) -> xr.DataArray:
     """Match forecast landfalls to the closest target landfall.
 
     For each forecast initialization time, finds the target landfall
     whose valid_time is closest to the forecast's predicted landfall
-    time, constrained to be after init_time (and optionally within
-    max_lead_time). This ensures that multi-landfall storms pair the
-    model's prediction with the observed event it is actually
-    attempting to forecast, rather than a chronologically earlier
-    landfall the model cannot represent.
+    time, constrained to be after the forecast track's actual start
+    time (and optionally within max_lead_time). This ensures that
+    multi-landfall storms pair the model's prediction with the
+    observed event it is actually attempting to forecast, rather
+    than a chronologically earlier landfall the model cannot
+    represent.
 
     Args:
         forecast_landfalls: Forecast landfall DataArray with init_time
@@ -511,11 +566,31 @@ def find_next_landfall_for_init_time(
             with landfall dimension and valid_time coordinate.
         max_lead_time: If provided, only consider target landfalls
             within this duration after each init_time.
+        min_target_separation_hours: If > 0, pre-filter target
+            landfalls so that consecutive retained landfalls are at
+            least this many hours apart.
+        max_time_mismatch_hours: If provided, discard matched pairs
+            where the absolute difference between the forecast's
+            predicted landfall valid_time and the matched target
+            landfall valid_time exceeds this threshold (hours).
+        track_start_times: Optional dict mapping init_time to the
+            earliest valid_time with non-NaN forecast track data
+            (from ``get_forecast_track_start_times``). When
+            provided, only target landfalls after the track start
+            are considered. Falls back to init_time when not
+            provided or when a given init_time is missing.
 
     Returns:
         DataArray with matched target landfalls indexed by init_time.
         Returns a zero-length DataArray if no matches exist.
     """
+    if min_target_separation_hours > 0:
+        target_landfalls = _filter_minor_landfalls(
+            target_landfalls, min_target_separation_hours
+        )
+        if len(target_landfalls) == 0:
+            return utils._empty_init_time_array()
+
     if "init_time" in forecast_landfalls.dims:
         init_times = forecast_landfalls.init_time.values
     elif "init_time" in forecast_landfalls.coords:
@@ -530,10 +605,11 @@ def find_next_landfall_for_init_time(
             "landfall" in forecast_landfalls.dims
             and "init_time" in forecast_landfalls.dims
         ):
-            # 2D: valid_time lives on the landfall dim while
-            # init_time is a separate dim. Map each init to
-            # the earliest forecast landfall valid_time.
+            # 2D: Map each init to earliest forecast landfall
+            # valid_time. valid_time may be 1D (landfall,) or
+            # 2D (init_time, landfall).
             lf_vts = forecast_landfalls.coords["valid_time"].values
+            vt_2d = lf_vts.ndim == 2
             data = forecast_landfalls.values
             n_lf = forecast_landfalls.sizes["landfall"]
             for j in range(n_lf):
@@ -542,7 +618,7 @@ def find_next_landfall_for_init_time(
                 if len(non_nan) == 0:
                     continue
                 owner = init_times[non_nan[0]]
-                vt = lf_vts[j]
+                vt = lf_vts[non_nan[0], j] if vt_2d else lf_vts[j]
                 if owner not in forecast_vt_map or vt < forecast_vt_map[owner]:
                     forecast_vt_map[owner] = vt
         else:
@@ -557,7 +633,15 @@ def find_next_landfall_for_init_time(
     results = []
 
     for init_time in init_times:
-        future_mask = target_times > init_time
+        # With track_start_times, cutoff is when the forecast
+        # has data (>= because the track exists at cutoff).
+        # Without, cutoff is the nominal init_time which
+        # predates any forecast output (strict >).
+        if track_start_times is not None:
+            cutoff = track_start_times.get(init_time, init_time)
+            future_mask = target_times >= cutoff
+        else:
+            future_mask = target_times > init_time
 
         if max_lead_time is not None:
             horizon = init_time + max_lead_time
@@ -575,17 +659,17 @@ def find_next_landfall_for_init_time(
         else:
             best = future_indices[0]
 
+        if max_time_mismatch_hours is not None and fc_vt is not None:
+            target_vt = target_times[int(best)]
+            mismatch_h = abs(np.int64(fc_vt) - np.int64(target_vt)) / _ns_per_hour
+            if mismatch_h > max_time_mismatch_hours:
+                continue
+
         landfall = target_landfalls.isel(landfall=int(best))
-        landfall = landfall.expand_dims("init_time", axis=0)
-        landfall = landfall.assign_coords(init_time=("init_time", [init_time]))
-        results.append(landfall)
+        results.append(_landfall_point_to_init_row(landfall, init_time))
 
     if not results:
-        return xr.DataArray(
-            np.array([], dtype=float),
-            dims=["init_time"],
-            coords={"init_time": np.array([], dtype="datetime64[ns]")},
-        )
+        return utils._empty_init_time_array()
     return xr.concat(
         results,
         dim="init_time",
@@ -905,6 +989,129 @@ def _deduplicate_landfalls(
     return landfalls.isel(landfall=kept_indices)
 
 
+def get_forecast_track_start_times(
+    forecast: xr.DataArray,
+) -> dict[np.datetime64, np.datetime64]:
+    """Map each init_time to the earliest valid_time with data.
+
+    TC tracker output contains NaN at lead times before the
+    storm is detected. This returns the valid_time of each
+    init_time's first non-NaN data point, telling us when the
+    forecast track actually begins.
+
+    Args:
+        forecast: Forecast DataArray with ``lead_time`` and
+            ``valid_time`` dimensions.
+
+    Returns:
+        Dict mapping ``init_time`` → earliest ``valid_time``
+        with non-NaN track data for that initialization.
+    """
+    if "lead_time" not in forecast.dims:
+        return {}
+
+    lt_vals = forecast.lead_time.values
+    if len(lt_vals) == 0:
+        return {}
+    if not isinstance(lt_vals[0], np.timedelta64):
+        lt_vals = np.array([np.timedelta64(int(lt), "h") for lt in lt_vals])
+
+    vt_vals = forecast.valid_time.values
+    data = forecast.values
+
+    start_times: dict[np.datetime64, np.datetime64] = {}
+    for j, vt in enumerate(vt_vals):
+        for i, lt in enumerate(lt_vals):
+            if not np.isnan(data[i, j]):
+                init = vt - lt
+                if init not in start_times or vt < start_times[init]:
+                    start_times[init] = vt
+
+    return start_times
+
+
+def filter_inits_by_track_start(
+    forecast_landfalls: xr.DataArray,
+    first_valid_time: np.datetime64,
+    track_starts: dict[np.datetime64, np.datetime64],
+) -> xr.DataArray:
+    """Drop init_times whose track starts after a target event.
+
+    Keeps init_times where the track starts at or before
+    ``first_valid_time``, or where the track start is unknown.
+
+    Args:
+        forecast_landfalls: DataArray with ``init_time`` dim.
+        first_valid_time: Target landfall valid_time cutoff.
+        track_starts: Dict from ``get_forecast_track_start_times``.
+
+    Returns:
+        Filtered DataArray (may be empty).
+    """
+    keep = [
+        it
+        for it in forecast_landfalls.init_time.values
+        if track_starts.get(it, first_valid_time) <= first_valid_time
+    ]
+    if len(keep) < len(forecast_landfalls.init_time):
+        return forecast_landfalls.sel(init_time=np.array(keep))
+    return forecast_landfalls
+
+
+def select_first_forecast_landfall_per_init(
+    forecast_landfalls: xr.DataArray,
+) -> xr.DataArray:
+    """Reduce forecast landfalls to one per init_time.
+
+    For each init_time, keeps the forecast landfall with the
+    earliest valid_time. This prevents downstream metrics from
+    averaging distances across multiple forecast landfalls
+    (e.g. island-hopping detections) for a single init_time.
+
+    Args:
+        forecast_landfalls: DataArray with ``init_time`` and
+            ``landfall`` dimensions, as returned by
+            ``find_landfalls`` on forecast data.
+
+    Returns:
+        DataArray with one landfall per init_time, indexed by
+        ``init_time`` with ``landfall`` dim removed.
+    """
+    if "init_time" not in forecast_landfalls.dims:
+        return forecast_landfalls
+    if "landfall" not in forecast_landfalls.dims:
+        return forecast_landfalls
+
+    init_times = forecast_landfalls.init_time.values
+    vt_vals = forecast_landfalls.coords["valid_time"].values
+    data = forecast_landfalls.values
+    vt_2d = vt_vals.ndim == 2
+
+    results = []
+    for i, it in enumerate(init_times):
+        row = data[i, :]
+        non_nan = np.where(~np.isnan(row))[0]
+        if len(non_nan) == 0:
+            continue
+        row_vts = vt_vals[i, non_nan] if vt_2d else vt_vals[non_nan]
+        earliest_j = non_nan[np.argmin(row_vts)]
+        pt = forecast_landfalls.isel(
+            init_time=i,
+            landfall=earliest_j,
+        )
+        results.append(_landfall_point_to_init_row(pt, it))
+
+    if not results:
+        return utils._empty_init_time_array()
+    return xr.concat(
+        results,
+        dim="init_time",
+        coords="different",
+        compat="equals",
+        join="outer",
+    )
+
+
 def broadcast_first_target_to_init_times(
     init_times: xr.DataArray,
     target: xr.DataArray,
@@ -921,15 +1128,17 @@ def broadcast_first_target_to_init_times(
     landfall) before passing it here.
 
     Args:
-        target: ``(landfall,)`` DataArray from ``find_landfalls`` for
-            observations. Must contain exactly one element.
-        forecast: ``(init_time,)`` DataArray from ``find_landfalls`` for
-            the forecast, used to determine which init_times the broadcast
-            target should span.
+        init_times: ``init_time`` coordinate from the forecast
+            landfall DataArray, determines which init_times the
+            broadcast target should span.
+        target: ``(landfall,)`` DataArray from ``find_landfalls``
+            for observations. Must contain at least one element
+            (uses the first).
 
     Returns:
-        ``(init_time,)`` DataArray with the target value, latitude,
-        longitude, and valid_time repeated across all forecast init_times.
+        ``(init_time,)`` DataArray with the target value,
+        latitude, longitude, and valid_time repeated across
+        all provided init_times.
     """
     t = target.isel(landfall=0)
     n = len(init_times)
