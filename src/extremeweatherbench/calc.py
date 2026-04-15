@@ -1058,6 +1058,114 @@ def filter_inits_by_track_start(
     return forecast_landfalls
 
 
+def _can_filter_landfall_pair(
+    forecast_landfalls: xr.DataArray,
+    target_landfalls: xr.DataArray,
+) -> bool:
+    """True if both arrays have init_time dim and valid_time coord."""
+    return (
+        "init_time" in forecast_landfalls.dims
+        and "valid_time" in forecast_landfalls.coords
+        and "valid_time" in target_landfalls.coords
+    )
+
+
+def _apply_landfall_keep_mask(
+    forecast_landfalls: xr.DataArray,
+    target_landfalls: xr.DataArray,
+    keep: np.ndarray,
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """Select init_times where ``keep`` is True."""
+    if keep.all():
+        return forecast_landfalls, target_landfalls
+    if not keep.any():
+        return (
+            utils._empty_init_time_array(),
+            utils._empty_init_time_array(),
+        )
+    idx = np.where(keep)[0]
+    return (
+        forecast_landfalls.isel(init_time=idx),
+        target_landfalls.isel(init_time=idx),
+    )
+
+
+def filter_by_landfall_time_window(
+    forecast_landfalls: xr.DataArray,
+    target_landfalls: xr.DataArray,
+    window_hours: float = 24.0,
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """Drop pairs where forecast and target landfall times
+    differ by more than ``window_hours``.
+
+    Keeps:
+
+        abs(fc_valid_time - tgt_valid_time) <= window_hours
+
+    Args:
+        forecast_landfalls: ``(init_time,)`` with
+            ``valid_time`` coord.
+        target_landfalls: Same shape/coords.
+        window_hours: Max allowed mismatch in hours.
+
+    Returns:
+        Filtered (forecast, target) pair. May be empty.
+    """
+    if not _can_filter_landfall_pair(forecast_landfalls, target_landfalls):
+        return forecast_landfalls, target_landfalls
+
+    fc_vt = forecast_landfalls.coords["valid_time"].values
+    tgt_vt = target_landfalls.coords["valid_time"].values
+
+    mismatch = np.abs(fc_vt - tgt_vt)
+    threshold = np.timedelta64(int(window_hours * 3600), "s")
+
+    return _apply_landfall_keep_mask(
+        forecast_landfalls, target_landfalls, mismatch <= threshold
+    )
+
+
+def filter_by_landfall_time_tolerance(
+    forecast_landfalls: xr.DataArray,
+    target_landfalls: xr.DataArray,
+    tolerance_fraction: float = 0.5,
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """Drop pairs where forecast landfall timing error exceeds
+    a fraction of the lead time.
+
+    Keeps::
+
+        abs(fc_vt - tgt_vt) <= fraction * (tgt_vt - init_time)
+
+    A 2-day forecast predicting landfall 4 days late would be
+    dropped with the default fraction of 0.5.
+
+    Args:
+        forecast_landfalls: ``(init_time,)`` with
+            ``valid_time`` coord.
+        target_landfalls: Same shape/coords.
+        tolerance_fraction: Multiplier on the lead time
+            that sets the max allowed mismatch.
+
+    Returns:
+        Filtered (forecast, target) pair. May be empty.
+    """
+    if not _can_filter_landfall_pair(forecast_landfalls, target_landfalls):
+        return forecast_landfalls, target_landfalls
+
+    fc_vt = forecast_landfalls.coords["valid_time"].values
+    tgt_vt = target_landfalls.coords["valid_time"].values
+    init_vals = forecast_landfalls.coords["init_time"].values
+
+    mismatch = np.abs(fc_vt - tgt_vt)
+    lead = np.abs(tgt_vt - init_vals)
+    threshold = tolerance_fraction * lead
+
+    return _apply_landfall_keep_mask(
+        forecast_landfalls, target_landfalls, mismatch <= threshold
+    )
+
+
 def select_first_forecast_landfall_per_init(
     forecast_landfalls: xr.DataArray,
 ) -> xr.DataArray:

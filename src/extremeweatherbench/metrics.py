@@ -1652,41 +1652,37 @@ class LandfallMetric(CompositeMetric):
         metrics: Optional[list[Type["LandfallMetric"]]] = None,
         min_target_separation_hours: float = 0.0,
         max_time_mismatch_hours: Optional[float] = None,
+        landfall_time_filter: Optional[tuple[str, float]] = ("window", 24.0),
         *args,
         **kwargs,
     ):
-        """Initialize LandfallMetric.
+        """Configure landfall detection and filtering.
 
-        Landfalls are detected using the calc.find_landfalls function, which utilizes a
-        land geometry and line segments based on coordinates to determine intersections.
-
-        Using approach, "first" will calculate the first detected landfall for an entire
-        forecast, i.e. later landfalls in a multi-landfall event will not be considered.
-        "next" will calculate the next landfall for each init_time.
-        Using Ida as an example (case 220), "first" would only run calculations for the
-        first landfall in Cuba, ignoring the later US landfall. "next" would run
-        calculations for the first landfall in Cuba, then the next landfall in the US,
-        etc. based on the init_time and when landfall occurred.
+        ``approach="first"`` evaluates the first observed
+        landfall only; ``approach="next"`` matches each
+        init_time to the closest future observed landfall.
 
         Args:
-            name: The name of the metric. Defaults to "landfall_metrics" for the base
-                class.
-            preserve_dims: The dimensions to preserve. Defaults to "init_time".
-            approach: The approach to use for landfall detection. Defaults to "first".
-            exclude_post_landfall: Whether to exclude post-landfall data. Defaults to
-                False.
-            forecast_variable: The forecast variable to use. Defaults to None.
-            target_variable: The target variable to use. Defaults to None.
-            metrics: A list of metrics to use as a composite. Defaults to None.
-            min_target_separation_hours: If > 0, pre-filter observed target landfalls
-                so that consecutive retained landfalls are separated by at least this
-                many hours. Removes rapid sequential island/peninsula crossings that
-                models cannot resolve individually. Only applies when approach="next".
-            max_time_mismatch_hours: If set, discard matched forecast–target pairs
-                where the model's predicted landfall time differs from the matched
-                target landfall time by more than this many hours. Prevents pairing
-                a forecast that skips a minor first landfall with the wrong target.
-                Only applies when approach="next" and forecast valid_time is available.
+            name: Metric name.
+            preserve_dims: Dims to keep in the result.
+            approach: ``"first"`` or ``"next"``.
+            exclude_post_landfall: Drop post-landfall data.
+            forecast_variable: Forecast variable name.
+            target_variable: Target variable name.
+            metrics: Sub-metric classes for composite mode.
+            min_target_separation_hours: Min hours between
+                consecutive target landfalls. Filters rapid
+                island crossings. Only for ``"next"``.
+            max_time_mismatch_hours: Max hours between
+                matched forecast/target landfall times.
+                Only for ``"next"``.
+            landfall_time_filter: How to filter paired
+                forecast/target landfalls by timing.
+                ``("window", hours)`` keeps pairs within
+                a fixed ± window.
+                ``("proportional", fraction)`` keeps pairs
+                where timing error < fraction * lead time.
+                ``None`` disables filtering.
         """
         super().__init__(
             name=name,
@@ -1700,24 +1696,20 @@ class LandfallMetric(CompositeMetric):
         self.exclude_post_landfall = exclude_post_landfall
         self.min_target_separation_hours = min_target_separation_hours
         self.max_time_mismatch_hours = max_time_mismatch_hours
+        self.landfall_time_filter = landfall_time_filter
         self.metrics = metrics or []
-
-        # If metrics provided, instantiate them
-        if self.metrics is not None:
-            self._metric_instances = [
-                (
-                    metric_cls(
-                        preserve_dims=self.preserve_dims,
-                        forecast_variable=self.forecast_variable,
-                        target_variable=self.target_variable,
-                    )
-                    if isinstance(metric_cls, type)
-                    else metric_cls
+        self._metric_instances = [
+            (
+                metric_cls(
+                    preserve_dims=self.preserve_dims,
+                    forecast_variable=self.forecast_variable,
+                    target_variable=self.target_variable,
                 )
-                for metric_cls in self.metrics
-            ]
-        else:
-            self._metric_instances = []
+                if isinstance(metric_cls, type)
+                else metric_cls
+            )
+            for metric_cls in self.metrics
+        ]
 
     def __call__(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
@@ -1739,22 +1731,24 @@ class LandfallMetric(CompositeMetric):
     def maybe_compute_landfalls(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
     ) -> tuple[xr.DataArray, xr.DataArray]:
-        """Compute landfalls for a given forecast and target dataarray.
+        """Detect and pair forecast/target landfalls.
 
-        This function computes the landfalls for a given forecast and target dataarray
-        using calc.find_landfalls. Currently, this access pattern doesn't include
-        passing land geometry in, but calc.find_landfalls will use NaturalEarth's 10m
-        land geometry by default.
+        Uses ``calc.find_landfalls`` (NaturalEarth 10m land
+        geometry) then applies approach-specific matching and
+        the configured time filters.
+
+        Pre-computed landfalls can be passed via ``kwargs``
+        keys ``forecast_landfall`` and ``target_landfall``
+        to skip detection.
 
         Args:
-            forecast: The forecast DataArray
-            target: The target DataArray
-            **kwargs: Additional keyword arguments, may include pre-computed
-                forecast_landfall and target_landfall
+            forecast: Forecast DataArray.
+            target: Target DataArray.
+            **kwargs: May include pre-computed landfalls.
 
         Returns:
-            Tuple of (forecast_landfall, target_landfall). If no landfalls are found,
-            returns NaN DataArrays with init_time dimension.
+            ``(forecast_landfall, target_landfall)`` tuple,
+            or NaN arrays if no valid landfalls remain.
         """
         forecast_landfall, target_landfall = (
             kwargs.get("forecast_landfall", None),
@@ -1801,6 +1795,14 @@ class LandfallMetric(CompositeMetric):
             forecast_landfalls = calc.select_first_forecast_landfall_per_init(
                 forecast_landfalls
             )
+            common = np.intersect1d(
+                forecast_landfalls.init_time.values,
+                target_landfalls.init_time.values,
+            )
+            if len(common) == 0:
+                return self._nan_landfall_pair()
+            forecast_landfalls = forecast_landfalls.sel(init_time=common)
+            target_landfalls = target_landfalls.sel(init_time=common)
         else:
             # "first" approach: compare to the earliest IBTrACS
             # landfall that the forecast can actually cover.
@@ -1850,6 +1852,32 @@ class LandfallMetric(CompositeMetric):
                 forecast_landfalls.init_time,
                 selected_target,
             )
+
+        if self.landfall_time_filter is not None:
+            method, value = self.landfall_time_filter
+            if method == "window":
+                forecast_landfalls, target_landfalls = (
+                    calc.filter_by_landfall_time_window(
+                        forecast_landfalls,
+                        target_landfalls,
+                        window_hours=value,
+                    )
+                )
+            elif method == "proportional":
+                forecast_landfalls, target_landfalls = (
+                    calc.filter_by_landfall_time_tolerance(
+                        forecast_landfalls,
+                        target_landfalls,
+                        tolerance_fraction=value,
+                    )
+                )
+            else:
+                raise ValueError(
+                    f'Unknown filter method {method!r}. Use "window" or "proportional".'
+                )
+            if len(forecast_landfalls) == 0:
+                return self._nan_landfall_pair()
+
         return forecast_landfalls, target_landfalls
 
     def maybe_prepare_composite_kwargs(
