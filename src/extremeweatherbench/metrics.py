@@ -1650,6 +1650,8 @@ class LandfallMetric(CompositeMetric):
         forecast_variable: Optional[str | derived.DerivedVariable] = None,
         target_variable: Optional[str | derived.DerivedVariable] = None,
         metrics: Optional[list[Type["LandfallMetric"]]] = None,
+        min_target_separation_hours: float = 0.0,
+        max_time_mismatch_hours: Optional[float] = None,
         *args,
         **kwargs,
     ):
@@ -1676,6 +1678,15 @@ class LandfallMetric(CompositeMetric):
             forecast_variable: The forecast variable to use. Defaults to None.
             target_variable: The target variable to use. Defaults to None.
             metrics: A list of metrics to use as a composite. Defaults to None.
+            min_target_separation_hours: If > 0, pre-filter observed target landfalls
+                so that consecutive retained landfalls are separated by at least this
+                many hours. Removes rapid sequential island/peninsula crossings that
+                models cannot resolve individually. Only applies when approach="next".
+            max_time_mismatch_hours: If set, discard matched forecast–target pairs
+                where the model's predicted landfall time differs from the matched
+                target landfall time by more than this many hours. Prevents pairing
+                a forecast that skips a minor first landfall with the wrong target.
+                Only applies when approach="next" and forecast valid_time is available.
         """
         super().__init__(
             name=name,
@@ -1687,6 +1698,8 @@ class LandfallMetric(CompositeMetric):
         )
         self.approach = approach
         self.exclude_post_landfall = exclude_post_landfall
+        self.min_target_separation_hours = min_target_separation_hours
+        self.max_time_mismatch_hours = max_time_mismatch_hours
         self.metrics = metrics or []
 
         # If metrics provided, instantiate them
@@ -1717,6 +1730,11 @@ class LandfallMetric(CompositeMetric):
             **kwargs: Additional keyword arguments
         """
         return self.compute_metric(forecast, target, **kwargs)
+
+    def _nan_landfall_pair(self):
+        """Return a (NaN, NaN) forecast/target landfall pair."""
+        a = utils._create_nan_dataarray(self.preserve_dims)
+        return (a, a.copy())
 
     def maybe_compute_landfalls(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
@@ -1749,49 +1767,88 @@ class LandfallMetric(CompositeMetric):
         # For "next" approach: get all target landfalls, then filter
         return_next_landfall = self.approach == "next"
 
-        # Get first forecast landfall per init_time
         forecast_landfalls = calc.find_landfalls(forecast)
 
-        # find_landfalls never returns None; an empty array means no landfalls.
         if len(forecast_landfalls) == 0:
-            nan_landfalls = utils._create_nan_dataarray(self.preserve_dims)
-            return (nan_landfalls, nan_landfalls.copy())
+            return self._nan_landfall_pair()
 
-        # Get all target landfalls
         target_landfalls = calc.find_landfalls(target)
 
         if len(target_landfalls) == 0:
-            nan_landfalls = utils._create_nan_dataarray(self.preserve_dims)
-            return (nan_landfalls, nan_landfalls.copy())
+            return self._nan_landfall_pair()
 
         if return_next_landfall:
             max_lead = None
+            track_starts = None
             if "lead_time" in forecast.dims:
                 max_lead = forecast.lead_time.values.max()
                 if not isinstance(max_lead, np.timedelta64):
                     max_lead = np.timedelta64(int(max_lead), "h")
+                track_starts = calc.get_forecast_track_start_times(forecast)
             target_landfalls = calc.find_next_landfall_for_init_time(
                 forecast_landfalls,
                 target_landfalls,
                 max_lead_time=max_lead,
+                min_target_separation_hours=self.min_target_separation_hours,
+                max_time_mismatch_hours=self.max_time_mismatch_hours,
+                track_start_times=track_starts,
             )
             if len(target_landfalls) == 0:
-                nan_landfalls = utils._create_nan_dataarray(self.preserve_dims)
-                return (nan_landfalls, nan_landfalls.copy())
-        else:
-            # First approach: target is (landfall,) with one observed event.
-            # Drop forecast init_times at or after the landfall to prevent
-            # data leakage, then broadcast the single target to (init_time,)
-            # so sub-metrics receive consistent arrays.
-            first_valid_time = (
-                target_landfalls.coords["valid_time"].isel(landfall=0).values
+                return self._nan_landfall_pair()
+            # Reduce to first forecast landfall per init_time so
+            # downstream metrics compare one-to-one instead of
+            # averaging across multiple forecast landfalls.
+            forecast_landfalls = calc.select_first_forecast_landfall_per_init(
+                forecast_landfalls
             )
-            forecast_landfalls = forecast_landfalls.where(
-                forecast_landfalls.init_time < first_valid_time,
-                drop=True,
+        else:
+            # "first" approach: compare to the earliest IBTrACS
+            # landfall that the forecast can actually cover.
+            # If the first landfall has no forecast data (e.g.
+            # tracker misses a Cuba crossing), fall back to the
+            # next landfall with coverage.
+            reduced_forecast = calc.select_first_forecast_landfall_per_init(
+                forecast_landfalls
+            )
+            track_starts = None
+            if "lead_time" in forecast.dims:
+                track_starts = calc.get_forecast_track_start_times(forecast)
+
+            n_targets = target_landfalls.sizes.get("landfall", 1)
+            selected_idx = None
+            for lf_idx in range(n_targets):
+                candidate_vt = (
+                    target_landfalls.coords["valid_time"].isel(landfall=lf_idx).values
+                )
+                candidate_fc = reduced_forecast.where(
+                    reduced_forecast.init_time < candidate_vt,
+                    drop=True,
+                )
+                if len(candidate_fc) == 0:
+                    continue
+                if track_starts is not None:
+                    candidate_fc = calc.filter_inits_by_track_start(
+                        candidate_fc,
+                        candidate_vt,
+                        track_starts,
+                    )
+                if len(candidate_fc) > 0:
+                    selected_idx = lf_idx
+                    forecast_landfalls = candidate_fc
+                    break
+
+            if selected_idx is None:
+                return self._nan_landfall_pair()
+
+            # slice keeps the landfall dim (length 1) so
+            # broadcast_first_target_to_init_times can
+            # .isel(landfall=0) on it.
+            selected_target = target_landfalls.isel(
+                landfall=slice(selected_idx, selected_idx + 1)
             )
             target_landfalls = calc.broadcast_first_target_to_init_times(
-                forecast_landfalls.init_time, target_landfalls
+                forecast_landfalls.init_time,
+                selected_target,
             )
         return forecast_landfalls, target_landfalls
 
@@ -1823,6 +1880,49 @@ class LandfallMetric(CompositeMetric):
         kwargs["preserve_dims"] = self.preserve_dims
 
         return kwargs
+
+    @staticmethod
+    def _attach_landfall_metadata(
+        result: xr.DataArray,
+        forecast_landfall: xr.DataArray,
+        target_landfall: xr.DataArray,
+    ) -> xr.DataArray:
+        """Attach forecast/target landfall coords to a result.
+
+        Adds latitude, longitude, and valid_time for both the
+        forecast and target landfalls as coordinates on the
+        result DataArray. These become extra columns when
+        converted to a DataFrame in the evaluation pipeline.
+        """
+        if "init_time" not in result.dims:
+            return result
+        coord_map = {}
+        for prefix, lf in (
+            ("forecast_landfall", forecast_landfall),
+            ("target_landfall", target_landfall),
+        ):
+            for coord in ("latitude", "longitude", "valid_time"):
+                if coord in lf.coords:
+                    vals = lf.coords[coord].values
+                    if vals.ndim == 0:
+                        vals = np.full(
+                            len(result.init_time),
+                            vals,
+                        )
+                    coord_map[f"{prefix}_{coord}"] = (
+                        "init_time",
+                        vals,
+                    )
+        return result.assign_coords(coord_map)
+
+    @staticmethod
+    def _reduce_landfall_dim(
+        result: xr.DataArray,
+    ) -> xr.DataArray:
+        """Mean over landfall dim if present."""
+        if "landfall" in result.dims:
+            return result.mean(dim="landfall")
+        return result
 
     def _compute_metric(
         self,
@@ -2010,7 +2110,8 @@ class LandfallDisplacement(LandfallMetric):
         )
         if not isinstance(distances, xr.DataArray):
             raise TypeError("haversine_distance returned a scalar; expected DataArray")
-        return distances.where(forecast_landfall.notnull()).mean(dim="landfall")
+        result = distances.where(forecast_landfall.notnull())
+        return self._reduce_landfall_dim(result)
 
     def _compute_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
@@ -2023,10 +2124,15 @@ class LandfallDisplacement(LandfallMetric):
             forecast_landfall
         ) or not utils.is_valid_landfall(target_landfall):
             return utils._create_nan_dataarray(self.preserve_dims)
-        return self.calculate_displacement(
+        result = self.calculate_displacement(
             forecast_landfall,
             target_landfall,
             units=self.units,
+        )
+        return self._attach_landfall_metadata(
+            result,
+            forecast_landfall,
+            target_landfall,
         )
 
 
@@ -2082,7 +2188,8 @@ class LandfallTimeMeanError(LandfallMetric):
         time_diffs = (
             forecast_landfall.valid_time - target_landfall.valid_time
         ) / np.timedelta64(1, "h")
-        return time_diffs.where(forecast_landfall.notnull()).mean(dim="landfall")
+        result = time_diffs.where(forecast_landfall.notnull())
+        return self._reduce_landfall_dim(result)
 
     def _compute_metric(
         self, forecast: xr.DataArray, target: xr.DataArray, **kwargs: Any
@@ -2095,7 +2202,15 @@ class LandfallTimeMeanError(LandfallMetric):
             forecast_landfall
         ) or not utils.is_valid_landfall(target_landfall):
             return utils._create_nan_dataarray(self.preserve_dims)
-        return self.calculate_time_difference(forecast_landfall, target_landfall)
+        result = self.calculate_time_difference(
+            forecast_landfall,
+            target_landfall,
+        )
+        return self._attach_landfall_metadata(
+            result,
+            forecast_landfall,
+            target_landfall,
+        )
 
 
 class LandfallIntensityMeanAbsoluteError(LandfallMetric, MeanAbsoluteError):
@@ -2137,8 +2252,13 @@ class LandfallIntensityMeanAbsoluteError(LandfallMetric, MeanAbsoluteError):
         ) or not utils.is_valid_landfall(target_landfall):
             return utils._create_nan_dataarray(self.preserve_dims)
 
-        return (
-            np.abs(forecast_landfall - target_landfall)
-            .where(forecast_landfall.notnull())
-            .mean(dim="landfall")
+        result = self._reduce_landfall_dim(
+            np.abs(forecast_landfall - target_landfall).where(
+                forecast_landfall.notnull()
+            )
+        )
+        return self._attach_landfall_metadata(
+            result,
+            forecast_landfall,
+            target_landfall,
         )

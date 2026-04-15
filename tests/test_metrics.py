@@ -2350,6 +2350,542 @@ class TestLandfallMetrics:
             # Allow some tolerance for floating point calculations
             assert 39.0 < result.values[0] < 41.0
 
+    def test_multi_landfall_displacement_uses_first_per_init(self):
+        """Verify displacement uses only the first forecast landfall per
+        init_time, not an average across multiple forecast landfalls.
+
+        Mimics TC Yagi's pattern: Philippines landfall (~16N, 120E) then
+        Vietnam landfall (~20N, 106E). The target is the Philippines
+        landfall. Without the fix, the displacement would be inflated
+        by averaging in the Vietnam forecast landfall distance (~1500 km).
+        With the fix, only the first (Philippines) forecast landfall
+        is used, giving a small displacement (~15 km).
+        """
+        target = xr.Dataset(
+            {
+                "latitude": (["valid_time"], [16.0]),
+                "longitude": (["valid_time"], [120.0]),
+                "surface_wind_speed": (["valid_time"], [55.0]),
+            },
+            coords={
+                "valid_time": [pd.Timestamp("2024-09-01 12:00")],
+            },
+        )
+
+        forecast = xr.Dataset(
+            {
+                "latitude": (
+                    ["lead_time", "valid_time"],
+                    [[16.0]],
+                ),
+                "longitude": (
+                    ["lead_time", "valid_time"],
+                    [[120.0]],
+                ),
+                "surface_wind_speed": (
+                    ["lead_time", "valid_time"],
+                    [[52.0]],
+                ),
+            },
+            coords={
+                "lead_time": [24],
+                "valid_time": [
+                    pd.Timestamp("2024-09-01 12:00"),
+                ],
+            },
+        )
+
+        init_ts = pd.Timestamp("2024-08-31 12:00")
+
+        # Target: single observed landfall near Philippines
+        mock_target_landfall = xr.DataArray(
+            [55.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0],
+                "latitude": ("landfall", [16.0]),
+                "longitude": ("landfall", [120.0]),
+                "valid_time": (
+                    "landfall",
+                    [pd.Timestamp("2024-09-01 12:00")],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Forecast: TWO landfalls for the same init_time.
+        # Landfall 0 = Philippines (16.1N, 120.1E, close)
+        # Landfall 1 = Vietnam (20N, 106E, ~1500 km away)
+        mock_forecast_landfall = xr.DataArray(
+            [[52.0, 45.0]],
+            dims=["init_time", "landfall"],
+            coords={
+                "init_time": [init_ts],
+                "landfall": [0, 1],
+                "latitude": (
+                    ["init_time", "landfall"],
+                    [[16.1, 20.0]],
+                ),
+                "longitude": (
+                    ["init_time", "landfall"],
+                    [[120.1, 106.0]],
+                ),
+                "valid_time": (
+                    ["init_time", "landfall"],
+                    [
+                        [
+                            pd.Timestamp("2024-09-01 12:00"),
+                            pd.Timestamp("2024-09-07 06:00"),
+                        ]
+                    ],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+
+            def side_effect(track_data, **kw):
+                if "lead_time" not in track_data.dims:
+                    return mock_target_landfall
+                return mock_forecast_landfall
+
+            mock_find.side_effect = side_effect
+
+            metric = metrics.LandfallDisplacement(
+                approach="first",
+            )
+            result = metric._compute_metric(
+                forecast["surface_wind_speed"],
+                target["surface_wind_speed"],
+            )
+
+            assert isinstance(result, xr.DataArray)
+            assert result.dims == ("init_time",)
+            displacement_km = result.values[0]
+            # First forecast landfall is ~15 km from target.
+            # If the bug were present (averaging both landfalls),
+            # the displacement would be ~750 km.
+            assert displacement_km < 50, (
+                f"Displacement {displacement_km:.1f} km is too large; "
+                f"multi-landfall averaging bug is likely present"
+            )
+
+            # Verify landfall metadata is attached
+            expected_coords = [
+                "forecast_landfall_latitude",
+                "forecast_landfall_longitude",
+                "forecast_landfall_valid_time",
+                "target_landfall_latitude",
+                "target_landfall_longitude",
+                "target_landfall_valid_time",
+            ]
+            for coord_name in expected_coords:
+                assert coord_name in result.coords, (
+                    f"Missing metadata coord: {coord_name}"
+                )
+            assert abs(float(result.forecast_landfall_latitude) - 16.1) < 0.01
+            assert abs(float(result.target_landfall_latitude) - 16.0) < 0.01
+
+    def test_first_approach_skips_init_with_late_track_start(self):
+        """Verify approach='first' filters out init_times whose
+        forecast track starts after the first target landfall.
+
+        Mimics TC Debby (case 154): the target's first landfall is
+        Cuba at Aug 3 17Z, but the forecast track for init Aug 2
+        12Z doesn't start until Aug 3 18Z (tracker doesn't detect
+        the TC until then). That init_time should be excluded
+        because the forecast can't predict the Cuba landfall.
+
+        The forecast grid has two init_times sharing the same
+        valid_time column (Aug 3 18Z): init Aug 3 18Z at lt=0
+        and init Aug 2 12Z at lt=30. This tests that the
+        track-start detection scans all cells in the
+        (lead_time, valid_time) grid, not just the first
+        non-NaN per column.
+        """
+        forecast = xr.Dataset(
+            {
+                "surface_wind_speed": (
+                    ["lead_time", "valid_time"],
+                    [
+                        [np.nan, 40.0],
+                        [np.nan, 35.0],
+                    ],
+                ),
+                "latitude": (
+                    ["lead_time", "valid_time"],
+                    [
+                        [np.nan, 25.0],
+                        [np.nan, 29.0],
+                    ],
+                ),
+                "longitude": (
+                    ["lead_time", "valid_time"],
+                    [
+                        [np.nan, -80.0],
+                        [np.nan, -83.0],
+                    ],
+                ),
+            },
+            coords={
+                "lead_time": [0, 30],
+                "valid_time": [
+                    pd.Timestamp("2024-08-02 12:00"),
+                    pd.Timestamp("2024-08-03 18:00"),
+                ],
+            },
+        )
+
+        target = xr.Dataset(
+            {
+                "surface_wind_speed": (["valid_time"], [55.0]),
+                "latitude": (["valid_time"], [22.0]),
+                "longitude": (["valid_time"], [-79.5]),
+            },
+            coords={
+                "valid_time": [
+                    pd.Timestamp("2024-08-03 17:00"),
+                ],
+            },
+        )
+
+        # Target: Cuba landfall at Aug 3 17Z
+        mock_target_landfall = xr.DataArray(
+            [55.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0],
+                "latitude": ("landfall", [22.0]),
+                "longitude": ("landfall", [-79.5]),
+                "valid_time": (
+                    "landfall",
+                    [pd.Timestamp("2024-08-03 17:00")],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        init_ts = pd.Timestamp("2024-08-02 12:00")
+
+        # Forecast landfall: Florida at Aug 5
+        # (only landfall the tracker can see)
+        mock_forecast_landfall = xr.DataArray(
+            [[35.0]],
+            dims=["init_time", "landfall"],
+            coords={
+                "init_time": [init_ts],
+                "landfall": [0],
+                "latitude": (
+                    ["init_time", "landfall"],
+                    [[29.0]],
+                ),
+                "longitude": (
+                    ["init_time", "landfall"],
+                    [[-83.0]],
+                ),
+                "valid_time": (
+                    ["init_time", "landfall"],
+                    [[pd.Timestamp("2024-08-05 00:00")]],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+
+            def side_effect(track_data, **kw):
+                if "lead_time" not in track_data.dims:
+                    return mock_target_landfall
+                return mock_forecast_landfall
+
+            mock_find.side_effect = side_effect
+
+            metric = metrics.LandfallDisplacement(
+                approach="first",
+            )
+            result = metric._compute_metric(
+                forecast["surface_wind_speed"],
+                target["surface_wind_speed"],
+            )
+
+            # The init_time should be filtered out because
+            # the track starts at Aug 3 18Z, AFTER the Cuba
+            # landfall at Aug 3 17Z. Result should be NaN
+            # (no valid init_times remain).
+            assert np.isnan(result.values).all(), (
+                "Init with track starting after target "
+                "landfall should have been filtered out"
+            )
+
+    def test_first_approach_falls_back_to_next_target(self):
+        """When the first IBTrACS landfall has no forecast
+        coverage, fall back to the next one that does.
+
+        Mimics TC Debby: Cuba landfall at Aug 3 17Z has no
+        forecast data (track starts Aug 3 18Z). Florida
+        landfall at Aug 5 15Z does. The metric should compare
+        against the Florida landfall instead of returning NaN.
+        """
+        forecast = xr.Dataset(
+            {
+                "surface_wind_speed": (
+                    ["lead_time", "valid_time"],
+                    [
+                        [np.nan, 40.0],
+                        [np.nan, 35.0],
+                    ],
+                ),
+                "latitude": (
+                    ["lead_time", "valid_time"],
+                    [
+                        [np.nan, 25.0],
+                        [np.nan, 29.0],
+                    ],
+                ),
+                "longitude": (
+                    ["lead_time", "valid_time"],
+                    [
+                        [np.nan, -80.0],
+                        [np.nan, -83.0],
+                    ],
+                ),
+            },
+            coords={
+                "lead_time": [0, 30],
+                "valid_time": [
+                    pd.Timestamp("2024-08-02 12:00"),
+                    pd.Timestamp("2024-08-03 18:00"),
+                ],
+            },
+        )
+
+        target = xr.Dataset(
+            {
+                "surface_wind_speed": (
+                    ["valid_time"],
+                    [55.0, 50.0],
+                ),
+                "latitude": (
+                    ["valid_time"],
+                    [22.0, 29.5],
+                ),
+                "longitude": (
+                    ["valid_time"],
+                    [-79.5, -83.5],
+                ),
+            },
+            coords={
+                "valid_time": [
+                    pd.Timestamp("2024-08-03 17:00"),
+                    pd.Timestamp("2024-08-05 15:00"),
+                ],
+            },
+        )
+
+        # Two target landfalls: Cuba (Aug 3 17Z), Florida
+        # (Aug 5 15Z)
+        mock_target_landfall = xr.DataArray(
+            [55.0, 50.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1],
+                "latitude": ("landfall", [22.0, 29.5]),
+                "longitude": (
+                    "landfall",
+                    [-79.5, -83.5],
+                ),
+                "valid_time": (
+                    "landfall",
+                    [
+                        pd.Timestamp("2024-08-03 17:00"),
+                        pd.Timestamp("2024-08-05 15:00"),
+                    ],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        init_ts = pd.Timestamp("2024-08-02 12:00")
+
+        mock_forecast_landfall = xr.DataArray(
+            [[35.0]],
+            dims=["init_time", "landfall"],
+            coords={
+                "init_time": [init_ts],
+                "landfall": [0],
+                "latitude": (
+                    ["init_time", "landfall"],
+                    [[29.0]],
+                ),
+                "longitude": (
+                    ["init_time", "landfall"],
+                    [[-83.0]],
+                ),
+                "valid_time": (
+                    ["init_time", "landfall"],
+                    [[pd.Timestamp("2024-08-05 00:00")]],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+
+            def side_effect(track_data, **kw):
+                if "lead_time" not in track_data.dims:
+                    return mock_target_landfall
+                return mock_forecast_landfall
+
+            mock_find.side_effect = side_effect
+
+            metric = metrics.LandfallDisplacement(
+                approach="first",
+            )
+            result = metric._compute_metric(
+                forecast["surface_wind_speed"],
+                target["surface_wind_speed"],
+            )
+
+            assert isinstance(result, xr.DataArray)
+            assert not np.isnan(result.values).all(), (
+                "Should fall back to Florida landfall, not return NaN"
+            )
+            # Target is Florida (29.5N, -83.5W),
+            # forecast is (29.0N, -83.0W) — close match
+            assert result.values[0] < 100, (
+                f"Displacement {result.values[0]:.1f} km should be small (FL vs FL)"
+            )
+            # Verify metadata uses the Florida target
+            assert abs(float(result.target_landfall_latitude) - 29.5) < 0.01
+
+    def test_multi_landfall_displacement_next_approach(self):
+        """Verify approach='next' also uses first forecast landfall
+        per init_time after matching to the correct target.
+
+        Two target landfalls (Philippines, Vietnam) and two forecast
+        landfalls per init_time. find_next_landfall_for_init_time
+        runs with real logic to match by closest valid_time. Then
+        select_first_forecast_landfall_per_init keeps only the
+        earliest forecast landfall, preventing averaging inflation.
+        """
+        target = xr.Dataset(
+            {
+                "latitude": (["valid_time"], [16.0]),
+                "longitude": (["valid_time"], [120.0]),
+                "surface_wind_speed": (["valid_time"], [55.0]),
+            },
+            coords={
+                "valid_time": [pd.Timestamp("2024-09-01 12:00")],
+            },
+        )
+
+        forecast = xr.Dataset(
+            {
+                "latitude": (
+                    ["lead_time", "valid_time"],
+                    [[16.0]],
+                ),
+                "longitude": (
+                    ["lead_time", "valid_time"],
+                    [[120.0]],
+                ),
+                "surface_wind_speed": (
+                    ["lead_time", "valid_time"],
+                    [[52.0]],
+                ),
+            },
+            coords={
+                "lead_time": [24],
+                "valid_time": [
+                    pd.Timestamp("2024-09-01 12:00"),
+                ],
+            },
+        )
+
+        init_ts = pd.Timestamp("2024-08-31 12:00")
+
+        # Target: TWO observed landfalls (Philippines then Vietnam)
+        mock_target_landfall = xr.DataArray(
+            [55.0, 48.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1],
+                "latitude": ("landfall", [16.0, 20.0]),
+                "longitude": ("landfall", [120.0, 106.0]),
+                "valid_time": (
+                    "landfall",
+                    [
+                        pd.Timestamp("2024-09-01 12:00"),
+                        pd.Timestamp("2024-09-07 06:00"),
+                    ],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Forecast: TWO landfalls for the same init_time.
+        # Landfall 0 = Philippines (16.1N, 120.1E) at Sep 1
+        # Landfall 1 = Vietnam (20N, 106E) at Sep 7
+        mock_forecast_landfall = xr.DataArray(
+            [[52.0, 45.0]],
+            dims=["init_time", "landfall"],
+            coords={
+                "init_time": [init_ts],
+                "landfall": [0, 1],
+                "latitude": (
+                    ["init_time", "landfall"],
+                    [[16.1, 20.0]],
+                ),
+                "longitude": (
+                    ["init_time", "landfall"],
+                    [[120.1, 106.0]],
+                ),
+                "valid_time": (
+                    ["init_time", "landfall"],
+                    [
+                        [
+                            pd.Timestamp("2024-09-01 12:00"),
+                            pd.Timestamp("2024-09-07 06:00"),
+                        ]
+                    ],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+
+            def side_effect(track_data, **kw):
+                if "lead_time" not in track_data.dims:
+                    return mock_target_landfall
+                return mock_forecast_landfall
+
+            mock_find.side_effect = side_effect
+
+            metric = metrics.LandfallDisplacement(
+                approach="next",
+            )
+            result = metric._compute_metric(
+                forecast["surface_wind_speed"],
+                target["surface_wind_speed"],
+            )
+
+            assert isinstance(result, xr.DataArray)
+            assert result.dims == ("init_time",)
+            displacement_km = result.values[0]
+            # find_next_landfall_for_init_time matches the
+            # forecast (Philippines, Sep 1) to the target
+            # (Philippines, Sep 1) by closest valid_time.
+            # select_first_forecast_landfall_per_init then
+            # keeps only the first forecast landfall (~15 km).
+            # Without the fix, averaging would give ~750 km.
+            assert displacement_km < 50, (
+                f"Displacement {displacement_km:.1f} km is too "
+                f"large; multi-landfall averaging bug is "
+                f"likely present (next approach)"
+            )
+
     def test_landfall_intensity_mae_with_known_values(self):
         """Test LandfallIntensityMeanAbsoluteError with manually calculated expected
         values."""
