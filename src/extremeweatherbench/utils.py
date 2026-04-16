@@ -32,6 +32,15 @@ operators = {
 }
 
 
+def _empty_init_time_array() -> xr.DataArray:
+    """Empty float DataArray with an init_time dimension."""
+    return xr.DataArray(
+        np.array([], dtype=float),
+        dims=["init_time"],
+        coords={"init_time": np.array([], dtype="datetime64[ns]")},
+    )
+
+
 def maybe_get_operator(
     operator_method: Union[Literal[">", ">=", "<", "<=", "==", "!="], Callable],
 ) -> Callable:
