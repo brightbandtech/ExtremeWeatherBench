@@ -162,12 +162,16 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 Defaults to 48.0.
             use_contour_validation: Whether to apply closed contour validation.
                 Defaults to True.
-            min_track_timesteps: Minimum number of timesteps required for a valid track.
-                Defaults to 10.
+            timestep_count_wind_minimum: Minimum number of lead times where
+                the neighbourhood peak wind (max within
+                wind_search_radius_degrees) is >= 10 m/s for a track to be
+                retained. Defaults to 10.
             latitude_max_degrees: Maximum latitude in degrees for TC detection.
                 Defaults to 50.0.
-            surface_pressure_threshold: Surface pressure threshold in Pa.
-                Defaults to 100500.0.
+            surface_pressure_threshold: Maximum SLP (Pa) a candidate grid
+                point may have to be considered for peak detection. Defaults
+                to 101000.0 Pa, so only below-average pressure cells are
+                examined.
             orography: Optional orography DataArray for terrain filtering.
                 Defaults to None.
             max_gc_distance_slp_contour_degrees: Maximum great circle distance for
@@ -177,6 +181,9 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 degrees.
             orography_filter_threshold: Orography filter threshold in meters.
                 Defaults to 150.0.
+            wind_search_radius_degrees: GCD radius in degrees for
+                neighbourhood wind sampling, per TempestExtremes 2.1.
+                Converted to grid points at runtime. Defaults to 2.0.
         """
         super().__init__(output_variables=output_variables, name=name)
         self.slp_contour_magnitude = slp_contour_magnitude

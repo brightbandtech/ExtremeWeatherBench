@@ -511,14 +511,20 @@ def _filter_minor_landfalls(
     """
     if len(target_landfalls) <= 1:
         return target_landfalls
-    times = target_landfalls.coords["valid_time"].values.astype("datetime64[ns]")
+    ns = (
+        target_landfalls.coords["valid_time"]
+        .values.astype("datetime64[ns]")
+        .astype(np.int64)
+    )
+    min_gap_ns = int(min_separation_hours * _ns_per_hour)
+    # Greedy reset-anchor walk: each kept landfall becomes the new
+    # reference, so this cannot be a plain ``np.diff`` threshold.
     keep_idx = [0]
-    last_kept = times[0]
-    for i in range(1, len(times)):
-        gap_h = (np.int64(times[i]) - np.int64(last_kept)) / _ns_per_hour
-        if gap_h >= min_separation_hours:
+    last_ns = ns[0]
+    for i in range(1, len(ns)):
+        if ns[i] - last_ns >= min_gap_ns:
             keep_idx.append(i)
-            last_kept = times[i]
+            last_ns = ns[i]
     return target_landfalls.isel(landfall=keep_idx)
 
 
@@ -1058,16 +1064,24 @@ def filter_inits_by_track_start(
     return forecast_landfalls
 
 
-def _can_filter_landfall_pair(
+def _landfall_pair_time_mismatch(
     forecast_landfalls: xr.DataArray,
     target_landfalls: xr.DataArray,
-) -> bool:
-    """True if both arrays have init_time dim and valid_time coord."""
-    return (
+) -> Optional[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Return ``(fc_vt, tgt_vt, |fc_vt - tgt_vt|)`` as numpy arrays.
+
+    Returns ``None`` if either array lacks the ``init_time`` dim or
+    the ``valid_time`` coord needed for pairwise timing filters.
+    """
+    if not (
         "init_time" in forecast_landfalls.dims
         and "valid_time" in forecast_landfalls.coords
         and "valid_time" in target_landfalls.coords
-    )
+    ):
+        return None
+    fc_vt = forecast_landfalls.coords["valid_time"].values
+    tgt_vt = target_landfalls.coords["valid_time"].values
+    return fc_vt, tgt_vt, np.abs(fc_vt - tgt_vt)
 
 
 def _apply_landfall_keep_mask(
@@ -1111,13 +1125,11 @@ def filter_by_landfall_time_window(
     Returns:
         Filtered (forecast, target) pair. May be empty.
     """
-    if not _can_filter_landfall_pair(forecast_landfalls, target_landfalls):
+    pair = _landfall_pair_time_mismatch(forecast_landfalls, target_landfalls)
+    if pair is None:
         return forecast_landfalls, target_landfalls
+    _fc_vt, _tgt_vt, mismatch = pair
 
-    fc_vt = forecast_landfalls.coords["valid_time"].values
-    tgt_vt = target_landfalls.coords["valid_time"].values
-
-    mismatch = np.abs(fc_vt - tgt_vt)
     threshold = np.timedelta64(int(window_hours * 3600), "s")
 
     return _apply_landfall_keep_mask(
@@ -1150,16 +1162,13 @@ def filter_by_landfall_time_tolerance(
     Returns:
         Filtered (forecast, target) pair. May be empty.
     """
-    if not _can_filter_landfall_pair(forecast_landfalls, target_landfalls):
+    pair = _landfall_pair_time_mismatch(forecast_landfalls, target_landfalls)
+    if pair is None:
         return forecast_landfalls, target_landfalls
+    _fc_vt, tgt_vt, mismatch = pair
 
-    fc_vt = forecast_landfalls.coords["valid_time"].values
-    tgt_vt = target_landfalls.coords["valid_time"].values
     init_vals = forecast_landfalls.coords["init_time"].values
-
-    mismatch = np.abs(fc_vt - tgt_vt)
-    lead = np.abs(tgt_vt - init_vals)
-    threshold = tolerance_fraction * lead
+    threshold = tolerance_fraction * np.abs(tgt_vt - init_vals)
 
     return _apply_landfall_keep_mask(
         forecast_landfalls, target_landfalls, mismatch <= threshold

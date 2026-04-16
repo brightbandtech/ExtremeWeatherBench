@@ -1723,7 +1723,7 @@ class LandfallMetric(CompositeMetric):
         """
         return self.compute_metric(forecast, target, **kwargs)
 
-    def _nan_landfall_pair(self):
+    def _nan_landfall_pair(self) -> tuple[xr.DataArray, xr.DataArray]:
         """Return a (NaN, NaN) forecast/target landfall pair."""
         a = utils._create_nan_dataarray(self.preserve_dims)
         return (a, a.copy())
@@ -1795,10 +1795,7 @@ class LandfallMetric(CompositeMetric):
             forecast_landfalls = calc.select_first_forecast_landfall_per_init(
                 forecast_landfalls
             )
-            common = np.intersect1d(
-                forecast_landfalls.init_time.values,
-                target_landfalls.init_time.values,
-            )
+            common = utils.find_common_init_times(forecast_landfalls, target_landfalls)
             if len(common) == 0:
                 return self._nan_landfall_pair()
             forecast_landfalls = forecast_landfalls.sel(init_time=common)

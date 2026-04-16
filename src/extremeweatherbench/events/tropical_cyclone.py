@@ -117,12 +117,13 @@ def generate_tc_tracks_by_init_time(
         max_temporal_hours: Maximum temporal window from init_time in hours. Defaults
             to 48.0 hours
         use_contour_validation: Whether to use contour validation. Defaults to True
-        min_track_timesteps: Minimum consecutive lead times for valid tracks. Defaults
-            to 10
+        timestep_count_wind_minimum: Minimum number of lead times where the
+            neighbourhood peak wind speed (max within wind_search_radius_degrees)
+            is >= 10 m/s for a track to be considered valid. Defaults to 10
         latitude_max_degrees: Maximum latitude for valid tracks in degrees. Defaults
             to 50.0 degrees
         surface_pressure_threshold: Maximum surface pressure threshold for valid peaks
-            in Pa. Defaults to 100500.0 Pa
+            in Pa. Defaults to 101000.0 Pa
         orography: Orography dataarray in m. Defaults to None
         max_gc_distance_slp_contour_degrees: Max great circle distance for SLP contour
             in degrees. Defaults to 5.5 degrees
@@ -130,6 +131,10 @@ def generate_tc_tracks_by_init_time(
             in degrees. Defaults to 6.5 degrees
         orography_filter_threshold: Threshold for the orography filter's max height
             in m. Defaults to 150.0 m
+        wind_search_radius_degrees: GCD radius in degrees used to sample the
+            neighbourhood maximum wind speed around each detected peak,
+            following TempestExtremes 2.1. Converted to grid points at
+            runtime. Defaults to 2.0 degrees
 
     Returns:
         xarray Dataset with detected tropical cyclone tracks
@@ -755,8 +760,8 @@ def _find_peaks_for_time_slice(
     current_valid_time: pd.Timestamp,
     tc_track_data_df: pd.DataFrame,
     min_distance_between_peaks: int,
-    lat_coords: Optional[npt.NDArray] = None,
-    lon_coords: Optional[npt.NDArray] = None,
+    lat_coords: npt.NDArray,
+    lon_coords: npt.NDArray,
     max_spatial_distance_degrees: float = 5.0,
     max_temporal_hours: float = 48.0,
     slp_contour_magnitude: float = 200.0,
@@ -780,8 +785,8 @@ def _find_peaks_for_time_slice(
         current_valid_time: Current valid time being processed
         tc_track_data_df: Tropical cyclone track data
         min_distance_between_peaks: Minimum distance between peaks in grid points
-        lat_coords: Latitude coordinates in degrees. Defaults to None
-        lon_coords: Longitude coordinates in degrees. Defaults to None
+        lat_coords: 1-D latitude coordinate array in degrees
+        lon_coords: 1-D longitude coordinate array in degrees
         max_spatial_distance_degrees: Max spatial distance in degrees. Defaults to
             5.0 degrees
         max_temporal_hours: Max temporal buffer for genesis in hours. Defaults to
@@ -791,7 +796,7 @@ def _find_peaks_for_time_slice(
         use_contour_validation: Whether to use contour validation. Defaults to True
         is_first_timestep: If True, applies temporal buffer. Defaults to False
         surface_pressure_threshold: Maximum surface pressure threshold for valid peaks
-            in Pa. Defaults to 100500.0 Pa
+            in Pa. Defaults to 101000.0 Pa
         latitude_max_degrees: Maximum latitude for valid tracks in degrees. Defaults
             to 50.0 degrees
         max_gc_distance_slp_contour_degrees: Max great circle distance for SLP contour
@@ -828,10 +833,6 @@ def _find_peaks_for_time_slice(
     low_pressure_mask = slp_slice < surface_pressure_threshold
 
     if not np.any(low_pressure_mask):
-        return np.array([])
-
-    # OPTIMIZED: Vectorized spatial masking
-    if lat_coords is None or lon_coords is None:
         return np.array([])
 
     spatial_mask = _create_spatial_mask(
