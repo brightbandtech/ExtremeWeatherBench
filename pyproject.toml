@@ -51,6 +51,7 @@ dependencies = [
     "icechunk>=1.1.14",
     "dask[complete]>=2025.1.0",
     "distributed>=2025.1.0",
+    "lazy-loader>=0.4",
 ]
 
 [project.optional-dependencies]
