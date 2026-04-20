@@ -403,7 +403,7 @@ def plot_consecutive_map(
     )
     cbar = fig.colorbar(im, cax=cax)
     cbar.set_ticks(range(MIN_CONSECUTIVE_DAYS, vmax + 1))
-    cbar.set_label("Consecutive Days", fontsize=12, labelpad=6)
+    cbar.set_label("Consecutive Days", fontsize=12, labelpad=12, rotation=270)
     cbar.ax.yaxis.set_label_position("left")
 
     ax.set_title(title, loc="left", fontsize=13)
