@@ -1398,6 +1398,7 @@ def include_temps_with_events(
         The same event list with ``mean_temp_c`` and ``min_temp_c``
         added (NaN when no active points exist).
     """
+
     def _idx(arr: np.ndarray, val: float) -> int:
         return int(np.argmin(np.abs(arr - val)))
 
