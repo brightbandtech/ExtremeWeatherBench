@@ -7,7 +7,7 @@
     parameters:
       latitude_min: 39.0
       latitude_max: 65.0
-      longitude_min: -136.75
+      longitude_min: -137.75
       longitude_max: -105.75
   event_type: heat_wave
 - case_id_number: 2
@@ -29,10 +29,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 31.5
+      latitude_min: 29.5
       latitude_max: 42.5
       longitude_min: -123.75
-      longitude_max: -104.75
+      longitude_max: -103.75
   event_type: heat_wave
 - case_id_number: 4
   title: 2022 Texas
@@ -103,7 +103,7 @@
     parameters:
       latitude_min: 39.5
       latitude_max: 52.5
-      longitude_min: 3.0
+      longitude_min: 0.0
       longitude_max: 17.0
   event_type: heat_wave
 - case_id_number: 10
@@ -113,7 +113,7 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 35.0
+      latitude_min: 36.0
       latitude_max: 50.0
       longitude_min: -10.25
       longitude_max: 18.75
@@ -127,7 +127,7 @@
     parameters:
       latitude_min: -34.5
       latitude_max: -18.5
-      longitude_min: -73.0
+      longitude_min: -72.0
       longitude_max: -55.0
   event_type: heat_wave
 - case_id_number: 12
@@ -137,7 +137,7 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 23.75
+      latitude_min: 25.75
       latitude_max: 33.75
       longitude_min: 119.0
       longitude_max: 124.0
@@ -162,8 +162,8 @@
     type: bounded_region
     parameters:
       latitude_min: 29.25
-      latitude_max: 39.25
-      longitude_min: -11.5
+      latitude_max: 40.25
+      longitude_min: -10.5
       longitude_max: 11.5
   event_type: heat_wave
 - case_id_number: 15
@@ -173,10 +173,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 22.75
-      latitude_max: 44.75
+      latitude_min: 35.75
+      latitude_max: 46.75
       longitude_min: -10.0
-      longitude_max: 9.0
+      longitude_max: 5.0
   event_type: heat_wave
 - case_id_number: 16
   title: 2023 Southeast Asia
@@ -223,7 +223,7 @@
     parameters:
       latitude_min: 46.0
       latitude_max: 55.0
-      longitude_min: -2.0
+      longitude_min: -3.0
       longitude_max: 17.0
   event_type: heat_wave
 - case_id_number: 20
@@ -233,10 +233,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 41.0
+      latitude_min: 49.0
       latitude_max: 56.0
-      longitude_min: -6.75
-      longitude_max: 8.25
+      longitude_min: -5.75
+      longitude_max: 2.25
   event_type: heat_wave
 - case_id_number: 21
   title: 2022 UK (July)
@@ -245,9 +245,9 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 37.0
+      latitude_min: 49.0
       latitude_max: 54.0
-      longitude_min: -7.75
+      longitude_min: -5.75
       longitude_max: 2.25
   event_type: heat_wave
 - case_id_number: 22
@@ -257,8 +257,8 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 31.0
-      latitude_max: 51.0
+      latitude_min: 36.0
+      latitude_max: 52.0
       longitude_min: -9.0
       longitude_max: 10.0
   event_type: heat_wave
@@ -270,8 +270,8 @@
     type: bounded_region
     parameters:
       latitude_min: 33.25
-      latitude_max: 42.25
-      longitude_min: 126.25
+      latitude_max: 41.25
+      longitude_min: 134.25
       longitude_max: 142.25
   event_type: heat_wave
 - case_id_number: 24
@@ -294,7 +294,7 @@
     type: bounded_region
     parameters:
       latitude_min: -85.5
-      latitude_max: -64.5
+      latitude_max: -65.5
       longitude_min: 101.0
       longitude_max: 145.75
   event_type: heat_wave
@@ -378,7 +378,7 @@
     type: bounded_region
     parameters:
       latitude_min: 48.25
-      latitude_max: 68.25
+      latitude_max: 58.25
       longitude_min: 1.5
       longitude_max: 21.5
   event_type: freeze
@@ -392,7 +392,7 @@
       latitude_min: 26.75
       latitude_max: 53.5
       longitude_min: 100.0
-      longitude_max: 124.0
+      longitude_max: 134.0
   event_type: freeze
 - case_id_number: 34
   title: 2023 Afghanistan
@@ -833,10 +833,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 14.5
+      latitude_min: 12.5
       latitude_max: 31.5
       longitude_min: -105.0
-      longitude_max: -95.0
+      longitude_max: -83.0
   event_type: heat_wave
 - case_id_number: 71
   title: June 2024 Northeast US
@@ -859,7 +859,7 @@
     parameters:
       latitude_min: 28.75
       latitude_max: 59.75
-      longitude_min: -125.25
+      longitude_min: -129.25
       longitude_max: -110.25
   event_type: heat_wave
 - case_id_number: 73
@@ -872,7 +872,7 @@
       latitude_min: 37.75
       latitude_max: 52.75
       longitude_min: -78.0
-      longitude_max: -61.0
+      longitude_max: -62.0
   event_type: heat_wave
 - case_id_number: 74
   title: July 2024 Mid-Atlantic US
@@ -884,7 +884,7 @@
       latitude_min: 37.0
       latitude_max: 43.0
       longitude_min: -81.25
-      longitude_max: -68.25
+      longitude_max: -70.25
   event_type: heat_wave
 - case_id_number: 75
   title: August 2024 Midwest US
@@ -918,7 +918,7 @@
     type: bounded_region
     parameters:
       latitude_min: 58.5
-      latitude_max: 76.5
+      latitude_max: 70.5
       longitude_min: -133.5
       longitude_max: -89.5
   event_type: heat_wave
@@ -930,7 +930,7 @@
     type: bounded_region
     parameters:
       latitude_min: -27.5
-      latitude_max: -17.5
+      latitude_max: -15.5
       longitude_min: 114.5
       longitude_max: 142.5
   event_type: heat_wave
@@ -955,7 +955,7 @@
     parameters:
       latitude_min: 18.0
       latitude_max: 36.0
-      longitude_min: 22.0
+      longitude_min: 34.0
       longitude_max: 55.0
   event_type: heat_wave
 - case_id_number: 81
@@ -965,7 +965,7 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 34.5
+      latitude_min: 38.5
       latitude_max: 53.5
       longitude_min: 3.0
       longitude_max: 22.0
@@ -979,7 +979,7 @@
     parameters:
       latitude_min: 39.0
       latitude_max: 55.0
-      longitude_min: 15.0
+      longitude_min: 16.0
       longitude_max: 39.0
   event_type: heat_wave
 - case_id_number: 83
@@ -1001,7 +1001,7 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 14.0
+      latitude_min: 12.0
       latitude_max: 31.0
       longitude_min: -104.75
       longitude_max: -82.75
@@ -1027,7 +1027,7 @@
     parameters:
       latitude_min: -42.0
       latitude_max: -20.0
-      longitude_min: -73.25
+      longitude_min: -74.25
       longitude_max: -62.25
   event_type: heat_wave
 - case_id_number: 87
@@ -1073,10 +1073,10 @@
   location:
     type: bounded_region
     parameters:
-      latitude_min: 56.75
+      latitude_min: 55.75
       latitude_max: 71.75
-      longitude_min: 3.5
-      longitude_max: 20.5
+      longitude_min: 4.5
+      longitude_max: 35.5
   event_type: freeze
 - case_id_number: 91
   title: December 2022 Europe
@@ -1086,8 +1086,8 @@
     type: bounded_region
     parameters:
       latitude_min: 48.0
-      latitude_max: 55.0
-      longitude_min: -9.0
+      latitude_max: 58.0
+      longitude_min: 0.0
       longitude_max: 16.0
   event_type: freeze
 - case_id_number: 92
@@ -1098,9 +1098,9 @@
     type: bounded_region
     parameters:
       latitude_min: 42.25
-      latitude_max: 54.25
+      latitude_max: 56.25
       longitude_min: -3.25
-      longitude_max: 23.75
+      longitude_max: 24.75
   event_type: freeze
 - case_id_number: 93
   title: January 2023 North China
@@ -1124,7 +1124,7 @@
       latitude_min: 57.75
       latitude_max: 71.75
       longitude_min: 10.25
-      longitude_max: 21.25
+      longitude_max: 30.25
   event_type: freeze
 - case_id_number: 95
   title: November 2024 West Coast US

@@ -18,9 +18,9 @@ Three subcommands, each producing csv and/or png output:
 Examples:
 
   python temperature_events.py plot --case-id-number 30 \\
-      --quantile 0.85 --operator ">="
+      --event-quantiles
 
-  python temperature_events.py case \\
+  python temperature_events.py case --event-quantiles \\
       --output heat_cold_yaml.csv --n-workers 4
 
   python temperature_events.py global \\
@@ -70,6 +70,7 @@ MIN_AREA_KM2 = 200000.0
 EXPANSION_DEGREES = 1
 MAX_SPATIAL_ITERATIONS = 20
 EDGE_VALIDITY_THRESHOLD = 0.5
+MIN_EDGE_LAND_FRACTION = 0.20
 AREA_DECLINE_FRACTION = 0.5
 TEMPORAL_LOAD_BUFFER_DAYS = 14
 MAX_TEMPORAL_DAYS = 21
@@ -120,7 +121,13 @@ class PeriodicBoundaryIndex(PandasIndex):
         return obj
 
     def _wrap_periodically(self, label_value: float) -> float:
-        return self._min + (label_value - self._max) % self.period
+        # Reduce ``label_value`` into ``[_min, _min + period)``. The
+        # earlier formulation used ``label - _max`` which silently
+        # shifted in-range labels by ``period - (_max - _min)`` (one
+        # grid step on a 0-360 ERA5 axis where ``_max=359.75``).
+        # ``label - _min`` is the textbook periodic remap and works
+        # for both 0-360 and -180/180 axes.
+        return self._min + (label_value - self._min) % self.period
 
     def _split_slice_across_boundary(self, label: slice) -> np.ndarray:
         """Return concatenated integer indices for a slice that wraps."""
@@ -193,6 +200,47 @@ def detect_time_dim(obj: xr.Dataset | xr.DataArray) -> str:
 def _to_plot_lon(lon: float) -> float:
     """Wrap 0-360 longitude to -180..180 for PlateCarree plotting."""
     return lon - 360.0 if lon > 180.0 else lon
+
+
+def edge_slice(arr: np.ndarray, edge: EdgeName, band_pts: int) -> np.ndarray:
+    """Return the outermost ``band_pts`` rows or columns of a 2-D array."""
+    if edge == "north":
+        return arr[-band_pts:, :]
+    if edge == "south":
+        return arr[:band_pts, :]
+    if edge == "west":
+        return arr[:, :band_pts]
+    if edge == "east":
+        return arr[:, -band_pts:]
+    raise ValueError(f"Unknown edge: {edge}")
+
+
+def main_land_component(
+    land_2d: np.ndarray,
+    center_i: int,
+    center_j: int,
+) -> np.ndarray:
+    """Return the 4-connected land component containing a seed cell.
+
+    Labels 4-connected components of ``land_2d`` and returns a boolean
+    mask of the component containing ``(center_i, center_j)``. If the
+    seed cell is not on land, falls back to the largest component.
+    Used so edge expansion only follows a peninsula or land bridge
+    reachable from the box centre, rather than jumping across open
+    water to a disconnected land mass.
+    """
+    if not land_2d.any():
+        return np.zeros_like(land_2d, dtype=bool)
+    labels, _ = ndimage.label(land_2d)
+    if (
+        0 <= center_i < labels.shape[0]
+        and 0 <= center_j < labels.shape[1]
+        and labels[center_i, center_j] > 0
+    ):
+        return labels == int(labels[center_i, center_j])
+    sizes = np.bincount(labels.ravel())
+    sizes[0] = 0
+    return labels == int(sizes.argmax())
 
 
 def max_consecutive_days(mask_3d: np.ndarray) -> np.ndarray:
@@ -475,101 +523,88 @@ def build_exceedance_mask(
     return mask_6h.resample({tdim: "1D"}).min().astype(bool) & land_mask
 
 
-def _edge_valid_fraction(
-    mask_2d: np.ndarray,
-    land_2d: np.ndarray,
-    edge: str,
-    band_pts: int,
-) -> float:
-    """Return the fraction of land grid points on an edge that are active.
+def _lon_midpoint(lo: float, hi: float) -> float:
+    """Eastward arc midpoint between two longitudes (0-360)."""
+    return (lo + _arc_span(lo, hi) / 2.0) % 360.0
 
-    Args:
-        mask_2d: 2-D boolean activity array (lat, lon).
-        land_2d: 2-D boolean land mask (lat, lon); True = land.
-        edge: One of ``north``, ``south``, ``east``, ``west``.
-        band_pts: Width of the edge strip in grid points.
 
-    Returns:
-        Fraction in [0, 1] of land points in the strip that are
-        active, or 0.0 if the strip contains no land points.
+def _attach_periodic_lon_index(da: xr.DataArray) -> xr.DataArray:
+    """Attach a 360°-period :class:`PeriodicBoundaryIndex` to ``longitude``.
 
-    Raises:
-        ValueError: If ``edge`` is not one of the recognised values.
+    Replaces the default ``PandasIndex`` so wrap-crossing
+    ``.sel(longitude=slice(...))`` queries work via
+    :func:`_wrap_lon_slice`.
     """
-    if edge == "north":
-        strip = mask_2d[-band_pts:, :]
-        land_strip = land_2d[-band_pts:, :]
-    elif edge == "south":
-        strip = mask_2d[:band_pts, :]
-        land_strip = land_2d[:band_pts, :]
-    elif edge == "west":
-        strip = mask_2d[:, :band_pts]
-        land_strip = land_2d[:, :band_pts]
-    elif edge == "east":
-        strip = mask_2d[:, -band_pts:]
-        land_strip = land_2d[:, -band_pts:]
-    else:
-        raise ValueError(f"Unknown edge: {edge}")
-    n_land = int(land_strip.sum())
-    if n_land == 0:
-        return 0.0
-    return float((strip & land_strip).sum()) / n_land
+    return da.drop_indexes("longitude").set_xindex(
+        "longitude", index_cls=PeriodicBoundaryIndex, period=360
+    )
+
+
+def _wrap_lon_slice(lon_min: float, lon_max: float) -> slice:
+    """Slice for ``PeriodicBoundaryIndex`` accepting the wrap convention.
+
+    ``PeriodicBoundaryIndex.sel`` triggers its cross-boundary path
+    only when the slice's ``stop`` is greater than ``start`` (e.g.
+    ``slice(350, 370)``). Our event bboxes use the more natural
+    ``lon_min > lon_max`` convention to mark a wrap (e.g. lon 350 →
+    10). Convert by lifting ``stop`` above the period if needed.
+    """
+    if lon_max < lon_min:
+        return slice(lon_min, lon_max + 360.0)
+    return slice(lon_min, lon_max)
+
+
+def _circular_argmin(arr: np.ndarray, target: float) -> int:
+    """Index of ``arr``'s entry closest to ``target`` modulo 360."""
+    diff = np.abs(arr - target)
+    diff = np.minimum(diff, 360.0 - diff)
+    return int(np.argmin(diff))
 
 
 def expand_event_bounds(
     event: Dict,
-    filt_mask: np.ndarray,
-    dates: np.ndarray,
-    lats: np.ndarray,
-    lons: np.ndarray,
-    land_mask_np: np.ndarray,
+    filt_mask: xr.DataArray,
+    land_mask: xr.DataArray,
 ) -> Dict:
-    """Expand a detected event's bounding box using case-script logic.
+    """Expand one detected event's bounding box by edge validity.
 
-    Starting from the blob-tracked bounding box, expands each edge
-    outward while >= EDGE_VALIDITY_THRESHOLD of land points on that
-    edge are active on the peak-footprint day. Also computes and stores
-    max_consecutive_days and mean_consecutive_days within the expanded
-    region.
+    Starts from the blob-tracked bounding box and grows each edge
+    outward by ``EXPANSION_DEGREES`` per iteration while that edge's
+    active fraction over connected land stays at or above
+    ``EDGE_VALIDITY_THRESHOLD``. An edge whose current band has less
+    than ``MIN_EDGE_LAND_FRACTION`` of land 4-connected to the
+    box-centre component is paused for the iteration only, so it can
+    recover once the box grows through a peninsula or land bridge.
+
+    Also stores ``max_consecutive_days`` and
+    ``mean_consecutive_days`` (mean over cells at or above
+    ``MIN_CONSECUTIVE_DAYS``) within the final region.
 
     Args:
-        event: Event dict from detect_events.
-        filt_mask: Boolean array (time, lat, lon) with consecutive-day
-            filtering already applied.
-        dates: 1-D datetime64 array of daily timestamps (axis 0).
-        lats: 1-D latitude array (axis 1).
-        lons: 1-D longitude array (axis 2).
-        land_mask_np: 2-D boolean array (lat, lon); True = land.
-
-    Returns:
-        The same event dict with updated lat_min/lat_max/lon_min/
-        lon_max, max_consecutive_days, and mean_consecutive_days.
+        event: Event dict from ``detect_events``. ``lon_min`` may be
+            greater than ``lon_max`` if the event crosses the 0°/360°
+            seam.
+        filt_mask: Boolean DataArray (time, lat, lon) already filtered
+            by ``apply_consecutive_filter``. Longitude must carry a
+            ``PeriodicBoundaryIndex`` so wrap-crossing slices work.
+        land_mask: 2-D bool DataArray (lat, lon) sharing the same
+            longitude index as ``filt_mask``.
     """
+    lats = filt_mask.latitude.values
     grid_res = float(np.abs(np.diff(lats[:2]))[0]) if len(lats) > 1 else 0.25
     band_pts = max(1, int(round(EXPANSION_DEGREES / grid_res)))
+    band_deg = band_pts * grid_res
 
-    start_date = np.datetime64(event["start"])
-    end_date = np.datetime64(event["end"])
-    t_mask = (dates >= start_date) & (dates <= end_date)
-    ev_filt = filt_mask[t_mask]
+    tdim = detect_time_dim(filt_mask)
+    ev_filt = filt_mask.sel({tdim: slice(str(event["start"]), str(event["end"]))})
 
-    if ev_filt.shape[0] == 0:
+    if ev_filt.sizes[tdim] == 0:
         event["max_consecutive_days"] = 0
         event["mean_consecutive_days"] = 0.0
         return event
 
-    def _lat_idx(val: float) -> int:
-        return int(np.argmin(np.abs(lats - val)))
-
-    def _lon_idx(val: float) -> int:
-        return int(np.argmin(np.abs(lons - val)))
-
-    idx_s0 = _lat_idx(event["lat_min"])
-    idx_n0 = _lat_idx(event["lat_max"])
-    idx_w0 = _lon_idx(event["lon_min"])
-    idx_e0 = _lon_idx(event["lon_max"])
-
-    daily_counts = ev_filt.sum(axis=(1, 2))
+    ev_vals = ev_filt.values
+    daily_counts = ev_vals.sum(axis=(1, 2))
     max_count = daily_counts.max()
     tied_days = np.where(daily_counts == max_count)[0]
     n_tied = len(tied_days)
@@ -577,55 +612,83 @@ def expand_event_bounds(
         peak_day = int(tied_days[-1]) if n_tied == 2 else int(tied_days[0])
     else:
         peak_day = int(tied_days[(n_tied - 1) // 2])
-    peak_mask = ev_filt[peak_day]
+    peak_mask_da = ev_filt.isel({tdim: peak_day})
 
-    idx_s, idx_n, idx_w, idx_e = idx_s0, idx_n0, idx_w0, idx_e0
+    lat_min = float(event["lat_min"])
+    lat_max = float(event["lat_max"])
+    lon_min = float(event["lon_min"])
+    lon_max = float(event["lon_max"])
 
-    init_region_land = land_mask_np[idx_s0 : idx_n0 + 1, idx_w0 : idx_e0 + 1]
-    edges_active: Dict[str, bool] = {}
-    for edge in ("north", "south", "east", "west"):
-        if edge == "north":
-            strip = init_region_land[-band_pts:, :]
-        elif edge == "south":
-            strip = init_region_land[:band_pts, :]
-        elif edge == "west":
-            strip = init_region_land[:, :band_pts]
-        else:
-            strip = init_region_land[:, -band_pts:]
-        land_frac = strip.sum() / max(strip.size, 1)
-        edges_active[edge] = bool(land_frac >= 0.25)
+    init_lat_min, init_lat_max, init_lon_min, init_lon_max = event["initial_bbox"]
+    center_lat = (init_lat_min + init_lat_max) / 2.0
+    center_lon = _lon_midpoint(init_lon_min, init_lon_max)
+
+    edges_active: Dict[str, bool] = {
+        e: True for e in ("north", "south", "east", "west")
+    }
 
     for _ in range(MAX_SPATIAL_ITERATIONS):
-        region = peak_mask[idx_s : idx_n + 1, idx_w : idx_e + 1]
-        land_region = land_mask_np[idx_s : idx_n + 1, idx_w : idx_e + 1]
+        lon_sl = _wrap_lon_slice(lon_min, lon_max)
+        region_da = peak_mask_da.sel(
+            latitude=slice(lat_min, lat_max),
+            longitude=lon_sl,
+        )
+        land_region_da = land_mask.sel(
+            latitude=slice(lat_min, lat_max),
+            longitude=lon_sl,
+        )
+        region = region_da.values
+        land_region = land_region_da.values.astype(bool)
+        if region.size == 0 or land_region.size == 0:
+            break
+
+        slab_lats = region_da.latitude.values
+        slab_lons = region_da.longitude.values
+        center_i = int(np.argmin(np.abs(slab_lats - center_lat)))
+        center_j = _circular_argmin(slab_lons, center_lon)
+        center_i = min(max(0, center_i), land_region.shape[0] - 1)
+        center_j = min(max(0, center_j), land_region.shape[1] - 1)
+        main_land = main_land_component(land_region, center_i, center_j)
 
         all_done = True
-        for edge in list(edges_active.keys()):
+        for edge in ("north", "south", "east", "west"):
             if not edges_active[edge]:
                 continue
-            frac = _edge_valid_fraction(region, land_region, edge, band_pts)
+            main_strip = edge_slice(main_land, edge, band_pts)
+            n_land = int(main_strip.sum())
+            if (
+                main_strip.size == 0
+                or n_land / main_strip.size < MIN_EDGE_LAND_FRACTION
+            ):
+                continue
+
+            region_strip = edge_slice(region, edge, band_pts)
+            frac = float((region_strip & main_strip).sum()) / n_land
             if frac < EDGE_VALIDITY_THRESHOLD:
                 edges_active[edge] = False
             else:
                 all_done = False
                 if edge == "north":
-                    idx_n = min(len(lats) - 1, idx_n + band_pts)
+                    lat_max = min(float(lats[-1]), lat_max + band_deg)
                 elif edge == "south":
-                    idx_s = max(0, idx_s - band_pts)
+                    lat_min = max(float(lats[0]), lat_min - band_deg)
                 elif edge == "east":
-                    idx_e = min(len(lons) - 1, idx_e + band_pts)
+                    lon_max = (lon_max + band_deg) % 360.0
                 elif edge == "west":
-                    idx_w = max(0, idx_w - band_pts)
+                    lon_min = (lon_min - band_deg) % 360.0
 
         if all_done:
             break
 
-    fin_filt = ev_filt[:, idx_s : idx_n + 1, idx_w : idx_e + 1]
+    fin_filt = ev_filt.sel(
+        latitude=slice(lat_min, lat_max),
+        longitude=_wrap_lon_slice(lon_min, lon_max),
+    ).values
     consec = max_consecutive_days(fin_filt)
-    event["lat_min"] = float(lats[idx_s])
-    event["lat_max"] = float(lats[idx_n])
-    event["lon_min"] = float(lons[idx_w])
-    event["lon_max"] = float(lons[idx_e])
+    event["lat_min"] = lat_min
+    event["lat_max"] = lat_max
+    event["lon_min"] = lon_min
+    event["lon_max"] = lon_max
     event["max_consecutive_days"] = int(consec.max()) if consec.size > 0 else 0
     active = consec[consec >= MIN_CONSECUTIVE_DAYS]
     event["mean_consecutive_days"] = (
@@ -639,22 +702,28 @@ def process_event(
     out_dir: pathlib.Path = pathlib.Path("."),
     quantile: float | None = None,
     op_str: str | None = None,
+    event_quantiles: bool = False,
 ) -> Optional[Dict]:
     """Re-expand one curated case's time window and spatial bounds.
 
     Grows the time window forward from ``start_date - 3`` one day at
     a time until the single-day exceedance fraction drops below 50%
     of its peak, then grows each spatial edge by
-    ``EXPANSION_DEGREES`` per iteration while the edge-validity
-    threshold is met.
+    ``EXPANSION_DEGREES`` per iteration under the same connected-land
+    / edge-validity rules used by ``expand_event_bounds``.
 
     Args:
         single_case: Case with a ``CenteredRegion`` location.
         out_dir: Directory to write PNG plots into.
-        quantile: Climatology quantile. Defaults to 0.85 for
-            heat_wave or 0.15 for freeze when not provided.
+        quantile: Climatology quantile. Required unless
+            ``event_quantiles`` is True.
         op_str: Comparison operator (``>``, ``>=``, ``<``, ``<=``).
-            Defaults to ``>`` for heat_wave or ``<`` for freeze.
+            Required unless ``event_quantiles`` is True.
+        event_quantiles: If True, derive ``quantile`` and
+            ``op_str`` from ``single_case.event_type``: heat_wave ->
+            ``0.85`` with ``>=``; freeze / cold_snap -> ``0.15`` with
+            ``<=``. Mutually exclusive with explicit ``quantile`` /
+            ``op_str``.
 
     Returns:
         A result dict (see call sites) or None if the case was
@@ -760,10 +829,18 @@ def process_event(
         )
         return None
 
-    if quantile is None:
+    if event_quantiles:
+        if quantile is not None or op_str is not None:
+            raise ValueError(
+                "event_quantiles=True is mutually exclusive with"
+                " explicit quantile / op_str."
+            )
         quantile = 0.85 if is_heatwave else 0.15
-    if op_str is None:
-        op_str = ">" if is_heatwave else "<"
+        op_str = ">=" if is_heatwave else "<="
+    elif quantile is None or op_str is None:
+        raise ValueError(
+            "quantile and op_str are required unless event_quantiles=True."
+        )
     cmp = resolve_op(op_str)
 
     clim = defaults.get_climatology(quantile).sortby("latitude")
@@ -813,6 +890,7 @@ def process_event(
 
     box_lon_min_era = _to_plot_lon(box_lon_min)
     box_lon_max_era = _to_plot_lon(box_lon_max)
+    center_lon_era = _to_plot_lon(center_lon)
 
     idx_s0 = _lat_idx(box_lat_min)
     idx_n0 = _lat_idx(box_lat_max)
@@ -917,38 +995,33 @@ def process_event(
     idx_w = idx_w0
     idx_e = idx_e0
 
-    init_region_land = land_mask_np[idx_s0 : idx_n0 + 1, idx_w0 : idx_e0 + 1]
-    edges_active = {}
-    for edge in ("north", "south", "east", "west"):
-        if edge == "north":
-            strip = init_region_land[-band_pts:, :]
-        elif edge == "south":
-            strip = init_region_land[:band_pts, :]
-        elif edge == "west":
-            strip = init_region_land[:, :band_pts]
-        else:
-            strip = init_region_land[:, -band_pts:]
-        land_frac = strip.sum() / max(strip.size, 1)
-        edges_active[edge] = bool(land_frac >= 0.25)
-        if not edges_active[edge]:
-            logger.info(
-                "  %s edge disabled (%.1f%% land in initial box)",
-                edge.capitalize(),
-                land_frac * 100,
-            )
+    edges_active = {e: True for e in ("north", "south", "east", "west")}
+    center_i_full = _lat_idx(center_lat)
+    center_j_full = _lon_idx(center_lon_era)
     n_iter = 0
 
     for iteration in range(MAX_SPATIAL_ITERATIONS):
         n_iter = iteration + 1
         region = peak_mask[idx_s : idx_n + 1, idx_w : idx_e + 1]
         land_region = land_mask_np[idx_s : idx_n + 1, idx_w : idx_e + 1]
+        main_land = main_land_component(
+            land_region,
+            center_i_full - idx_s,
+            center_j_full - idx_w,
+        )
 
         all_done = True
-        for edge in list(edges_active.keys()):
+        for edge in ("north", "south", "east", "west"):
             if not edges_active[edge]:
                 continue
 
-            frac = _edge_valid_fraction(region, land_region, edge, band_pts)
+            main_strip = edge_slice(main_land, edge, band_pts)
+            n_land = int(main_strip.sum())
+            if n_land / main_strip.size < MIN_EDGE_LAND_FRACTION:
+                continue
+
+            region_strip = edge_slice(region, edge, band_pts)
+            frac = float((region_strip & main_strip).sum()) / n_land
             if frac < EDGE_VALIDITY_THRESHOLD:
                 edges_active[edge] = False
             else:
@@ -1142,6 +1215,71 @@ def _terminate_declined_events(
             ev["done"] = True
 
 
+def _label_periodic_lon(day: np.ndarray) -> tuple[np.ndarray, int]:
+    """4-connectivity ``ndimage.label`` with longitude-axis wrap.
+
+    Treats columns ``0`` and ``N-1`` of a 2D boolean array as
+    adjacent by labelling on a 1-column halo-padded array, then
+    merging labels that share pixels across the seam.
+
+    Args:
+        day: 2D bool array of shape ``(lat, lon)``.
+
+    Returns:
+        ``(labels, n_obj)`` with ``labels`` shape ``(lat, lon)``
+        (int32) and label ids in ``1..n_obj`` packed contiguously.
+    """
+    halo_left = day[:, -1:]
+    halo_right = day[:, :1]
+    padded = np.concatenate([halo_left, day, halo_right], axis=1)
+    labels_p, n_p = ndimage.label(padded)
+    if n_p == 0:
+        return np.zeros_like(day, dtype=np.int32), 0
+
+    labels = labels_p[:, 1:-1].copy()
+
+    parent = np.arange(n_p + 1, dtype=np.int32)
+
+    def _find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = int(parent[x])
+        return x
+
+    def _union(a: int, b: int) -> None:
+        ra, rb = _find(a), _find(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+
+    # Halo column 0 of the padded array is the wrap-image of the
+    # last column of the original; halo column N+1 is the wrap-image
+    # of the first column. Union labels that coincide.
+    left_halo = labels_p[:, 0]
+    east_edge = labels_p[:, -2]
+    for h, e in zip(left_halo.tolist(), east_edge.tolist()):
+        if h > 0 and e > 0:
+            _union(h, e)
+    right_halo = labels_p[:, -1]
+    west_edge = labels_p[:, 1]
+    for h, w in zip(right_halo.tolist(), west_edge.tolist()):
+        if h > 0 and w > 0:
+            _union(h, w)
+
+    # Re-pack labels that survive in the un-padded slice. Labels that
+    # only existed in the halo map to 0 (the default), which is what
+    # we want.
+    roots = np.array([_find(i) for i in range(n_p + 1)], dtype=np.int32)
+    remap = np.zeros(n_p + 1, dtype=np.int32)
+    new_id: Dict[int, int] = {}
+    for old_id in np.unique(labels[labels > 0]).tolist():
+        r = int(roots[old_id])
+        if r not in new_id:
+            new_id[r] = len(new_id) + 1
+        remap[old_id] = new_id[r]
+    labels = remap[labels]
+    return labels, len(new_id)
+
+
 def _bbox_from_blob(
     li: np.ndarray,
     lo: np.ndarray,
@@ -1152,7 +1290,8 @@ def _bbox_from_blob(
 
     When the blob touches both column 0 and column ``len(lons)-1``
     it is assumed to cross the 0°/360° seam, and the bbox is emitted
-    using the wrap convention ``lon_min > lon_max``.
+    using the wrap convention ``lon_min > lon_max`` — the form
+    ``_wrap_lon_slice`` understands.
     """
     lat_min = float(lats[li].min())
     lat_max = float(lats[li].max())
@@ -1211,37 +1350,39 @@ def _merge_lon_extent(
 
 
 def detect_events(
-    filtered_mask: np.ndarray,
-    dates: np.ndarray,
-    lats: np.ndarray,
-    lons: np.ndarray,
+    filtered_mask: xr.DataArray,
     event_type: str,
     area_grid: Optional[np.ndarray] = None,
     min_seed_area_km2: float = 0.0,
 ) -> List[Dict]:
-    """Track spatiotemporal events from a filtered boolean mask.
+    """Track spatiotemporal events through a filtered boolean mask.
 
     A new event is seeded only when the current-day blob AND the prior
     ``MIN_CONSECUTIVE_DAYS - 1`` days share a single contiguous region
     of at least ``min_seed_area_km2``. The joint intersection of the
-    blob footprint with all prior filtered masks is computed; the
-    largest connected component must meet the area threshold. Blobs
-    that fail the seed test but overlap an established event still
-    extend it.
+    blob footprint with all prior filtered masks is taken and the
+    largest connected component must meet the area threshold. This
+    enforces continuous coverage over the full window — checking
+    each prior day independently would let scattered cells across
+    different days satisfy the threshold. Blobs that fail the seed
+    test but overlap an already-established event still extend it.
 
     Args:
-        filtered_mask: Boolean array of shape (time, lat, lon) with
-            consecutive-day filtering already applied.
-        dates: 1-D array of date labels aligned with axis 0.
-        lats: 1-D latitude array aligned with axis 1.
-        lons: 1-D longitude array aligned with axis 2.
-        event_type: Label string stored in each returned event dict.
-        area_grid: Optional 2-D array (lat, lon) of grid-cell areas
-            in km².
-        min_seed_area_km2: Minimum contiguous area in km² for the
-            seed test. Default 0.0 (all blobs seed).
+        filtered_mask: Boolean DataArray (time, lat, lon) already
+            filtered by ``apply_consecutive_filter``. Longitude is
+            assumed to span the full 360° period (the labelling step
+            uses a wrap halo so blobs that straddle the 0°/360° seam
+            are detected as a single object).
+        event_type: Label stored in each returned event dict.
+        area_grid: 2-D array (lat, lon) of grid-cell areas in km^2.
+        min_seed_area_km2: Minimum contiguous area in km^2 required
+            for the seed test. Default 0.0 (all blobs seed).
     """
-    filt_np = filtered_mask
+    tdim = detect_time_dim(filtered_mask)
+    dates = filtered_mask[tdim].values
+    lats = filtered_mask.latitude.values
+    lons = filtered_mask.longitude.values
+    filt_np = filtered_mask.values
 
     n_days = filt_np.shape[0]
     events: Dict[int, Dict] = {}
@@ -1262,8 +1403,7 @@ def detect_events(
             prev_map = {}
             continue
 
-        labels, n_obj = ndimage.label(day)
-        labels = labels.astype(np.int32)
+        labels, n_obj = _label_periodic_lon(day)
         cur_map: Dict[int, int] = {}
 
         overlap_mat: Optional[np.ndarray] = None
@@ -1306,7 +1446,7 @@ def detect_events(
                         joint_mask &= filt_np[di - k]
                     if not joint_mask.any():
                         continue
-                    j_lbl, j_n = ndimage.label(joint_mask)
+                    j_lbl, j_n = _label_periodic_lon(joint_mask)
                     if j_n == 0:
                         continue
                     best_area = max(
@@ -1371,51 +1511,45 @@ def detect_events(
 
 def include_temps_with_events(
     events: List[Dict],
-    t2m_daily_np: np.ndarray,
-    exc_filt: np.ndarray,
-    dates: np.ndarray,
-    lats: np.ndarray,
-    lons: np.ndarray,
+    t2m_daily: xr.DataArray,
+    exc_filt: xr.DataArray,
 ) -> List[Dict]:
-    """Add mean and minimum temperature (°C) to each event dict.
+    """Attach per-event mean and min temperature (Celsius).
 
-    Uses a pre-computed global daily-mean temperature array so all
-    events share a single ERA5 fetch. Statistics are computed over
-    active (exceedant) grid point-days within each event's expanded
-    bounding box and time window.
+    Uses a pre-computed global daily-mean temperature DataArray so
+    every event shares a single ERA5 fetch rather than one compute
+    per event. Statistics are taken over active grid point-days
+    (cells where ``exc_filt`` is True) within each event's bounding
+    box and time window. Wrap-crossing bboxes
+    (``lon_min > lon_max``) are handled via the
+    ``PeriodicBoundaryIndex`` attached to the longitude dimension.
 
     Args:
         events: Event dicts with lat_min/max, lon_min/max, start, end.
-        t2m_daily_np: Float32 array (days, lat, lon) of daily-mean
-            2m temperature in Celsius, aligned with dates/lats/lons.
-        exc_filt: Boolean array (time, lat, lon) from
-            ``apply_consecutive_filter``, aligned with dates/lats/lons.
-        dates: 1-D datetime64 array aligned with axis 0.
-        lats: 1-D latitude array aligned with axis 1.
-        lons: 1-D longitude array aligned with axis 2.
+        t2m_daily: Float32 DataArray (days, lat, lon) of daily-mean
+            2m temperature in Celsius.
+        exc_filt: Boolean DataArray (time, lat, lon) from
+            ``apply_consecutive_filter``.
 
     Returns:
         The same event list with ``mean_temp_c`` and ``min_temp_c``
         added (NaN when no active points exist).
     """
-    def _idx(arr: np.ndarray, val: float) -> int:
-        return int(np.argmin(np.abs(arr - val)))
+    tdim = detect_time_dim(exc_filt)
+    t2m_tdim = detect_time_dim(t2m_daily)
 
     for ev in events:
-        start_date = np.datetime64(ev["start"])
-        end_date = np.datetime64(ev["end"])
-        t_indices = np.where((dates >= start_date) & (dates <= end_date))[0]
-
-        idx_s = _idx(lats, ev["lat_min"])
-        idx_n = _idx(lats, ev["lat_max"])
-        idx_w = _idx(lons, ev["lon_min"])
-        idx_e = _idx(lons, ev["lon_max"])
-
-        exc_ev = exc_filt[t_indices][:, idx_s : idx_n + 1, idx_w : idx_e + 1]
-        t2m_ev = t2m_daily_np[t_indices][:, idx_s : idx_n + 1, idx_w : idx_e + 1]
-
-        n_days = min(t2m_ev.shape[0], exc_ev.shape[0])
-        active_temps = t2m_ev[:n_days][exc_ev[:n_days]]
+        time_sl = slice(str(ev["start"]), str(ev["end"]))
+        lat_sl = slice(ev["lat_min"], ev["lat_max"])
+        lon_sl = _wrap_lon_slice(ev["lon_min"], ev["lon_max"])
+        exc_np = exc_filt.sel(
+            {tdim: time_sl, "latitude": lat_sl, "longitude": lon_sl},
+        ).values
+        t2m_np = t2m_daily.sel(
+            {t2m_tdim: time_sl, "latitude": lat_sl, "longitude": lon_sl},
+        ).values
+        n_days = min(t2m_np.shape[0], exc_np.shape[0])
+        active_temps = t2m_np[:n_days][exc_np[:n_days]]
         if active_temps.size > 0:
             ev["mean_temp_c"] = round(float(active_temps.mean()), 2)
             ev["min_temp_c"] = round(float(active_temps.min()), 2)
@@ -1522,6 +1656,7 @@ def compute_consecutive_field(
     single_case: cases.IndividualCase,
     quantile: float | None = None,
     op_str: str | None = None,
+    event_quantiles: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return ``(consec, lats, lons)`` for a case's exceedance mask.
 
@@ -1531,16 +1666,29 @@ def compute_consecutive_field(
 
     Args:
         single_case: The case to compute the field for.
-        quantile: Climatology quantile. Defaults to 0.85 for
-            heat_wave or 0.15 for freeze.
-        op_str: Comparison operator. Defaults to ``>=`` for
-            heat_wave or ``<=`` for freeze.
+        quantile: Climatology quantile. Required unless
+            ``event_quantiles`` is True.
+        op_str: Comparison operator. Required unless
+            ``event_quantiles`` is True.
+        event_quantiles: If True, derive ``quantile`` and
+            ``op_str`` from ``single_case.event_type``: heat_wave ->
+            ``0.85`` with ``>=``; freeze / cold_snap -> ``0.15`` with
+            ``<=``. Mutually exclusive with explicit ``quantile`` /
+            ``op_str``.
     """
     is_heatwave = single_case.event_type == "heat_wave"
-    if quantile is None:
+    if event_quantiles:
+        if quantile is not None or op_str is not None:
+            raise ValueError(
+                "event_quantiles=True is mutually exclusive with"
+                " explicit quantile / op_str."
+            )
         quantile = 0.85 if is_heatwave else 0.15
-    if op_str is None:
         op_str = ">=" if is_heatwave else "<="
+    elif quantile is None or op_str is None:
+        raise ValueError(
+            "quantile and op_str are required unless event_quantiles=True."
+        )
     cmp = resolve_op(op_str)
 
     start = str(single_case.start_date.date())
@@ -2230,31 +2378,18 @@ def _to_plot_lon_axis(lons_0360: np.ndarray) -> np.ndarray:
 
 def plot_event_consec_maps(
     df: pd.DataFrame,
-    exc_filt: np.ndarray,
-    dates: np.ndarray,
-    lats: np.ndarray,
-    lons: np.ndarray,
+    exc_filt: xr.DataArray,
     stem: str,
     min_consec: int = 3,
 ) -> None:
     """Save a per-event consecutive-days map for each qualifying event.
 
     For each row in ``df`` with ``max_consecutive_days >= min_consec``,
-    slices ``exc_filt`` to the event's bounding box and time window,
-    computes per-grid-point max consecutive days, and writes a
-    ``plasma_r`` pcolormesh to
+    slices ``exc_filt`` to the event's bounding box and time window
+    (wrap-crossing bboxes use the ``lon_min > lon_max`` convention
+    handled by ``PeriodicBoundaryIndex``), computes per-grid-point
+    max consecutive days, and writes a ``plasma_r`` pcolormesh to
     ``{stem}_event_{label:04d}_consec.png``.
-
-    Args:
-        df: DataFrame from ``events_to_dataframe``.
-        exc_filt: Boolean array (time, lat, lon) from
-            ``apply_consecutive_filter``, aligned with
-            dates/lats/lons.
-        dates: 1-D datetime64 array aligned with axis 0.
-        lats: 1-D latitude array aligned with axis 1.
-        lons: 1-D longitude array (0-360) aligned with axis 2.
-        stem: Output path stem.
-        min_consec: Minimum max_consecutive_days to plot. Default 3.
     """
     qualifying = df[df["max_consecutive_days"] >= min_consec]
     if qualifying.empty:
@@ -2269,29 +2404,26 @@ def plot_event_consec_maps(
         len(qualifying),
     )
 
-    def _idx(arr: np.ndarray, val: float) -> int:
-        return int(np.argmin(np.abs(arr - val)))
-
-    plot_lons = np.where(lons > 180, lons - 360.0, lons)
+    tdim = detect_time_dim(exc_filt)
 
     for _, row in qualifying.iterrows():
         label = int(row["label"])
-        start_date = np.datetime64(row["start_date"])
-        end_date = np.datetime64(row["end_date"])
-        t_indices = np.where((dates >= start_date) & (dates <= end_date))[0]
-
-        idx_s = _idx(lats, row["latitude_min"])
-        idx_n = _idx(lats, row["latitude_max"])
-        idx_w = _idx(lons, row["longitude_min"])
-        idx_e = _idx(lons, row["longitude_max"])
-
-        ev_filt = exc_filt[t_indices][:, idx_s : idx_n + 1, idx_w : idx_e + 1]
+        ev_da = exc_filt.sel(
+            {
+                tdim: slice(str(row["start_date"]), str(row["end_date"])),
+                "latitude": slice(row["latitude_min"], row["latitude_max"]),
+                "longitude": _wrap_lon_slice(
+                    row["longitude_min"], row["longitude_max"]
+                ),
+            }
+        )
+        ev_filt = ev_da.values
         if ev_filt.size == 0:
             continue
         consec = max_consecutive_days(ev_filt)
 
-        ev_lats = lats[idx_s : idx_n + 1]
-        ev_lons = plot_lons[idx_w : idx_e + 1]
+        ev_lats = ev_da.latitude.values
+        ev_lons = _to_plot_lon_axis(ev_da.longitude.values)
 
         plot_data = consec.astype(float)
         plot_data[consec < MIN_CONSECUTIVE_DAYS] = np.nan
@@ -2375,8 +2507,9 @@ def _add_plot_args(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=None,
         help=(
-            f"Climatology quantile (one of {VALID_QUANTILES}). "
-            "Defaults to 0.85 for heat_wave or 0.15 for freeze."
+            "Climatology quantile "
+            f"(one of {VALID_QUANTILES}). "
+            "Required unless --event-quantiles is set."
         ),
     )
     parser.add_argument(
@@ -2384,7 +2517,17 @@ def _add_plot_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help=(
             "Comparison operator string (>, >=, <, <=, ==). "
-            "Defaults to > for heat_wave or < for freeze."
+            "Required unless --event-quantiles is set."
+        ),
+    )
+    parser.add_argument(
+        "--event-quantiles",
+        action="store_true",
+        help=(
+            "Auto-pick climatology quantile/operator from each case's "
+            "event_type: heat_wave -> q=0.85 with '>='; "
+            "freeze/cold_snap -> q=0.15 with '<='. "
+            "Mutually exclusive with --quantile / --operator."
         ),
     )
 
@@ -2419,8 +2562,9 @@ def _add_case_args(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=None,
         help=(
-            f"Climatology quantile ({VALID_QUANTILES}). "
-            "Defaults to 0.85 for heat_wave or 0.15 for freeze."
+            "Climatology quantile "
+            f"({VALID_QUANTILES}). "
+            "Required unless --event-quantiles is set."
         ),
     )
     parser.add_argument(
@@ -2428,7 +2572,17 @@ def _add_case_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help=(
             "Comparison operator (>, >=, <, <=, ==). "
-            "Defaults to > for heat_wave or < for freeze."
+            "Required unless --event-quantiles is set."
+        ),
+    )
+    parser.add_argument(
+        "--event-quantiles",
+        action="store_true",
+        help=(
+            "Auto-pick climatology quantile/operator from each case's "
+            "event_type: heat_wave -> q=0.85 with '>='; "
+            "freeze/cold_snap -> q=0.15 with '<='. "
+            "Mutually exclusive with --quantile / --operator."
         ),
     )
 
@@ -2551,11 +2705,29 @@ def _add_global_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _validate_quantile_args(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
+    """Enforce mutual exclusion / required-together for quantile args."""
+    if args.event_quantiles and (
+        args.quantile is not None or args.operator is not None
+    ):
+        parser.error(
+            "--event-quantiles is mutually exclusive with --quantile and --operator."
+        )
+    if not args.event_quantiles and (args.quantile is None or args.operator is None):
+        parser.error(
+            "--quantile and --operator are required unless --event-quantiles is set."
+        )
+
+
 def _run_plot(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
 ) -> None:
     """Run the ``plot`` subcommand."""
+    _validate_quantile_args(args, parser)
     t0 = time_module.time()
     single_case = load_case(args.case_id_number)
     logger.info(
@@ -2575,6 +2747,7 @@ def _run_plot(
         single_case,
         quantile=args.quantile,
         op_str=args.operator,
+        event_quantiles=args.event_quantiles,
     )
 
     kind = "Heat Wave" if single_case.event_type == "heat_wave" else "Cold Snap"
@@ -2597,6 +2770,7 @@ def _run_case(
     parser: argparse.ArgumentParser,
 ) -> None:
     """Run the ``case`` subcommand."""
+    _validate_quantile_args(args, parser)
     wall_start = time_module.time()
 
     client = Client(LocalCluster(n_workers=args.n_workers))
@@ -2623,6 +2797,7 @@ def _run_case(
             out_dir,
             quantile=args.quantile,
             op_str=args.operator,
+            event_quantiles=args.event_quantiles,
         )
         for c in hw_fz
     )
@@ -2722,8 +2897,7 @@ def _run_global(
     )
 
     logger.info("Building land mask and grid-cell area array...")
-    land_mask = build_land_mask(t2m.longitude, t2m.latitude)
-    land_mask_np = land_mask.values.astype(bool)
+    land_mask = _attach_periodic_lon_index(build_land_mask(t2m.longitude, t2m.latitude))
     area_grid = compute_grid_cell_area(t2m.latitude.values, t2m.longitude.values)
 
     tdim = detect_time_dim(t2m)
@@ -2804,26 +2978,21 @@ def _run_global(
         time_module.time() - t0,
     )
 
-    dates = exc_da[tdim].values
+    exc_da = _attach_periodic_lon_index(exc_da.astype(bool))
+    t2m_daily_da = _attach_periodic_lon_index(
+        (t2m_daily_da - 273.15).astype(np.float32)
+    )
+
     lats = exc_da.latitude.values
     lons = exc_da.longitude.values
-    exc_np = exc_da.values.astype(bool)
-    del exc_da
-
-    t2m_daily_np = (t2m_daily_da.values - 273.15).astype(np.float32)
-    del t2m_daily_da
 
     logger.info(
         "Applying %d-day consecutive filter...",
         MIN_CONSECUTIVE_DAYS,
     )
-    exc_filt = _consecutive_filter_np(exc_np, MIN_CONSECUTIVE_DAYS, 1)
-    logger.info(
-        "  %d -> %d True cells",
-        exc_np.sum(),
-        exc_filt.sum(),
-    )
-    del exc_np
+    exc_filt = apply_consecutive_filter(exc_da)
+    logger.info("  %d True cells after filter", int(exc_filt.values.sum()))
+    del exc_da
 
     logger.info(
         "Detecting events (min_seed_area_km2=%.0f)...",
@@ -2832,9 +3001,6 @@ def _run_global(
     t0 = time_module.time()
     events = detect_events(
         exc_filt,
-        dates,
-        lats,
-        lons,
         event_type,
         area_grid=area_grid,
         min_seed_area_km2=args.min_area_km2,
@@ -2847,19 +3013,14 @@ def _run_global(
     )
     t0 = time_module.time()
     events = joblib.Parallel(n_jobs=-1, prefer="threads")(
-        joblib.delayed(expand_event_bounds)(
-            ev, exc_filt, dates, lats, lons, land_mask_np
-        )
-        for ev in events
+        joblib.delayed(expand_event_bounds)(ev, exc_filt, land_mask) for ev in events
     )
     logger.info("  done in %.1f s", time_module.time() - t0)
 
     logger.info("Computing per-event temperature statistics...")
     t0 = time_module.time()
-    events = include_temps_with_events(
-        events, t2m_daily_np, exc_filt, dates, lats, lons
-    )
-    del t2m_daily_np
+    events = include_temps_with_events(events, t2m_daily_da, exc_filt)
+    del t2m_daily_da
     logger.info("  done in %.1f s", time_module.time() - t0)
 
     stem = str(pathlib.Path(args.output).with_suffix(""))
@@ -2870,7 +3031,7 @@ def _run_global(
     logger.info("%d events written to %s", len(df), events_csv)
 
     logger.info("Computing max-consecutive-days plot...")
-    consec = max_consecutive_days(exc_filt)
+    consec = max_consecutive_days(exc_filt.values)
     plot_consecutive_map(
         consec,
         lats,
@@ -2896,13 +3057,14 @@ def _run_global(
     plot_events_high_consec(
         df,
         title=(
-            f"Events \u22656 consecutive days ({event_type.replace('_', ' ')})"
+            f"Events \u22656 consecutive days"
+            f" ({event_type.replace('_', ' ')})"
             f"\n{args.start_date} to {args.end_date}"
         ),
         output_path=f"{stem}_high_consec.png",
     )
 
-    plot_event_consec_maps(df, exc_filt, dates, lats, lons, stem)
+    plot_event_consec_maps(df, exc_filt, stem)
 
     del exc_filt
 
