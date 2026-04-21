@@ -89,9 +89,6 @@ _FZ_COLOR = "#4575b4"
 _BOX_ALPHA = 0.35
 _BOX_EDGE_ALPHA = 0.85
 
-EdgeName = Literal["north", "south", "east", "west"]
-
-
 class PeriodicBoundaryIndex(PandasIndex):
     """xarray index for a 1-D coordinate that wraps at a period.
 
@@ -278,33 +275,6 @@ def _consecutive_filter_np(
     return np.isin(labels, valid) & filled_runs
 
 
-def apply_consecutive_filter(
-    mask: xr.DataArray,
-    min_days: int = MIN_CONSECUTIVE_DAYS,
-    max_grace_days: int = 1,
-) -> xr.DataArray:
-    """Keep temporal runs of ``min_days``+ True days along axis 0.
-
-    Once a strict run of ``min_days`` True days exists at a grid
-    point, gaps of up to ``max_grace_days`` are bridged so a single
-    short-lived break does not split the event. Runs that never reach
-    ``min_days`` strict consecutive days are discarded.
-
-    Args:
-        mask: Boolean DataArray of shape (time, lat, lon). Any
-            xindexes (e.g. ``PeriodicBoundaryIndex`` on longitude) are
-            preserved on the returned DataArray.
-        min_days: Minimum strict run length. Default 3.
-        max_grace_days: Maximum gap length to bridge. Default 1.
-
-    Returns:
-        Boolean DataArray of the same shape and indexes with only
-        qualifying runs retained.
-    """
-    out_np = _consecutive_filter_np(mask.values.astype(bool), min_days, max_grace_days)
-    return mask.copy(data=out_np)
-
-
 def open_era5_t2m(start_date: str, end_date: str) -> xr.DataArray:
     """Open ERA5 2m temperature lazily for an inclusive date range.
 
@@ -326,47 +296,6 @@ def open_era5_t2m(start_date: str, end_date: str) -> xr.DataArray:
     t2m = t2m.sel({tdim: six_hourly})
     t2m = t2m.chunk({"latitude": -1, "longitude": -1})
     return t2m.sortby("latitude")
-
-
-def _align_climatology(
-    clim: xr.DataArray,
-    daily: xr.DataArray,
-    tdim: str,
-) -> xr.DataArray:
-    """Align a dayofyear-indexed climatology to a daily DataArray.
-
-    Computes the climatology into memory (366 x lat x lon) to avoid
-    dask chunk multiplication, then indexes by day-of-year via numpy.
-
-    Args:
-        clim: Climatology DataArray indexed by ``dayofyear``.
-        daily: Daily DataArray to align against.
-        tdim: Name of the time dimension in ``daily``.
-    """
-    clim_vals = clim.compute().values
-    clim_doy = clim.dayofyear.values
-    doy = daily[tdim].dt.dayofyear.values
-    max_doy = int(clim_doy.max())
-    doy_idx = np.clip(doy, 1, max_doy) - int(clim_doy.min())
-
-    clim_lats = clim.latitude.values
-    clim_lons = clim.longitude.values
-    daily_lats = daily.latitude.values
-    daily_lons = daily.longitude.values
-
-    if (
-        clim_lats.shape == daily_lats.shape
-        and np.allclose(clim_lats, daily_lats)
-        and clim_lons.shape == daily_lons.shape
-        and np.allclose(clim_lons, daily_lons)
-    ):
-        selected = clim_vals[doy_idx]
-    else:
-        lat_idx = np.array([np.argmin(np.abs(clim_lats - dl)) for dl in daily_lats])
-        lon_idx = np.array([np.argmin(np.abs(clim_lons - dl)) for dl in daily_lons])
-        selected = clim_vals[np.ix_(doy_idx, lat_idx, lon_idx)]
-
-    return xr.DataArray(selected, dims=daily.dims, coords=daily.coords)
 
 
 def get_climatology_bounds(
@@ -475,6 +404,47 @@ def build_exceedance_mask(
     return mask_6h.resample({tdim: "1D"}).min().astype(bool) & land_mask
 
 
+def _nearest_1d_index(arr: np.ndarray, val: float) -> int:
+    """Return the index of the nearest element in a 1-D array."""
+    return int(np.argmin(np.abs(arr - val)))
+
+
+def _peak_day_index(daily_counts: np.ndarray) -> int:
+    """Return the index of the peak-footprint day.
+
+    Ties broken as: last of two, middle of odd ≥ 3, first-middle of
+    even ≥ 4 (index ``(n_tied - 1) // 2``).
+    """
+    tied_days = np.where(daily_counts == daily_counts.max())[0]
+    n = len(tied_days)
+    if n <= 2:
+        return int(tied_days[-1]) if n == 2 else int(tied_days[0])
+    return int(tied_days[(n - 1) // 2])
+
+
+def _initial_edges_active(
+    init_region_land: np.ndarray,
+    band_pts: int,
+) -> Dict[str, bool]:
+    """Return edges that have ≥ 25% land in the initial box band.
+
+    Edges that are mostly ocean are disabled before the expansion loop
+    so the box does not slide into open water from the start.
+    """
+    active: Dict[str, bool] = {}
+    for edge in ("north", "south", "east", "west"):
+        if edge == "north":
+            strip = init_region_land[-band_pts:, :]
+        elif edge == "south":
+            strip = init_region_land[:band_pts, :]
+        elif edge == "west":
+            strip = init_region_land[:, :band_pts]
+        else:
+            strip = init_region_land[:, -band_pts:]
+        active[edge] = bool(strip.sum() / max(strip.size, 1) >= 0.25)
+    return active
+
+
 def _edge_valid_fraction(
     mask_2d: np.ndarray,
     land_2d: np.ndarray,
@@ -558,42 +528,18 @@ def expand_event_bounds(
         event["mean_consecutive_days"] = 0.0
         return event
 
-    def _lat_idx(val: float) -> int:
-        return int(np.argmin(np.abs(lats - val)))
+    idx_s0 = _nearest_1d_index(lats, event["lat_min"])
+    idx_n0 = _nearest_1d_index(lats, event["lat_max"])
+    idx_w0 = _nearest_1d_index(lons, event["lon_min"])
+    idx_e0 = _nearest_1d_index(lons, event["lon_max"])
 
-    def _lon_idx(val: float) -> int:
-        return int(np.argmin(np.abs(lons - val)))
-
-    idx_s0 = _lat_idx(event["lat_min"])
-    idx_n0 = _lat_idx(event["lat_max"])
-    idx_w0 = _lon_idx(event["lon_min"])
-    idx_e0 = _lon_idx(event["lon_max"])
-
-    daily_counts = ev_filt.sum(axis=(1, 2))
-    max_count = daily_counts.max()
-    tied_days = np.where(daily_counts == max_count)[0]
-    n_tied = len(tied_days)
-    if n_tied <= 2:
-        peak_day = int(tied_days[-1]) if n_tied == 2 else int(tied_days[0])
-    else:
-        peak_day = int(tied_days[(n_tied - 1) // 2])
+    peak_day = _peak_day_index(ev_filt.sum(axis=(1, 2)))
     peak_mask = ev_filt[peak_day]
 
     idx_s, idx_n, idx_w, idx_e = idx_s0, idx_n0, idx_w0, idx_e0
 
     init_region_land = land_mask_np[idx_s0 : idx_n0 + 1, idx_w0 : idx_e0 + 1]
-    edges_active: Dict[str, bool] = {}
-    for edge in ("north", "south", "east", "west"):
-        if edge == "north":
-            strip = init_region_land[-band_pts:, :]
-        elif edge == "south":
-            strip = init_region_land[:band_pts, :]
-        elif edge == "west":
-            strip = init_region_land[:, :band_pts]
-        else:
-            strip = init_region_land[:, -band_pts:]
-        land_frac = strip.sum() / max(strip.size, 1)
-        edges_active[edge] = bool(land_frac >= 0.25)
+    edges_active = _initial_edges_active(init_region_land, band_pts)
 
     for _ in range(MAX_SPATIAL_ITERATIONS):
         region = peak_mask[idx_s : idx_n + 1, idx_w : idx_e + 1]
@@ -786,14 +732,7 @@ def process_event(
     exc_6h = cmp(t2m, clim_aligned)
     daily_all_pass = exc_6h.resample({tdim: "1D"}).min().astype(bool)
 
-    land_reg = regionmask.defined_regions.natural_earth_v5_0_0.land_110
-    land_mask = (
-        land_reg.mask(
-            daily_all_pass.longitude,
-            daily_all_pass.latitude,
-        )
-        == 0
-    )
+    land_mask = build_land_mask(daily_all_pass.longitude, daily_all_pass.latitude)
 
     exc_mask = daily_all_pass & land_mask
 
@@ -805,19 +744,13 @@ def process_event(
     grid_res = np.abs(np.diff(all_lats[:2]))[0] if len(all_lats) > 1 else 0.25
     band_pts = max(1, int(round(EXPANSION_DEGREES / grid_res)))
 
-    def _lat_idx(val: float) -> int:
-        return int(np.argmin(np.abs(all_lats - val)))
-
-    def _lon_idx(val: float) -> int:
-        return int(np.argmin(np.abs(all_lons - val)))
-
     box_lon_min_era = _to_plot_lon(box_lon_min)
     box_lon_max_era = _to_plot_lon(box_lon_max)
 
-    idx_s0 = _lat_idx(box_lat_min)
-    idx_n0 = _lat_idx(box_lat_max)
-    idx_w0 = _lon_idx(box_lon_min_era)
-    idx_e0 = _lon_idx(box_lon_max_era)
+    idx_s0 = _nearest_1d_index(all_lats, box_lat_min)
+    idx_n0 = _nearest_1d_index(all_lats, box_lat_max)
+    idx_w0 = _nearest_1d_index(all_lons, box_lon_min_era)
+    idx_e0 = _nearest_1d_index(all_lons, box_lon_max_era)
 
     land_mask_np = land_mask.compute().values.astype(bool)
     box_land = land_mask_np[idx_s0 : idx_n0 + 1, idx_w0 : idx_e0 + 1]
@@ -894,22 +827,15 @@ def process_event(
     mask_np = mask_np[:final_t]
     filtered = _consecutive_filter_np(mask_np, MIN_CONSECUTIVE_DAYS, 1)
 
-    # Spatial expansion starts from the peak-footprint day. For tied
-    # counts: 2nd of 2, middle of odd count, or first-middle of even.
+    # Spatial expansion starts from the peak-footprint day.
     daily_counts = filtered.sum(axis=(1, 2))
-    max_count = daily_counts.max()
-    (tied_days,) = np.where(daily_counts == max_count)
-    n_tied = len(tied_days)
-    if n_tied <= 2:
-        peak_day = int(tied_days[-1]) if n_tied == 2 else int(tied_days[0])
-    else:
-        peak_day = int(tied_days[(n_tied - 1) // 2])
+    peak_day = _peak_day_index(daily_counts)
     peak_mask = filtered[peak_day]
     logger.info(
         "  Peak footprint on day %d (%d active grid points, %d tied days)",
         peak_day,
-        int(max_count),
-        n_tied,
+        int(daily_counts[peak_day]),
+        int((daily_counts == daily_counts.max()).sum()),
     )
 
     idx_s = idx_s0
@@ -918,24 +844,10 @@ def process_event(
     idx_e = idx_e0
 
     init_region_land = land_mask_np[idx_s0 : idx_n0 + 1, idx_w0 : idx_e0 + 1]
-    edges_active = {}
-    for edge in ("north", "south", "east", "west"):
-        if edge == "north":
-            strip = init_region_land[-band_pts:, :]
-        elif edge == "south":
-            strip = init_region_land[:band_pts, :]
-        elif edge == "west":
-            strip = init_region_land[:, :band_pts]
-        else:
-            strip = init_region_land[:, -band_pts:]
-        land_frac = strip.sum() / max(strip.size, 1)
-        edges_active[edge] = bool(land_frac >= 0.25)
-        if not edges_active[edge]:
-            logger.info(
-                "  %s edge disabled (%.1f%% land in initial box)",
-                edge.capitalize(),
-                land_frac * 100,
-            )
+    edges_active = _initial_edges_active(init_region_land, band_pts)
+    for edge, active in edges_active.items():
+        if not active:
+            logger.info("  %s edge disabled (< 25%% land)", edge.capitalize())
     n_iter = 0
 
     for iteration in range(MAX_SPATIAL_ITERATIONS):
@@ -1389,7 +1301,7 @@ def include_temps_with_events(
         t2m_daily_np: Float32 array (days, lat, lon) of daily-mean
             2m temperature in Celsius, aligned with dates/lats/lons.
         exc_filt: Boolean array (time, lat, lon) from
-            ``apply_consecutive_filter``, aligned with dates/lats/lons.
+            ``_consecutive_filter_np``, aligned with dates/lats/lons.
         dates: 1-D datetime64 array aligned with axis 0.
         lats: 1-D latitude array aligned with axis 1.
         lons: 1-D longitude array aligned with axis 2.
@@ -1399,18 +1311,15 @@ def include_temps_with_events(
         added (NaN when no active points exist).
     """
 
-    def _idx(arr: np.ndarray, val: float) -> int:
-        return int(np.argmin(np.abs(arr - val)))
-
     for ev in events:
         start_date = np.datetime64(ev["start"])
         end_date = np.datetime64(ev["end"])
         t_indices = np.where((dates >= start_date) & (dates <= end_date))[0]
 
-        idx_s = _idx(lats, ev["lat_min"])
-        idx_n = _idx(lats, ev["lat_max"])
-        idx_w = _idx(lons, ev["lon_min"])
-        idx_e = _idx(lons, ev["lon_max"])
+        idx_s = _nearest_1d_index(lats, ev["lat_min"])
+        idx_n = _nearest_1d_index(lats, ev["lat_max"])
+        idx_w = _nearest_1d_index(lons, ev["lon_min"])
+        idx_e = _nearest_1d_index(lons, ev["lon_max"])
 
         exc_ev = exc_filt[t_indices][:, idx_s : idx_n + 1, idx_w : idx_e + 1]
         t2m_ev = t2m_daily_np[t_indices][:, idx_s : idx_n + 1, idx_w : idx_e + 1]
@@ -1600,8 +1509,7 @@ def compute_consecutive_field(
     daily_all_pass = exc_6h.resample({tdim: "1D"}).min().astype(bool)
 
     logger.info("Building land mask...")
-    land = regionmask.defined_regions.natural_earth_v5_0_0.land_110
-    land_mask = land.mask(daily_all_pass.longitude, daily_all_pass.latitude) == 0
+    land_mask = build_land_mask(daily_all_pass.longitude, daily_all_pass.latitude)
 
     exc = daily_all_pass & land_mask
     mask_np = exc.compute().values.astype(bool)
@@ -1795,7 +1703,7 @@ def plot_consecutive_map(
     bin_edges = np.arange(MIN_CONSECUTIVE_DAYS - 0.5, vmax + 1.5, 1)
     norm = mcolors.BoundaryNorm(bin_edges, ncolors=n_levels)
 
-    plot_lons = np.array([_to_plot_lon(x) for x in lons])
+    plot_lons = np.where(lons > 180.0, lons - 360.0, lons)
 
     if extent is None:
         lon_min, lon_max = float(plot_lons.min()), float(plot_lons.max())
@@ -1859,104 +1767,6 @@ def plot_consecutive_map(
     return im
 
 
-def plot_event_bounds(
-    df: pd.DataFrame,
-    csv_path: str,
-    title: str = "Detected Heat Wave and Cold Snap Events",
-) -> None:
-    """Draw bounding boxes for all events on a global Robinson map.
-
-    The PNG is saved alongside ``csv_path`` with the same stem.
-    """
-    if df.empty:
-        logger.warning("No events to plot -- skipping bounds plot.")
-        return
-
-    out_path = str(pathlib.Path(csv_path).with_suffix(".png"))
-    hw_count = int((df["event_type"] == "heat_wave").sum())
-    fz_count = int((df["event_type"] == "cold_snap").sum())
-
-    fig, ax = plt.subplots(
-        subplot_kw={"projection": ccrs.Robinson()},
-        figsize=(14, 7),
-    )
-    ax.set_global()
-    ax.add_feature(cfeature.OCEAN, facecolor="lightblue", zorder=0)
-    ax.add_feature(cfeature.LAND, facecolor="whitesmoke", zorder=0)
-    ax.coastlines(linewidth=0.5, zorder=2)
-    ax.add_feature(
-        cfeature.BORDERS,
-        linewidth=0.3,
-        edgecolor="grey",
-        zorder=2,
-    )
-
-    for _, row in df.iterrows():
-        lon0 = _to_plot_lon(float(row["longitude_min"]))
-        lon1 = _to_plot_lon(float(row["longitude_max"]))
-        lat0, lat1 = float(row["latitude_min"]), float(row["latitude_max"])
-        if lon1 < lon0:
-            lon1 += 360.0
-        color = _HW_COLOR if row["event_type"] == "heat_wave" else _FZ_COLOR
-        kw = dict(
-            width=lon1 - lon0,
-            height=lat1 - lat0,
-            transform=ccrs.PlateCarree(),
-        )
-        ax.add_patch(
-            mpatches.Rectangle(
-                xy=(lon0, lat0),
-                facecolor=color,
-                edgecolor=color,
-                alpha=_BOX_ALPHA,
-                linewidth=1.0,
-                zorder=3,
-                **kw,
-            )
-        )
-        ax.add_patch(
-            mpatches.Rectangle(
-                xy=(lon0, lat0),
-                facecolor="none",
-                edgecolor=color,
-                alpha=_BOX_EDGE_ALPHA,
-                linewidth=1.0,
-                zorder=4,
-                **kw,
-            )
-        )
-
-    legend_handles = []
-    if hw_count:
-        legend_handles.append(
-            mpatches.Patch(
-                facecolor=_HW_COLOR,
-                alpha=0.7,
-                label=f"Heat wave ({hw_count})",
-            )
-        )
-    if fz_count:
-        legend_handles.append(
-            mpatches.Patch(
-                facecolor=_FZ_COLOR,
-                alpha=0.7,
-                label=f"Cold Snap ({fz_count})",
-            )
-        )
-    if legend_handles:
-        ax.legend(
-            handles=legend_handles,
-            loc="lower left",
-            fontsize=10,
-            framealpha=0.85,
-        )
-
-    ax.set_title(title, loc="left", fontsize=13)
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    logger.info("Saved bounds plot to %s", out_path)
-
-
 def plot_peak_day_with_bounds(
     peak_mask: np.ndarray,
     all_lats: np.ndarray,
@@ -1981,7 +1791,7 @@ def plot_peak_day_with_bounds(
         title: Figure title.
         output_path: Destination PNG path.
     """
-    plot_lons = np.array([_to_plot_lon(x) for x in all_lons])
+    plot_lons = np.where(all_lons > 180.0, all_lons - 360.0, all_lons)
     lon_min = float(plot_lons.min()) - 1
     lon_max = float(plot_lons.max()) + 1
     lat_min = float(all_lats.min()) - 1
@@ -2058,11 +1868,8 @@ def _add_lon_rect(
     does not produce an inverted or near-zero-width patch.
     """
 
-    def _to_180(lon: float) -> float:
-        return lon if lon <= 180 else lon - 360
-
-    lmin = _to_180(lon_min_0360)
-    lmax = _to_180(lon_max_0360)
+    lmin = _to_plot_lon(lon_min_0360)
+    lmax = _to_plot_lon(lon_max_0360)
 
     def _rect(x0: float, x1: float) -> mpatches.Rectangle:
         return mpatches.Rectangle(
@@ -2211,24 +2018,6 @@ def plot_events_high_consec(
     logger.info("High-consec plot saved to %s", output_path)
 
 
-def _to_plot_lon_axis(lons_0360: np.ndarray) -> np.ndarray:
-    """Convert a wrap-aware lon slab to a monotonic axis for plotting.
-
-    Inputs are 0-360 longitudes that may step backwards across the
-    seam (e.g. ``[350.0, ..., 359.75, 0.0, ..., 5.0]``). Returns the
-    same values shifted so they ascend monotonically (and potentially
-    extend slightly negative, e.g. ``[-10.0, ..., -0.25, 0.0, ..., 5.0]``).
-    """
-    if lons_0360.size == 0:
-        return lons_0360
-    diffs = np.diff(lons_0360)
-    wrap = np.where(diffs < 0)[0]
-    if wrap.size > 0:
-        split = int(wrap[0]) + 1
-        return np.concatenate([lons_0360[:split] - 360.0, lons_0360[split:]])
-    return np.where(lons_0360 > 180.0, lons_0360 - 360.0, lons_0360)
-
-
 def plot_event_consec_maps(
     df: pd.DataFrame,
     exc_filt: np.ndarray,
@@ -2249,7 +2038,7 @@ def plot_event_consec_maps(
     Args:
         df: DataFrame from ``events_to_dataframe``.
         exc_filt: Boolean array (time, lat, lon) from
-            ``apply_consecutive_filter``, aligned with
+            ``_consecutive_filter_np``, aligned with
             dates/lats/lons.
         dates: 1-D datetime64 array aligned with axis 0.
         lats: 1-D latitude array aligned with axis 1.
@@ -2270,9 +2059,6 @@ def plot_event_consec_maps(
         len(qualifying),
     )
 
-    def _idx(arr: np.ndarray, val: float) -> int:
-        return int(np.argmin(np.abs(arr - val)))
-
     plot_lons = np.where(lons > 180, lons - 360.0, lons)
 
     for _, row in qualifying.iterrows():
@@ -2281,10 +2067,10 @@ def plot_event_consec_maps(
         end_date = np.datetime64(row["end_date"])
         t_indices = np.where((dates >= start_date) & (dates <= end_date))[0]
 
-        idx_s = _idx(lats, row["latitude_min"])
-        idx_n = _idx(lats, row["latitude_max"])
-        idx_w = _idx(lons, row["longitude_min"])
-        idx_e = _idx(lons, row["longitude_max"])
+        idx_s = _nearest_1d_index(lats, row["latitude_min"])
+        idx_n = _nearest_1d_index(lats, row["latitude_max"])
+        idx_w = _nearest_1d_index(lons, row["longitude_min"])
+        idx_e = _nearest_1d_index(lons, row["longitude_max"])
 
         ev_filt = exc_filt[t_indices][:, idx_s : idx_n + 1, idx_w : idx_e + 1]
         if ev_filt.size == 0:
@@ -2355,22 +2141,8 @@ def _default_output(case_id_number: int, event_type: str) -> str:
     return f"case_{case_id_number}_consecutive_{kind}_days.png"
 
 
-def _add_plot_args(parser: argparse.ArgumentParser) -> None:
-    """Populate the ``plot`` subparser."""
-    parser.add_argument(
-        "--case-id-number",
-        type=int,
-        required=True,
-        help="case_id_number from events.yaml",
-    )
-    parser.add_argument(
-        "--output",
-        default=None,
-        help=(
-            "Output PNG path "
-            "(default: case_N_consecutive_{heatwave|cold_snap}_days.png)"
-        ),
-    )
+def _add_quantile_operator_args(parser: argparse.ArgumentParser) -> None:
+    """Add --quantile and --operator to a subparser (plot and case)."""
     parser.add_argument(
         "--quantile",
         type=float,
@@ -2388,6 +2160,25 @@ def _add_plot_args(parser: argparse.ArgumentParser) -> None:
             "Defaults to > for heat_wave or < for freeze."
         ),
     )
+
+
+def _add_plot_args(parser: argparse.ArgumentParser) -> None:
+    """Populate the ``plot`` subparser."""
+    parser.add_argument(
+        "--case-id-number",
+        type=int,
+        required=True,
+        help="case_id_number from events.yaml",
+    )
+    parser.add_argument(
+        "--output",
+        default=None,
+        help=(
+            "Output PNG path "
+            "(default: case_N_consecutive_{heatwave|cold_snap}_days.png)"
+        ),
+    )
+    _add_quantile_operator_args(parser)
 
 
 def _add_case_args(parser: argparse.ArgumentParser) -> None:
@@ -2415,23 +2206,7 @@ def _add_case_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Maximum case_id_number to process (inclusive)",
     )
-    parser.add_argument(
-        "--quantile",
-        type=float,
-        default=None,
-        help=(
-            f"Climatology quantile ({VALID_QUANTILES}). "
-            "Defaults to 0.85 for heat_wave or 0.15 for freeze."
-        ),
-    )
-    parser.add_argument(
-        "--operator",
-        default=None,
-        help=(
-            "Comparison operator (>, >=, <, <=, ==). "
-            "Defaults to > for heat_wave or < for freeze."
-        ),
-    )
+    _add_quantile_operator_args(parser)
 
 
 def _add_global_args(parser: argparse.ArgumentParser) -> None:
@@ -2552,10 +2327,7 @@ def _add_global_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _run_plot(
-    args: argparse.Namespace,
-    parser: argparse.ArgumentParser,
-) -> None:
+def _run_plot(args: argparse.Namespace) -> None:
     """Run the ``plot`` subcommand."""
     t0 = time_module.time()
     single_case = load_case(args.case_id_number)
@@ -2593,10 +2365,7 @@ def _run_plot(
     logger.info("Done in %.1f s", time_module.time() - t0)
 
 
-def _run_case(
-    args: argparse.Namespace,
-    parser: argparse.ArgumentParser,
-) -> None:
+def _run_case(args: argparse.Namespace) -> None:
     """Run the ``case`` subcommand."""
     wall_start = time_module.time()
 
@@ -2973,9 +2742,9 @@ def main() -> None:
 
     args = parser.parse_args()
     if args.cmd == "plot":
-        _run_plot(args, plot_p)
+        _run_plot(args)
     elif args.cmd == "case":
-        _run_case(args, case_p)
+        _run_case(args)
     elif args.cmd == "global":
         _run_global(args, global_p)
     else:  # pragma: no cover -- argparse enforces this
