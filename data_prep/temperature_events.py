@@ -1450,7 +1450,7 @@ def compute_consecutive_field(
     if quantile is None:
         quantile = 0.85 if is_heatwave else 0.15
     if op_str is None:
-        op_str = ">=" if is_heatwave else "<="
+        op_str = ">" if is_heatwave else "<"
     cmp = resolve_op(op_str)
 
     start = str(single_case.start_date.date())
