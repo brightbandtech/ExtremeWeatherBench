@@ -81,9 +81,7 @@ def atmospheric_river_mask(
     lat_axis = list(coords_dict.keys()).index("latitude")
     lat_shape = [1] * labeled_array.ndim
     lat_shape[lat_axis] = len(latitudes)
-    lat_grid = np.broadcast_to(
-        latitudes.reshape(lat_shape), labeled_array.shape
-    )
+    lat_grid = np.broadcast_to(latitudes.reshape(lat_shape), labeled_array.shape)
     valid_labels = [
         label
         for label in size_valid_labels
