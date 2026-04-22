@@ -89,6 +89,7 @@ _FZ_COLOR = "#4575b4"
 _BOX_ALPHA = 0.35
 _BOX_EDGE_ALPHA = 0.85
 
+
 class PeriodicBoundaryIndex(PandasIndex):
     """xarray index for a 1-D coordinate that wraps at a period.
 
