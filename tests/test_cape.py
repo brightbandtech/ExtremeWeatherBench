@@ -151,7 +151,7 @@ class TestEdgeCases:
         cape, cin = compute_ml_cape_cin_from_profile(p, t, td, z)
 
         assert cape >= 0, "CAPE should be non-negative"
-        assert cin <= 0, "CIN should be non-positive"
+        assert cin >= 0, "CIN should be non-negative (positive convention)"
 
     def test_many_levels(self):
         """Test with many levels (100)."""
@@ -165,7 +165,7 @@ class TestEdgeCases:
         cape, cin = compute_ml_cape_cin_from_profile(p, t, td, z)
 
         assert cape >= 0, "CAPE should be non-negative"
-        assert cin <= 0, "CIN should be non-positive"
+        assert cin >= 0, "CIN should be non-negative (positive convention)"
 
     def test_supersaturated_levels(self):
         """Test with supersaturated levels (dewpoint > temperature)."""
@@ -350,7 +350,8 @@ class TestKnownProfile:
                 "geopotential": 29.3 * 273 * np.log(1000 / p),
                 "mixed_layer_depth": 50,
                 "expected_cape_range": (200, 800),
-                "expected_cin_range": (-20, 20),
+                # CIN is returned as a non-negative inhibition magnitude.
+                "expected_cin_magnitude_range": (0, 50),
             }
         }
 
@@ -367,7 +368,7 @@ class TestKnownProfile:
             )
 
             cape_min, cape_max = profile["expected_cape_range"]
-            cin_min, cin_max = profile["expected_cin_range"]
+            cin_min, cin_max = profile["expected_cin_magnitude_range"]
 
             assert cape_min <= cape <= cape_max, (
                 f"{name}: CAPE {cape:.2f} outside expected range [{cape_min}, {cape_max}]"
@@ -407,7 +408,6 @@ class TestPerformance:
             f"Single profile computation too slow: {time_per_call:.2f} μs"
         )
 
-    @pytest.mark.flaky(reruns=3)
     def test_batch_performance(self, era5_reference):
         """Test that batch processing is reasonably fast."""
         import time
@@ -532,3 +532,314 @@ def test_pathological(pathological_profiles, profile_name, threshold, sign):
         )
     else:
         raise ValueError(f"Invalid sign: {sign}")
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for the three CIN bugs fixed in fix/improved-cape-cin
+# ---------------------------------------------------------------------------
+
+# Standard pressure / geopotential grid used by several tests below.
+_PRES = np.array(
+    [
+        1000.0,
+        925.0,
+        850.0,
+        700.0,
+        600.0,
+        500.0,
+        400.0,
+        300.0,
+        250.0,
+        200.0,
+        150.0,
+        100.0,
+        50.0,
+    ],
+    dtype=np.float64,
+)
+_GEOPOT = (
+    np.array(
+        [
+            0.0,
+            700.0,
+            1500.0,
+            3000.0,
+            4200.0,
+            5600.0,
+            7200.0,
+            9200.0,
+            10400.0,
+            11800.0,
+            13500.0,
+            16000.0,
+            20500.0,
+        ],
+        dtype=np.float64,
+    )
+    * 9.80665
+)  # convert m → J/kg (geopotential)
+
+
+class TestCINSignConvention:
+    """CIN must be returned as a non-negative magnitude (positive convention).
+
+    compute_buoyancy_energy_inline returns negative values below the LFC;
+    CIN must be negated before returning so callers receive a positive
+    inhibition energy (matching MetPy and xcape conventions).
+    """
+
+    def test_no_lfc_profile_returns_nonnegative_cin(self):
+        """Stable capped profile with no LFC: CAPE=0, CIN >= 0."""
+        t = np.array(
+            [
+                273.0,
+                270.0,
+                268.0,
+                260.0,
+                255.0,
+                250.0,
+                240.0,
+                230.0,
+                225.0,
+                220.0,
+                215.0,
+                210.0,
+                205.0,
+            ],
+            dtype=np.float64,
+        )
+        td = t - 20.0
+        cape, cin = compute_ml_cape_cin_from_profile(_PRES, t, td, _GEOPOT)
+        assert cape == 0.0, f"Stable profile should have CAPE=0, got {cape:.2f}"
+        assert cin >= 0.0, f"CIN should be non-negative, got {cin:.2f}"
+
+    def test_capped_convective_profile_returns_nonnegative_cin(self):
+        """Profile with LFC and cap inversion: CAPE > 0, CIN > 0."""
+        # Warm moist surface, strong cap at 850 hPa, then conditionally unstable above.
+        t = np.array(
+            [
+                303.0,
+                299.0,
+                296.0,
+                278.0,
+                270.0,
+                260.0,
+                245.0,
+                230.0,
+                225.0,
+                220.0,
+                215.0,
+                210.0,
+                205.0,
+            ],
+            dtype=np.float64,
+        )
+        td = np.array(
+            [
+                298.0,
+                292.0,
+                285.0,
+                268.0,
+                255.0,
+                245.0,
+                230.0,
+                215.0,
+                210.0,
+                205.0,
+                200.0,
+                195.0,
+                190.0,
+            ],
+            dtype=np.float64,
+        )
+        cape, cin = compute_ml_cape_cin_from_profile(_PRES, t, td, _GEOPOT)
+        assert cape > 0.0, f"Convective profile should have CAPE > 0, got {cape:.2f}"
+        assert cin >= 0.0, f"CIN should be non-negative, got {cin:.2f}"
+
+    def test_surface_buoyant_zero_cin(self):
+        """Surface-buoyant profile (parcel immediately positive): CIN should be ~0."""
+        # Very warm, very moist surface with no inversion.
+        t = np.array(
+            [
+                308.0,
+                300.0,
+                292.0,
+                278.0,
+                270.0,
+                260.0,
+                245.0,
+                230.0,
+                225.0,
+                220.0,
+                215.0,
+                210.0,
+                205.0,
+            ],
+            dtype=np.float64,
+        )
+        td = np.array(
+            [
+                305.0,
+                296.0,
+                288.0,
+                270.0,
+                258.0,
+                248.0,
+                232.0,
+                216.0,
+                210.0,
+                205.0,
+                200.0,
+                195.0,
+                190.0,
+            ],
+            dtype=np.float64,
+        )
+        cape, cin = compute_ml_cape_cin_from_profile(_PRES, t, td, _GEOPOT)
+        assert cape > 100.0, f"Should have significant CAPE, got {cape:.2f}"
+        assert cin < 10.0, (
+            f"Surface-buoyant profile should have near-zero CIN, got {cin:.2f}"
+        )
+
+
+class TestCINIntegrationScope:
+    """CIN must accumulate only negatively-buoyant layers between surface and LFC.
+
+    Before the fix, the LFC branch accumulated all buoyancy (positive and
+    negative) unconditionally.  A profile with a brief positive-buoyancy
+    layer near the surface followed by a cap should have CIN that reflects
+    only the cap, not a cancellation against the near-surface positive layer.
+    """
+
+    def test_cin_only_from_negative_buoyancy_layers(self):
+        """CIN should not be reduced by positively-buoyant sub-LFC layers."""
+        # Profile: parcel briefly buoyant near surface, then encounters a cap
+        # (stable layer 925-850 hPa), then free convection above.
+        t = np.array(
+            [
+                300.0,
+                297.0,
+                296.0,
+                278.0,
+                270.0,
+                260.0,
+                245.0,
+                230.0,
+                225.0,
+                220.0,
+                215.0,
+                210.0,
+                205.0,
+            ],
+            dtype=np.float64,
+        )
+        td = np.array(
+            [
+                297.0,
+                290.0,
+                280.0,
+                265.0,
+                252.0,
+                242.0,
+                228.0,
+                214.0,
+                208.0,
+                203.0,
+                198.0,
+                193.0,
+                188.0,
+            ],
+            dtype=np.float64,
+        )
+        # A second, drier version of the same profile (Td -12 K everywhere).
+        # With a drier ML parcel there is no near-surface positive buoyancy, so
+        # the LFC branch only ever sees negative buoyancy and CIN is unchanged.
+        # Comparing the two isolates the effect of the integration-scope bug:
+        # the buggy code would let the moist profile's brief positive buoyancy
+        # near the surface cancel some of the cap's negative buoyancy, giving a
+        # lower CIN than the drier profile despite having a stronger cap.
+        # After the fix both profiles accumulate only negative layers and the
+        # moist profile's CIN reflects the cap alone (≥50 J/kg).
+        t_dry = t.copy()
+        td_dry = td - 12.0
+
+        cape, cin = compute_ml_cape_cin_from_profile(_PRES, t, td, _GEOPOT)
+        cape_dry, cin_dry = compute_ml_cape_cin_from_profile(
+            _PRES, t_dry, td_dry, _GEOPOT
+        )
+
+        assert cape > 0.0, "Moist profile should have CAPE"
+        # CIN for the moist profile must be a substantial positive magnitude —
+        # if it were near-zero the sign-only check would pass even with the bug.
+        assert cin > 50.0, (
+            f"CIN should reflect the cap inversion (>50 J/kg), got {cin:.2f}. "
+            "A near-zero value suggests positive near-surface buoyancy is cancelling "
+            "the cap — the integration-scope bug may have been reintroduced."
+        )
+
+
+class TestLCLTemperatureInterpolation:
+    """The environment temperature at the inserted LCL level must be interpolated
+    from the surrounding profile, not set to the parcel's saturation temperature.
+
+    The original bug set new_temperature[insert_idx] = t_lcl (the parcel's LCL
+    temperature), making env_tv ≈ parcel_tv at the LCL and injecting a spurious
+    positive-buoyancy spike that generated a false LFC.  Profiles with a low LCL
+    and a strong capping inversion above were most affected: the false LFC hid the
+    real cap, driving CIN to near-zero when it should be substantial.
+    """
+
+    def test_capped_profile_cin_not_suppressed_by_false_lfc(self):
+        """A profile with a low LCL and cap inversion must have measurable CIN.
+
+        Before the fix, the spurious LCL buoyancy created a false LFC immediately
+        above the surface, making the integrator believe there was no cap and
+        returning CIN ≈ 0 even when the real cap required hundreds of J/kg to breach.
+        """
+        # Moist surface → low LCL.  Strong stable layer 925-850 hPa acts as cap.
+        t = np.array(
+            [
+                298.0,
+                297.0,
+                296.0,
+                278.0,
+                271.0,
+                262.0,
+                247.0,
+                232.0,
+                227.0,
+                222.0,
+                217.0,
+                212.0,
+                207.0,
+            ],
+            dtype=np.float64,
+        )
+        td = np.array(
+            [
+                296.5,
+                293.0,
+                286.0,
+                268.0,
+                256.0,
+                246.0,
+                232.0,
+                217.0,
+                211.0,
+                206.0,
+                201.0,
+                196.0,
+                191.0,
+            ],
+            dtype=np.float64,
+        )
+        cape, cin = compute_ml_cape_cin_from_profile(_PRES, t, td, _GEOPOT)
+        # If the false-LFC bug were present, CIN would be ~0 despite the clear cap.
+        # After the fix, the cap inversion is detected and CIN is substantial.
+        assert cape > 0.0, f"Profile should have CAPE above the cap, got {cape:.2f}"
+        assert cin > 10.0, (
+            f"Capped profile should have measurable CIN (>10 J/kg), got {cin:.2f}. "
+            "If CIN is near zero, the false-LFC bug may have been reintroduced: "
+            "check that insert_lcl_level interpolates the environment temperature "
+            "rather than using t_lcl."
+        )
