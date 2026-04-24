@@ -163,7 +163,7 @@ class TestGoldenTests:
                 forecast_threshold=15000,
                 target_threshold=0.3,
             ),
-            metrics.EarlySignal(threshold=15000),
+            metrics.EarlySignal(forecast_threshold=15000),
         ]
         severe_convection_evaluation_objects = [
             inputs.EvaluationObject(

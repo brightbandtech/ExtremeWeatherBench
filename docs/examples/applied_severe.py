@@ -9,6 +9,8 @@ logger.setLevel(logging.INFO)
 
 # Load case data from the default events.yaml
 case_yaml = ewb.load_cases()
+
+# Subset to one severe convection case for example
 case_list = [n for n in case_yaml if n.case_id_number == 305]
 
 # Define PPH target
@@ -38,7 +40,7 @@ pph_metrics = [
         forecast_threshold=15000,
         target_threshold=0.3,
     ),
-    ewb.metrics.EarlySignal(threshold=15000),
+    ewb.metrics.EarlySignal(forecast_threshold=15000),
 ]
 
 # Define LSR metrics as thresholdmetric to share scores contingency table
@@ -83,7 +85,9 @@ if __name__ == "__main__":
     logger.info("Starting EWB run")
 
     # Run the workflow with parllel_config backend set to dask
-    outputs = severe_ewb.run(parallel_config={"backend": "loky", "n_jobs": 3})
+    outputs = severe_ewb.run_evaluation(
+        parallel_config={"backend": "loky", "n_jobs": 3}
+    )
 
     # Save the results to a CSV file
     outputs.to_csv("applied_severe_convection_results.csv")

@@ -575,9 +575,11 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
     if missing_cols:
         logger.warning("Missing expected columns: %s.", missing_cols)
 
-    # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN)
-    # and reorder to match OUTPUT_COLUMNS specification
-    return df.reindex(columns=OUTPUT_COLUMNS)
+    # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN),
+    # reorder to match OUTPUT_COLUMNS specification, and preserve any
+    # extra columns (e.g. landfall metadata) appended at the end.
+    extra_cols = [c for c in df.columns if c not in OUTPUT_COLUMNS]
+    return df.reindex(columns=OUTPUT_COLUMNS + extra_cols)
 
 
 def _evaluate_metric_and_return_df(
@@ -632,6 +634,7 @@ def _evaluate_metric_and_return_df(
     metric_result = metric.compute_metric(
         forecast_data,
         target_data,
+        case_metadata=case_operator.case_metadata,
         **kwargs,
     )
     # If data is sparse, densify it

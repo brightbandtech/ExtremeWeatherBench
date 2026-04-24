@@ -8,6 +8,7 @@ This test suite covers:
 """
 
 # flake8: noqa: E501
+import math
 from unittest.mock import patch
 
 import numpy as np
@@ -15,6 +16,7 @@ import pandas as pd
 import pytest
 import xarray as xr
 
+from extremeweatherbench import derived
 from extremeweatherbench.events import tropical_cyclone
 
 
@@ -616,3 +618,653 @@ class TestTCIntegration:
             ]
             for var in expected_vars:
                 assert var in result.data_vars
+
+
+# ---------------------------------------------------------------------------
+# Shared fixture for end-to-end filter tests
+# ---------------------------------------------------------------------------
+
+
+def _make_single_init_tc_dataset(n_lead: int = 12, n_wind_strong: int = 10):
+    """Build a minimal synthetic TC dataset with one clear init_time.
+
+    Grid: 1° resolution, 21×21 points (lat 10–30°, lon -80 to -60°).
+    Storm: SLP=98 000 Pa at centre (lat=20, lon=-70) every (lead, valid) pair
+    on the diagonal (same init_time T0).
+    Wind: 20 m/s at one gridpoint east of centre for the first
+    ``n_wind_strong`` diagonal pairs; 2 m/s everywhere else.
+    Contour validation is OFF so only the wind filter is exercised.
+
+    With a 1° grid ``_degrees_to_gridpoints(2.0, ...)`` = 2 gridpoints, so
+    the ±2-pt neighbourhood around the centre includes the +1-pt east cell.
+
+    Expected: n_wind_strong detections have neighbourhood wind ≥ 10 m/s.
+    """
+    lat = np.arange(10.0, 31.0, 1.0)  # 21 pts, 1 ° spacing
+    lon = np.arange(-80.0, -59.0, 1.0)  # 21 pts, 1 ° spacing
+    n_lat, n_lon = len(lat), len(lon)
+    c_lat, c_lon = 10, 10  # centre indices → lat=20°, lon=-70°
+
+    T0 = pd.Timestamp("2023-09-10")
+    lead_h = np.arange(n_lead) * 6  # hours
+    lead_td = (lead_h * np.timedelta64(1, "h")).astype("timedelta64[ns]")
+    valid_times = pd.date_range(T0, periods=n_lead, freq="6h")
+
+    # init_time[lt, vt] = valid_time[vt] - lead_time[lt]
+    init_2d = np.array(
+        [
+            [valid_times[vt].to_datetime64() - lead_td[lt] for vt in range(n_lead)]
+            for lt in range(n_lead)
+        ]
+    )
+
+    # SLP: 98 000 Pa at centre for every (lt, vt) pair; 102 000 elsewhere
+    slp = np.full((n_lead, n_lead, n_lat, n_lon), 102000.0)
+    for k in range(n_lead):
+        slp[k, k, c_lat, c_lon] = 98000.0
+
+    # Wind: 20 m/s east of centre for the first n_wind_strong diagonal pairs
+    wind = np.full((n_lead, n_lead, n_lat, n_lon), 2.0)
+    for k in range(n_wind_strong):
+        wind[k, k, c_lat, c_lon + 1] = 20.0
+
+    # Geopotential thickness: zeros (contour validation disabled)
+    dz = np.zeros((n_lead, n_lead, n_lat, n_lon))
+
+    ds = xr.Dataset(
+        {
+            "air_pressure_at_mean_sea_level": (
+                ["lead_time", "valid_time", "latitude", "longitude"],
+                slp,
+            ),
+            "surface_wind_speed": (
+                ["lead_time", "valid_time", "latitude", "longitude"],
+                wind,
+            ),
+            "geopotential_thickness": (
+                ["lead_time", "valid_time", "latitude", "longitude"],
+                dz,
+            ),
+        },
+        coords={
+            "lead_time": lead_td,
+            "valid_time": valid_times,
+            "latitude": lat,
+            "longitude": lon,
+            "init_time": (["lead_time", "valid_time"], init_2d),
+        },
+    )
+    return ds
+
+
+def _make_ibt_for_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """IBTrACS stub matching the storm centre in ``_make_single_init_tc_dataset``."""
+    valid_times = ds.valid_time.values
+    return xr.Dataset(
+        {
+            "latitude": (["valid_time"], np.full(len(valid_times), 20.0)),
+            "longitude": (["valid_time"], np.full(len(valid_times), -70.0)),
+        },
+        coords={"valid_time": valid_times},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tests for _degrees_to_gridpoints
+# ---------------------------------------------------------------------------
+
+
+class TestDegreesToGridpoints:
+    """Unit tests for the _degrees_to_gridpoints helper.
+
+    Expected values are derived independently via:
+        ceil(degrees / mean_spacing)
+    where mean_spacing = (mean(|Δlat|) + mean(|Δlon|)) / 2.
+    """
+
+    def test_uniform_025_deg_grid_1deg(self):
+        """1° radius on 0.25° grid → ceil(1/0.25)=4."""
+        lat = np.arange(0.0, 10.0, 0.25)
+        lon = np.arange(0.0, 10.0, 0.25)
+        assert tropical_cyclone._degrees_to_gridpoints(1.0, lat, lon) == 4
+
+    def test_uniform_025_deg_grid_2deg(self):
+        """2° radius on 0.25° grid → ceil(2/0.25)=8."""
+        lat = np.arange(0.0, 20.0, 0.25)
+        lon = np.arange(0.0, 20.0, 0.25)
+        assert tropical_cyclone._degrees_to_gridpoints(2.0, lat, lon) == 8
+
+    def test_uniform_025_deg_grid_5deg(self):
+        """5° radius on 0.25° grid → ceil(5/0.25)=20."""
+        lat = np.arange(0.0, 90.0, 0.25)
+        lon = np.arange(0.0, 360.0, 0.25)
+        assert tropical_cyclone._degrees_to_gridpoints(5.0, lat, lon) == 20
+
+    def test_uniform_05_deg_grid_2deg(self):
+        """2° radius on 0.5° grid → ceil(2/0.5)=4."""
+        lat = np.arange(0.0, 20.0, 0.5)
+        lon = np.arange(0.0, 20.0, 0.5)
+        assert tropical_cyclone._degrees_to_gridpoints(2.0, lat, lon) == 4
+
+    def test_uniform_1_deg_grid_2deg(self):
+        """2° radius on 1° grid → ceil(2/1)=2."""
+        lat = np.arange(10.0, 31.0, 1.0)
+        lon = np.arange(-80.0, -59.0, 1.0)
+        assert tropical_cyclone._degrees_to_gridpoints(2.0, lat, lon) == 2
+
+    def test_non_square_grid(self):
+        """Non-square grid (0.25° lat, 0.5° lon): mean=0.375; 1.5°→ceil(4)=4."""
+        lat = np.arange(0.0, 20.0, 0.25)  # 0.25° spacing
+        lon = np.arange(0.0, 20.0, 0.5)  # 0.5° spacing
+        # mean_spacing = (0.25 + 0.5) / 2 = 0.375
+        # ceil(1.5 / 0.375) = ceil(4.0) = 4
+        assert tropical_cyclone._degrees_to_gridpoints(1.5, lat, lon) == 4
+
+    def test_non_square_grid_fractional(self):
+        """Non-square grid (0.25° lat, 0.5° lon): 2°→ceil(5.333)=6."""
+        lat = np.arange(0.0, 20.0, 0.25)
+        lon = np.arange(0.0, 20.0, 0.5)
+        # mean_spacing = 0.375; ceil(2/0.375) = ceil(5.333) = 6
+        expected = math.ceil(2.0 / 0.375)
+        assert tropical_cyclone._degrees_to_gridpoints(2.0, lat, lon) == expected
+
+    def test_always_at_least_one(self):
+        """Very small degree value never returns zero."""
+        lat = np.arange(0.0, 10.0, 0.25)
+        lon = np.arange(0.0, 10.0, 0.25)
+        assert tropical_cyclone._degrees_to_gridpoints(0.01, lat, lon) >= 1
+
+    def test_single_point_coords_fallback(self):
+        """Single-point coordinates fall back to 1.0° spacing."""
+        lat = np.array([20.0])
+        lon = np.array([-70.0])
+        # mean_spacing = (1.0 + 1.0) / 2 = 1.0; ceil(2/1) = 2
+        assert tropical_cyclone._degrees_to_gridpoints(2.0, lat, lon) == 2
+
+    def test_result_is_integer(self):
+        """Return type is always a plain Python int."""
+        lat = np.arange(0.0, 10.0, 0.25)
+        lon = np.arange(0.0, 10.0, 0.25)
+        result = tropical_cyclone._degrees_to_gridpoints(1.0, lat, lon)
+        assert isinstance(result, int)
+
+    def test_monotone_in_degrees(self):
+        """Larger degree radius never gives fewer gridpoints."""
+        lat = np.arange(0.0, 20.0, 0.25)
+        lon = np.arange(0.0, 20.0, 0.25)
+        prev = tropical_cyclone._degrees_to_gridpoints(0.5, lat, lon)
+        for deg in [1.0, 1.5, 2.0, 3.0, 5.0]:
+            cur = tropical_cyclone._degrees_to_gridpoints(deg, lat, lon)
+            assert cur >= prev, f"Expected monotone increase at {deg}°"
+            prev = cur
+
+
+# ---------------------------------------------------------------------------
+# Tests for TropicalCycloneTrackVariables parameter defaults
+# ---------------------------------------------------------------------------
+
+
+class TestTropicalCycloneTrackVariablesDefaults:
+    """Verify new parameter names and default values."""
+
+    def test_min_distance_between_peaks_degrees_default(self):
+        tc = derived.TropicalCycloneTrackVariables()
+        assert tc.min_distance_between_peaks_degrees == 1.0
+
+    def test_wind_search_radius_degrees_default(self):
+        tc = derived.TropicalCycloneTrackVariables()
+        assert tc.wind_search_radius_degrees == 2.0
+
+    def test_timestep_count_wind_minimum_default(self):
+        tc = derived.TropicalCycloneTrackVariables()
+        assert tc.timestep_count_wind_minimum == 10
+
+    def test_custom_min_distance_between_peaks_degrees(self):
+        tc = derived.TropicalCycloneTrackVariables(
+            min_distance_between_peaks_degrees=0.5
+        )
+        assert tc.min_distance_between_peaks_degrees == 0.5
+
+    def test_custom_wind_search_radius_degrees(self):
+        tc = derived.TropicalCycloneTrackVariables(wind_search_radius_degrees=3.0)
+        assert tc.wind_search_radius_degrees == 3.0
+
+    def test_old_min_distance_between_peaks_kwarg_raises(self):
+        """Renamed parameter: old name must raise TypeError."""
+        with pytest.raises(TypeError):
+            tropical_cyclone.generate_tc_tracks_by_init_time(
+                xr.DataArray(),
+                xr.DataArray(),
+                xr.DataArray(),
+                xr.Dataset(),
+                min_distance_between_peaks=5,  # old name
+            )
+
+
+# ---------------------------------------------------------------------------
+# End-to-end tests for neighbourhood wind sampling and the wind-count filter
+# ---------------------------------------------------------------------------
+
+
+class TestNeighbourhoodWindSampling:
+    """Verify that peak_winds uses max in the ±wind_search_radius neighbourhood.
+
+    On the 1° test grid, _degrees_to_gridpoints(2.0, …)=2. The high-wind cell
+    is 1 gridpoint east of the SLP minimum, so it falls inside the ±2-pt box.
+    The wind AT the centre is 2 m/s; the neighbourhood max is 20 m/s.
+    The output surface_wind_speed must reflect the neighbourhood max (≥10 m/s),
+    not the centre value (2 m/s).
+    """
+
+    def test_output_wind_exceeds_centre_wind(self):
+        """Detected surface_wind_speed > wind at SLP minimum (2 m/s)."""
+        ds = _make_single_init_tc_dataset(n_lead=12, n_wind_strong=12)
+        ibt = _make_ibt_for_dataset(ds)
+        result = tropical_cyclone.generate_tc_tracks_by_init_time(
+            sea_level_pressure=ds["air_pressure_at_mean_sea_level"],
+            wind_speed=ds["surface_wind_speed"],
+            geopotential_thickness=ds["geopotential_thickness"],
+            tc_track_analysis_data=ibt,
+            timestep_count_wind_minimum=1,
+            use_contour_validation=False,
+            surface_pressure_threshold=102000.0,
+            wind_search_radius_degrees=2.0,
+        )
+        assert result.sizes.get("valid_time", 0) > 0, "Expected detections"
+        ws = result["surface_wind_speed"].values
+        # Centre wind is 2 m/s; neighbourhood max is 20 m/s
+        assert np.nanmax(ws) > 2.0, "Neighbourhood max must exceed centre wind"
+        assert np.nanmax(ws) >= 10.0, "At least one detection should be ≥10 m/s"
+
+    def test_output_wind_close_to_neighbourhood_max(self):
+        """Neighbourhood max (20 m/s) is returned, not centre value (2 m/s)."""
+        ds = _make_single_init_tc_dataset(n_lead=5, n_wind_strong=5)
+        ibt = _make_ibt_for_dataset(ds)
+        result = tropical_cyclone.generate_tc_tracks_by_init_time(
+            sea_level_pressure=ds["air_pressure_at_mean_sea_level"],
+            wind_speed=ds["surface_wind_speed"],
+            geopotential_thickness=ds["geopotential_thickness"],
+            tc_track_analysis_data=ibt,
+            timestep_count_wind_minimum=1,
+            use_contour_validation=False,
+            surface_pressure_threshold=102000.0,
+            wind_search_radius_degrees=2.0,
+        )
+        assert result.sizes.get("valid_time", 0) > 0
+        ws = result["surface_wind_speed"].values
+        ws_detected = ws[~np.isnan(ws)]
+        assert len(ws_detected) > 0, "No non-NaN wind values in output"
+        # All detected timesteps should carry the neighbourhood max (20 m/s)
+        assert np.allclose(ws_detected, 20.0, atol=1.0), (
+            f"Expected neighbourhood max ≈20 m/s, got {ws_detected}"
+        )
+
+
+class TestMinTrackTimestepsWindFilter:
+    """Verify the wind-count filter: track survives iff it has >= timestep_count_wind_minimum
+    detections where the neighbourhood peak wind is >= 10 m/s.
+
+    Setup: n_lead=12, n_wind_strong=10.  The single long-lived track has exactly
+    10 detections with neighbourhood wind=20 m/s and 2 with wind=2 m/s.
+    Independent expectation:
+      min_ts ≤ 10 → track passes → result has valid_time > 0
+      min_ts = 11 → track fails  → result has valid_time == 0
+    """
+
+    N_LEAD = 12
+    N_WIND_STRONG = 10  # independently chosen threshold
+
+    @pytest.fixture(scope="class")
+    def tc_ds(self):
+        return _make_single_init_tc_dataset(self.N_LEAD, self.N_WIND_STRONG)
+
+    @pytest.fixture(scope="class")
+    def ibt(self, tc_ds):
+        return _make_ibt_for_dataset(tc_ds)
+
+    def _run(self, tc_ds, ibt, min_ts):
+        return tropical_cyclone.generate_tc_tracks_by_init_time(
+            sea_level_pressure=tc_ds["air_pressure_at_mean_sea_level"],
+            wind_speed=tc_ds["surface_wind_speed"],
+            geopotential_thickness=tc_ds["geopotential_thickness"],
+            tc_track_analysis_data=ibt,
+            timestep_count_wind_minimum=min_ts,
+            use_contour_validation=False,
+            surface_pressure_threshold=102000.0,
+            wind_search_radius_degrees=2.0,
+        )
+
+    def test_passes_at_exact_threshold(self, tc_ds, ibt):
+        """min_ts == n_wind_strong: track has exactly enough windy steps."""
+        result = self._run(tc_ds, ibt, self.N_WIND_STRONG)
+        assert result.sizes.get("valid_time", 0) > 0, (
+            f"Expected detections with min_ts={self.N_WIND_STRONG}"
+        )
+
+    def test_passes_below_threshold(self, tc_ds, ibt):
+        """min_ts < n_wind_strong: track comfortably passes."""
+        for min_ts in [1, 5, self.N_WIND_STRONG - 1]:
+            result = self._run(tc_ds, ibt, min_ts)
+            assert result.sizes.get("valid_time", 0) > 0, (
+                f"Expected detections with min_ts={min_ts}"
+            )
+
+    def test_fails_above_threshold(self, tc_ds, ibt):
+        """min_ts > n_wind_strong: track lacks sufficient windy steps."""
+        result = self._run(tc_ds, ibt, self.N_WIND_STRONG + 1)
+        assert result.sizes.get("valid_time", 0) == 0, (
+            f"Expected 0 detections with min_ts={self.N_WIND_STRONG + 1}"
+        )
+
+    def test_boundary_is_sharp(self, tc_ds, ibt):
+        """One step above the exact threshold flips pass→fail."""
+        result_pass = self._run(tc_ds, ibt, self.N_WIND_STRONG)
+        result_fail = self._run(tc_ds, ibt, self.N_WIND_STRONG + 1)
+        assert result_pass.sizes.get("valid_time", 0) > 0
+        assert result_fail.sizes.get("valid_time", 0) == 0
+
+
+class TestFillTrackGapsFromFields:
+    """Tests for _fill_track_gaps_from_fields SLP fallback."""
+
+    def test_fills_gap_with_slp_minimum(self):
+        """A gap between two detections is filled by finding
+        the SLP minimum near the expected position."""
+        n_lat, n_lon = 31, 31
+        lat = np.linspace(0, 30, n_lat)
+        lon = np.linspace(110, 140, n_lon)
+
+        # 3 timesteps; detection at ts 0 and ts 2, gap at 1
+        lt_seq = np.array([0, 1, 2])
+        vt_seq = np.array([0, 1, 2])
+        tid = 5000
+
+        detections = [
+            {
+                "lead_time_index": 0,
+                "valid_time_index": 0,
+                "track_id": tid,
+                "latitude": 15.0,
+                "longitude": 125.0,
+                "slp": 99800.0,
+                "wind": 20.0,
+            },
+            {
+                "lead_time_index": 2,
+                "valid_time_index": 2,
+                "track_id": tid,
+                "latitude": 15.0,
+                "longitude": 125.0,
+                "slp": 99600.0,
+                "wind": 22.0,
+            },
+        ]
+
+        # SLP field at ts 1: minimum at (15, 125)
+        min_r = np.argmin(np.abs(lat - 15.0))
+        min_c = np.argmin(np.abs(lon - 125.0))
+        slp_all = np.full((3, n_lat, n_lon), 101000.0)
+        slp_all[1, min_r, min_c] = 99700.0
+        wind_all = np.full((3, n_lat, n_lon), 5.0)
+        wind_all[1, min_r, min_c] = 18.0
+
+        result = tropical_cyclone._fill_track_gaps_from_fields(
+            detections,
+            slp_all,
+            wind_all,
+            lt_seq,
+            vt_seq,
+            lat,
+            lon,
+            wind_search_radius_gridpts=1,
+        )
+
+        # Should now have 3 detections
+        assert len(result) == 3
+        gap_det = [d for d in result if d["lead_time_index"] == 1]
+        assert len(gap_det) == 1
+        assert gap_det[0]["track_id"] == tid
+        np.testing.assert_allclose(gap_det[0]["latitude"], lat[min_r], atol=0.5)
+        np.testing.assert_allclose(gap_det[0]["longitude"], lon[min_c], atol=0.5)
+
+    def test_no_fill_beyond_endpoints(self):
+        """Timesteps outside the first/last detection are
+        NOT filled."""
+        n_lat, n_lon = 11, 11
+        lat = np.linspace(10, 20, n_lat)
+        lon = np.linspace(120, 130, n_lon)
+
+        lt_seq = np.array([0, 1, 2, 3, 4])
+        vt_seq = np.array([0, 1, 2, 3, 4])
+        tid = 100
+
+        detections = [
+            {
+                "lead_time_index": 1,
+                "valid_time_index": 1,
+                "track_id": tid,
+                "latitude": 15.0,
+                "longitude": 125.0,
+                "slp": 99800.0,
+                "wind": 20.0,
+            },
+            {
+                "lead_time_index": 3,
+                "valid_time_index": 3,
+                "track_id": tid,
+                "latitude": 15.0,
+                "longitude": 125.0,
+                "slp": 99600.0,
+                "wind": 22.0,
+            },
+        ]
+
+        slp_all = np.full((5, n_lat, n_lon), 101000.0)
+        slp_all[:, 5, 5] = 99500.0
+        wind_all = np.full((5, n_lat, n_lon), 5.0)
+
+        result = tropical_cyclone._fill_track_gaps_from_fields(
+            detections,
+            slp_all,
+            wind_all,
+            lt_seq,
+            vt_seq,
+            lat,
+            lon,
+            wind_search_radius_gridpts=1,
+        )
+
+        filled_lts = {d["lead_time_index"] for d in result}
+        # ts 0 and ts 4 should NOT be filled
+        assert 0 not in filled_lts
+        assert 4 not in filled_lts
+        # ts 2 should be filled
+        assert 2 in filled_lts
+
+    def test_empty_detections(self):
+        """No detections should return empty list."""
+        result = tropical_cyclone._fill_track_gaps_from_fields(
+            [],
+            np.zeros((1, 5, 5)),
+            np.zeros((1, 5, 5)),
+            np.array([0]),
+            np.array([0]),
+            np.linspace(0, 10, 5),
+            np.linspace(0, 10, 5),
+            wind_search_radius_gridpts=1,
+        )
+        assert result == []
+
+    def test_prefers_closest_candidate_over_deepest(self):
+        """Among low-SLP candidates, pick the one nearest
+        to expected position, not the absolute minimum."""
+        n_lat, n_lon = 31, 31
+        lat = np.linspace(0, 30, n_lat)
+        lon = np.linspace(110, 140, n_lon)
+
+        lt_seq = np.array([0, 1, 2])
+        vt_seq = np.array([0, 1, 2])
+        tid = 42
+
+        detections = [
+            {
+                "lead_time_index": 0,
+                "valid_time_index": 0,
+                "track_id": tid,
+                "latitude": 15.0,
+                "longitude": 125.0,
+                "slp": 99800.0,
+                "wind": 20.0,
+            },
+            {
+                "lead_time_index": 2,
+                "valid_time_index": 2,
+                "track_id": tid,
+                "latitude": 15.0,
+                "longitude": 125.0,
+                "slp": 99600.0,
+                "wind": 22.0,
+            },
+        ]
+
+        near_r = np.argmin(np.abs(lat - 15.0))
+        near_c = np.argmin(np.abs(lon - 125.0))
+        far_r = np.argmin(np.abs(lat - 17.0))
+        far_c = np.argmin(np.abs(lon - 127.0))
+
+        slp_all = np.full((3, n_lat, n_lon), 101000.0)
+        # Near candidate: moderate low
+        slp_all[1, near_r, near_c] = 99700.0
+        # Far candidate: deeper low but farther away
+        slp_all[1, far_r, far_c] = 99200.0
+
+        wind_all = np.full((3, n_lat, n_lon), 5.0)
+        wind_all[1, near_r, near_c] = 18.0
+        wind_all[1, far_r, far_c] = 25.0
+
+        result = tropical_cyclone._fill_track_gaps_from_fields(
+            detections,
+            slp_all,
+            wind_all,
+            lt_seq,
+            vt_seq,
+            lat,
+            lon,
+            wind_search_radius_gridpts=1,
+        )
+
+        gap = [d for d in result if d["lead_time_index"] == 1]
+        assert len(gap) == 1
+        np.testing.assert_allclose(
+            gap[0]["latitude"],
+            lat[near_r],
+            atol=0.5,
+        )
+        np.testing.assert_allclose(
+            gap[0]["longitude"],
+            lon[near_c],
+            atol=0.5,
+        )
+
+    def test_chaining_uses_filled_points(self):
+        """Successive gap fills should chain through
+        previously filled positions, not always interpolate
+        from the original bracketing detections.
+
+        Setup: endpoints at lat 10 (ts 0) and lat 18 (ts 3).
+        The SLP min at ts 1 sits at lat 14, which becomes
+        the "previous" anchor for ts 2. With chaining, ts 2
+        interpolates between lat 14 and 18 (expect ~16);
+        without chaining it would use 10 and 18 (expect ~14.7).
+        We place the ts 2 SLP min at lat 16 so it is only
+        chosen when the chained anchor shifts the expected
+        position northward."""
+        n_lat, n_lon = 41, 21
+        lat = np.linspace(8, 20, n_lat)
+        lon = np.linspace(123, 127, n_lon)
+
+        lt_seq = np.arange(4)
+        vt_seq = np.arange(4)
+        tid = 99
+
+        detections = [
+            {
+                "lead_time_index": 0,
+                "valid_time_index": 0,
+                "track_id": tid,
+                "latitude": 10.0,
+                "longitude": 125.0,
+                "slp": 99800.0,
+                "wind": 20.0,
+            },
+            {
+                "lead_time_index": 3,
+                "valid_time_index": 3,
+                "track_id": tid,
+                "latitude": 18.0,
+                "longitude": 125.0,
+                "slp": 99600.0,
+                "wind": 22.0,
+            },
+        ]
+
+        slp_all = np.full((4, n_lat, n_lon), 101000.0)
+        wind_all = np.full((4, n_lat, n_lon), 5.0)
+        c_mid = np.argmin(np.abs(lon - 125.0))
+
+        # ts 1: SLP min at lat 14
+        r_ts1 = np.argmin(np.abs(lat - 14.0))
+        slp_all[1, r_ts1, c_mid] = 99700.0
+        wind_all[1, r_ts1, c_mid] = 15.0
+
+        # ts 2: SLP min at lat 16 (only reachable via
+        # chained anchor at lat 14, not via endpoint
+        # midpoint at lat ~14.7)
+        r_ts2 = np.argmin(np.abs(lat - 16.0))
+        slp_all[2, r_ts2, c_mid] = 99700.0
+        wind_all[2, r_ts2, c_mid] = 15.0
+
+        result = tropical_cyclone._fill_track_gaps_from_fields(
+            detections,
+            slp_all,
+            wind_all,
+            lt_seq,
+            vt_seq,
+            lat,
+            lon,
+            wind_search_radius_gridpts=1,
+        )
+
+        assert len(result) == 4
+        ts2_fill = [d for d in result if d["lead_time_index"] == 2]
+        assert len(ts2_fill) == 1
+        np.testing.assert_allclose(
+            ts2_fill[0]["latitude"],
+            lat[r_ts2],
+            atol=0.5,
+        )
+
+    def test_single_detection_no_fill(self):
+        """A single detection should not trigger gap fill."""
+        detections = [
+            {
+                "lead_time_index": 0,
+                "valid_time_index": 0,
+                "track_id": 1,
+                "latitude": 15.0,
+                "longitude": 125.0,
+                "slp": 99800.0,
+                "wind": 20.0,
+            },
+        ]
+        result = tropical_cyclone._fill_track_gaps_from_fields(
+            detections,
+            np.full((3, 5, 5), 101000.0),
+            np.full((3, 5, 5), 5.0),
+            np.array([0, 1, 2]),
+            np.array([0, 1, 2]),
+            np.linspace(0, 10, 5),
+            np.linspace(0, 10, 5),
+            wind_search_radius_gridpts=1,
+        )
+        assert len(result) == 1

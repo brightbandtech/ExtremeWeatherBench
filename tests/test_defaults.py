@@ -10,8 +10,8 @@ from extremeweatherbench import defaults, inputs, metrics
 class TestDefaults:
     """Test the defaults module."""
 
-    def test_preprocess_cira_forecast_dataset(self):
-        """Test the _preprocess_cira_forecast_dataset function."""
+    def test_preprocess_cira_kerchunk_forecast_dataset(self):
+        """Test the preprocess_cira_kerchunk_forecast_dataset function."""
 
         # Create a mock dataset with 'time' coordinate matching expected output size
         # The function creates lead_time with 41 values (0 to 240 by 6)
@@ -21,7 +21,7 @@ class TestDefaults:
             {"temperature": (["time"], temp_data)}, coords={"time": time_data}
         )
 
-        result = defaults._preprocess_cira_forecast_dataset(mock_ds)
+        result = defaults.preprocess_cira_kerchunk_forecast_dataset(mock_ds)
 
         # Check that 'time' was renamed to 'lead_time'
         assert "lead_time" in result.coords
@@ -188,17 +188,24 @@ class TestCiraFcnv2PreprocessFunctions:
     def test_tropical_cyclone_forecast_has_tc_preprocess(self):
         """Test that cira_fcnv2_tropical_cyclone_forecast uses TC preprocess."""
         forecast = defaults.cira_fcnv2_tropical_cyclone_forecast
-        assert forecast.preprocess == defaults._preprocess_cira_tc_forecast_dataset
+        assert (
+            forecast.preprocess == defaults.preprocess_cira_icechunk_tc_forecast_dataset
+        )
 
     def test_atmospheric_river_forecast_has_ar_preprocess(self):
         """Test that cira_fcnv2_atmospheric_river_forecast uses AR preprocess."""
         forecast = defaults.cira_fcnv2_atmospheric_river_forecast
-        assert forecast.preprocess == defaults._preprocess_cira_ar_forecast_dataset
+        assert (
+            forecast.preprocess == defaults.preprocess_cira_icechunk_ar_forecast_dataset
+        )
 
     def test_severe_convection_forecast_has_severe_preprocess(self):
         """Test that cira_fcnv2_severe_convection_forecast uses severe preprocess."""
         forecast = defaults.cira_fcnv2_severe_convection_forecast
-        assert forecast.preprocess == defaults._preprocess_severe_cira_forecast_dataset
+        assert (
+            forecast.preprocess
+            == defaults.preprocess_cira_icechunk_severe_forecast_dataset
+        )
 
     def test_all_forecasts_have_preprocess_attribute(self):
         """Test that all cira_fcnv2 forecasts have a preprocess attribute set."""

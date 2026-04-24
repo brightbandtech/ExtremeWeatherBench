@@ -11,7 +11,7 @@ logger.setLevel(logging.INFO)
 # Users can also define their own cases_dict structure
 case_yaml = ewb.load_cases()
 
-# Define targets
+
 # ERA5 target
 era5_freeze_target = ewb.targets.ERA5(
     variables=["surface_air_temperature"],
@@ -21,18 +21,11 @@ era5_freeze_target = ewb.targets.ERA5(
 # GHCN target
 ghcn_freeze_target = ewb.targets.GHCN(variables=["surface_air_temperature"])
 
-# Define forecast (FCNv2 CIRA Virtualizarr)
-fcnv2_forecast = ewb.forecasts.KerchunkForecast(
-    name="fcnv2_forecast",
-    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
-    variables=["surface_air_temperature"],
-    variable_mapping=ewb.CIRA_metadata_variable_mapping,
-    storage_options={"remote_protocol": "s3", "remote_options": {"anon": True}},
-    preprocess=ewb.defaults._preprocess_bb_cira_forecast_dataset,
-)
+# Forecast (FCNv2) using helper in defaults
+fcnv2_forecast = ewb.defaults.cira_fcnv2_freeze_forecast
 
 # Load the climatology for DurationMeanError
-climatology = ewb.get_climatology(quantile=0.85)
+climatology = ewb.get_climatology(quantile=0.15)
 
 # Define the metrics
 metrics_list = [
@@ -65,7 +58,9 @@ if __name__ == "__main__":
     )
 
     # Run the workflow
-    outputs = freeze_ewb.run(parallel_config={"backend": "loky", "n_jobs": 1})
+    outputs = freeze_ewb.run_evaluation(
+        parallel_config={"backend": "loky", "n_jobs": 1}
+    )
 
     # Print the outputs; can be saved if desired
     outputs.to_csv("freeze_outputs.csv")

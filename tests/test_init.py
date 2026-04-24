@@ -117,12 +117,6 @@ class TestPrivateFunctionAccess:
 
         assert hasattr(derived, "_maybe_convert_variable_to_string")
 
-    def test_defaults_private_functions_accessible(self):
-        """Test that private functions in defaults are accessible."""
-        from extremeweatherbench import defaults
-
-        assert hasattr(defaults, "_preprocess_cira_forecast_dataset")
-
     def test_regions_private_functions_accessible(self):
         """Test that private functions in regions are accessible."""
         from extremeweatherbench import regions
