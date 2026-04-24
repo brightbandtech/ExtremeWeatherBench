@@ -350,7 +350,8 @@ class TestKnownProfile:
                 "geopotential": 29.3 * 273 * np.log(1000 / p),
                 "mixed_layer_depth": 50,
                 "expected_cape_range": (200, 800),
-                "expected_cin_range": (0, 50),
+                # CIN is returned as a non-negative inhibition magnitude.
+                "expected_cin_magnitude_range": (0, 50),
             }
         }
 
@@ -367,7 +368,7 @@ class TestKnownProfile:
             )
 
             cape_min, cape_max = profile["expected_cape_range"]
-            cin_min, cin_max = profile["expected_cin_range"]
+            cin_min, cin_max = profile["expected_cin_magnitude_range"]
 
             assert cape_min <= cape <= cape_max, (
                 f"{name}: CAPE {cape:.2f} outside expected range [{cape_min}, {cape_max}]"
@@ -751,11 +752,31 @@ class TestCINIntegrationScope:
             ],
             dtype=np.float64,
         )
+        # A second, drier version of the same profile (Td -12 K everywhere).
+        # With a drier ML parcel there is no near-surface positive buoyancy, so
+        # the LFC branch only ever sees negative buoyancy and CIN is unchanged.
+        # Comparing the two isolates the effect of the integration-scope bug:
+        # the buggy code would let the moist profile's brief positive buoyancy
+        # near the surface cancel some of the cap's negative buoyancy, giving a
+        # lower CIN than the drier profile despite having a stronger cap.
+        # After the fix both profiles accumulate only negative layers and the
+        # moist profile's CIN reflects the cap alone (≥50 J/kg).
+        t_dry = t.copy()
+        td_dry = td - 12.0
+
         cape, cin = compute_ml_cape_cin_from_profile(_PRES, t, td, _GEOPOT)
-        assert cape > 0.0, "Profile should have CAPE"
-        # Before the fix, positive near-surface buoyancy would cancel some CIN,
-        # producing an underestimate.  After the fix, CIN reflects only the cap.
-        assert cin >= 0.0, f"CIN should be non-negative, got {cin:.2f}"
+        cape_dry, cin_dry = compute_ml_cape_cin_from_profile(
+            _PRES, t_dry, td_dry, _GEOPOT
+        )
+
+        assert cape > 0.0, "Moist profile should have CAPE"
+        # CIN for the moist profile must be a substantial positive magnitude —
+        # if it were near-zero the sign-only check would pass even with the bug.
+        assert cin > 50.0, (
+            f"CIN should reflect the cap inversion (>50 J/kg), got {cin:.2f}. "
+            "A near-zero value suggests positive near-surface buoyancy is cancelling "
+            "the cap — the integration-scope bug may have been reintroduced."
+        )
 
 
 class TestLCLTemperatureInterpolation:

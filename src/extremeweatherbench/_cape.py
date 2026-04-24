@@ -397,7 +397,10 @@ def compute_ml_cape_cin_from_profile(
         depth: The depth of the mixed layer in hPa.
 
     Returns:
-        The CAPE and CIN in J/kg.
+        A tuple (cape, cin) in J/kg.  Both values are non-negative.  CIN is
+        returned as a positive inhibition magnitude (e.g. 50 J/kg means the
+        parcel must overcome 50 J/kg of negative buoyancy to reach the LFC),
+        matching the convention used by MetPy and xcape.
     """
     n_levels = len(pressure)
 
