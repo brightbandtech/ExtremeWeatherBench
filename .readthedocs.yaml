@@ -19,5 +19,5 @@ build:
     install:
       - UV_PROJECT_ENVIRONMENT="${READTHEDOCS_VIRTUALENV_PATH}" uv sync --frozen --group docs
 
-mkdocs:
+zensical:
   configuration: mkdocs.yml
