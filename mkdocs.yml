@@ -8,23 +8,17 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Usage: usage.md
+  - Data: data.md
+  - Data Preparation: data_prep.md
   - A Note on Parallelism: parallelism.md
-  - Event Categories:
-      - All Case Studies: events/AllCaseStudies.md
-      - Atmospheric Rivers:
-          - Overview: events/AtmosphericRivers.md
-          - November 2024 West Coast US: events/atmospheric_rivers/november_2024_west_coast_us.md
-      - Severe Convection: events/ConvectiveWx.md
-      - Derechos: events/Derechos.md
-      - Flooding: events/Flooding.md
-      - Freezes: events/FreezeEvents.md
-      - Heatwaves: events/Heatwaves.md
-      - Other Floods: events/OtherFloods.md
-      - Tropical Cyclones: events/TropicalCyclones.md
-      - Tropical Cyclone Flooding: events/TCFloods.md
-      - Tropical Cyclone Tornadic Outbreaks: events/TCTornadoOutbreaks.md
-      - Wind Events: events/WindEvents.md
-      - Winter Weather: events/WinterWeather.md
+  - Case Studies:
+      - Overview: events/case_studies.md
+      - Atmospheric Rivers: events/atmospheric_rivers.md
+      - Severe Convection: events/severe_convection.md
+      - Freezes: events/cold_snaps.md
+      - Heat Waves: events/heat_waves.md
+      - Tropical Cyclones: events/tropical_cyclones.md
+      - Planned Event Types: events/planned_events.md
   - Cookbook:
       - CIRA Forecast: recipes/cira_forecast.md
       - BYOF (Bring Your Own Forecast): recipes/your_own_forecast.md
@@ -39,10 +33,12 @@ nav:
 
 theme:
   name: material
-  logo: _static/bb_dark.svg
-  favicon: _static/bb.svg
+  logo: _static/bb_light.svg
+  favicon: _static/bb_light.svg
   palette:
     scheme: "brightband"
+    primary: custom
+    accent: custom
 
 extra_css:
   - stylesheets/brightband.css
@@ -51,6 +47,11 @@ extra_css:
 markdown_extensions:
   - pymdownx.arithmatex:
       generic: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
 
 extra_javascript:
   - javascripts/katex.js

@@ -1,10 +1,10 @@
 # A Note on Parallelism
 
-Running an evaluation on ExtremeWeatherBench utilizes `joblib` for parallelism. When invoking `ExtremeWeatherBench.run()`, users can choose to passthrough their own `parallel_config` (see `joblib` information on `parallel_config` [here](https://joblib.readthedocs.io/en/latest/generated/joblib.parallel_config.html)). The default and recommended method is to use `joblib`'s default engine, `loky`.
+Running an evaluation on ExtremeWeatherBench utilizes `joblib` for parallelism. When invoking `ExtremeWeatherBench.run_evaluation()`, users can choose to passthrough their own `parallel_config` (see `joblib` information on `parallel_config` [here](https://joblib.readthedocs.io/en/latest/generated/joblib.parallel_config.html)). The default and recommended method is to use `joblib`'s default engine, `loky`.
 
 ## What is Parallelized in EWB?
 
-As of `0.2/1.0rc`, each process in EWB evaluates one `CaseOperator`. As a reminder, `CaseOperator` is an object that processes:
+Each process in EWB evaluates one `CaseOperator`. As a reminder, `CaseOperator` is an object that processes:
 
 - One `IndividualCase` object
 - One `ForecastBase` object
