@@ -16,7 +16,8 @@ group_list = inputs.list_groups_in_icechunk_datatree(storage)
 
 `group_list` is list of each group within the DataTree. Note that the list order will change, do not code a fixed numerical index in based on this output.
 
-```['/',
+```
+['/',
  '/GRAP_v100_IFS',
  '/FOUR_v200_GFS',
  '/PANG_v100_IFS',
@@ -25,7 +26,7 @@ group_list = inputs.list_groups_in_icechunk_datatree(storage)
  '/FOUR_v200_IFS',
  '/GRAP_v100_GFS',
  '/AURO_v100_GFS']
- ```
+```
 
 ## Loading the data as an XarrayObject
 
@@ -121,7 +122,6 @@ parallel_config = {
 
 output = ewb.run_evaluation(parallel_config=parallel_config)
 ```
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/1w6poub9_6kYAX5UhDxwDD1FT4XPoTGS0/view?usp=sharing)
 
 ## Complete Example
 
@@ -132,7 +132,6 @@ from extremeweatherbench import inputs, metrics, evaluate
 from extremeweatherbench.cases import IndividualCase
 from extremeweatherbench.regions import BoundingBoxRegion
 
-# Mini-case: 2021 Pacific NW Heat Dome — Colab-optimized
 demo_case = IndividualCase(
     case_id_number=9001,
     title="2021 Pacific NW Heat Dome (demo)",

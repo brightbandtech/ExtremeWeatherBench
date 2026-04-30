@@ -33,10 +33,12 @@ nav:
 
 theme:
   name: material
-  logo: _static/bb_dark.svg
-  favicon: _static/bb_dark.svg
+  logo: _static/bb_light.svg
+  favicon: _static/bb_light.svg
   palette:
     scheme: "brightband"
+    primary: custom
+    accent: custom
 
 extra_css:
   - stylesheets/brightband.css

@@ -179,7 +179,6 @@ case_level_mae = ewb.metrics.MeanAbsoluteError(
 )
 ```
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/1k-LLNZw8BCKnEM0hWak-GB3chPMcLL01/view?usp=sharing)
 
 ## Complete Example
 
@@ -192,7 +191,6 @@ import extremeweatherbench as ewb
 from extremeweatherbench.cases import IndividualCase
 from extremeweatherbench.regions import BoundingBoxRegion
 
-# Mini-case: 2022 Southern Plains Heat Wave — Colab-optimized
 demo_case = IndividualCase(
     case_id_number=9004,
     title="2022 Southern Plains Heat Wave (demo)",

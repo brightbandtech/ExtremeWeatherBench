@@ -68,7 +68,7 @@ function filterTable(input, slug) {
      2. [https://www.spc.noaa.gov/climo/reports/220412\_rpts.html](https://www.spc.noaa.gov/climo/reports/220412_rpts.html)   
      3. [https://www.spc.noaa.gov/climo/reports/220413\_rpts.html](https://www.spc.noaa.gov/climo/reports/220413_rpts.html)   
    * Identified as a billion dollar disaster   
-     1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 7. May 20-21, 2022 Winter Storm Tad Colorado and Wyoming  
    * [2021–22 North American winter \- Wikipedia](https://en.wikipedia.org/wiki/2021%E2%80%9322_North_American_winter#Late_May_winter_storm)  
    * Cross-listed with major freezes  

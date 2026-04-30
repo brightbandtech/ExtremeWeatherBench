@@ -166,7 +166,6 @@ displacement = df[df["metric"] == "landfall_displacement"]
 print(displacement.groupby("forecast_source")["value"].describe())
 ```
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/1LLX8G73uLzy9Grsqi9yHjlRX60i8enlJ/view?usp=sharing)
 
 ## Complete Example
 
@@ -177,7 +176,6 @@ from extremeweatherbench import inputs, derived, metrics
 from extremeweatherbench.cases import IndividualCase
 from extremeweatherbench.regions import BoundingBoxRegion
 
-# Mini-case: Hurricane Ida 2021 — Colab-optimized
 demo_case = IndividualCase(
     case_id_number=9006,
     title="Hurricane Ida 2021 (demo)",

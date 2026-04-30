@@ -17,8 +17,8 @@ import extremeweatherbench as ewb
 
 all_cases = ewb.load_cases()
 
-# Keep only case 42 (inspect the full list to find your case)
-single_case = [c for c in all_cases if c.case_id_number == 42]
+# Keep only case 28 (inspect the full list to find your case)
+single_case = [c for c in all_cases if c.case_id_number == 28]
 
 target = ewb.ERA5(variables=["surface_air_temperature"])
 forecast = ewb.ZarrForecast(
@@ -162,7 +162,6 @@ The YAML schema for a single case entry:
   event_type: heat_wave
 ```
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/1u3llkqcFrcg_bAYwOEZN7qSAH15joCYf/view?usp=sharing)
 
 ## Complete Example
 
@@ -175,7 +174,6 @@ import extremeweatherbench as ewb
 from extremeweatherbench.cases import IndividualCase
 from extremeweatherbench.regions import BoundingBoxRegion
 
-# Mini-case: 2021 Pacific NW Heat Dome — Colab-optimized
 demo_case = IndividualCase(
     case_id_number=9008,
     title="2021 Pacific NW Heat Dome (demo)",

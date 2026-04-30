@@ -48,14 +48,14 @@ Many of these are cross-listed with outbreaks. If they don’t generate enough t
    * SPC reports  
      * [https://www.spc.noaa.gov/climo/reports/220512\_rpts.html](https://www.spc.noaa.gov/climo/reports/220512_rpts.html)   
    * Identified as a billion dollar disaster   
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 10. Dec 15-16, 2021  
     * [December 2021 Midwest derecho and tornado outbreak \- Wikipedia](https://en.wikipedia.org/wiki/December_2021_Midwest_derecho_and_tornado_outbreak)  
     * Cross-listed with tornado and derecho   
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/211215\_rpts.html](https://www.spc.noaa.gov/climo/reports/211215_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 11. Oct 7, 2020  
     * [Derecho October 7, 2020 \- Albany, NY](https://www.weather.gov/aly/High-End_Severe_Weather_Event_October_7_2020)  
     * [Forecasters say last week’s deadly storm complex in New England was a derecho](https://www.washingtonpost.com/weather/2020/10/13/new-england-derecho-storms/)  
@@ -169,7 +169,7 @@ The data used to identify these cases comes from:
       * [https://www.spc.noaa.gov/climo/reports/220607\_rpts.html](https://www.spc.noaa.gov/climo/reports/220607_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/220608\_rpts.html](https://www.spc.noaa.gov/climo/reports/220608_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 12. June 15-18, 2023  
     * [Tornado outbreak sequence of June 14–19, 2023 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_June_14%E2%80%9319,_2023#Non-tornadic_effects)   
     * Cross-listed with flooding and tornadoes and hail and wind  
@@ -178,7 +178,7 @@ The data used to identify these cases comes from:
       * [https://www.spc.noaa.gov/climo/reports/230616\_rpts.html](https://www.spc.noaa.gov/climo/reports/230616_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230617\_rpts.html](https://www.spc.noaa.gov/climo/reports/230617_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 13. May 10-12, 2023  
     * [The Severe Weather Event of May 11, 2023](https://www.weather.gov/oun/events-20230511)  
     * [May 10-11, 2023 Tornadoes, Flash Flooding, and Severe Weather](https://www.weather.gov/gld/May10112023Tornadoes)  
@@ -188,7 +188,7 @@ The data used to identify these cases comes from:
       * [https://www.spc.noaa.gov/climo/reports/230511\_rpts.html](https://www.spc.noaa.gov/climo/reports/230511_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230512\_rpts.html](https://www.spc.noaa.gov/climo/reports/230512_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 14. May 6-8, 2023  
     * [Damaging Winds and Golf Ball Hail \- May 6, 2023](https://www.weather.gov/dvn/summary_050623)  
     * [May 7, 2023: Severe Thunderstorms Produce Damaging Winds, Large Hail, Landspouts, Heavy Rain, and Blowing Dust](https://www.weather.gov/lot/2023_05_07_FloodingSevere)  
@@ -199,7 +199,7 @@ The data used to identify these cases comes from:
       * [https://www.spc.noaa.gov/climo/reports/230507\_rpts.html](https://www.spc.noaa.gov/climo/reports/230507_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230508\_rpts.html](https://www.spc.noaa.gov/climo/reports/230508_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 15. April 12 2023 Florida  
     * [202304 \- Rainfall \- Florida](https://confluence.ecmwf.int/display/FCST/202304+-+Rainfall+-+Florida)   
 16. April 18 \- 20 2022 SE US  
@@ -228,7 +228,7 @@ The data used to identify these cases comes from:
       * [https://www.spc.noaa.gov/climo/reports/210327\_rpts.html](https://www.spc.noaa.gov/climo/reports/210327_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/210328\_rpts.html](https://www.spc.noaa.gov/climo/reports/210328_rpts.html) (could skip this day)  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 22. April 5- 10 2020 Southern CA  
     * [https://cw3e.ucsd.edu/cw3e-event-summary-5-10-april-2020/](https://cw3e.ucsd.edu/cw3e-event-summary-5-10-april-2020/)   
     * [https://cw3e.ucsd.edu/characteristics-and-impacts-of-the-april-4-11-2020-cutoff-low-storm-in-california/](https://cw3e.ucsd.edu/characteristics-and-impacts-of-the-april-4-11-2020-cutoff-low-storm-in-california/)   
@@ -238,7 +238,7 @@ The data used to identify these cases comes from:
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/200412\_rpts.html](https://www.spc.noaa.gov/climo/reports/200412_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)
 
 ## Worldwide events
 
@@ -565,7 +565,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
      * [https://www.spc.noaa.gov/climo/reports/230807\_rpts.html](https://www.spc.noaa.gov/climo/reports/230807_rpts.html)   
      * [https://www.spc.noaa.gov/climo/reports/230808\_rpts.html](https://www.spc.noaa.gov/climo/reports/230808_rpts.html)   
    * Identified as a billion dollar disaster  
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 7. Jul 28-29, 2023  
    * [https://www.weather.gov/lot/2023\_07\_28\_SevereWeather](https://www.weather.gov/lot/2023_07_28_SevereWeather)  
    * [https://www.fox6now.com/weather/severe-storms-cause-havoc-se-wisconsin-friday-july-28](https://www.fox6now.com/weather/severe-storms-cause-havoc-se-wisconsin-friday-july-28)   
@@ -574,7 +574,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
      * [https://www.spc.noaa.gov/climo/reports/230728\_rpts.html](https://www.spc.noaa.gov/climo/reports/230728_rpts.html)   
      * [https://www.spc.noaa.gov/climo/reports/230729\_rpts.html](https://www.spc.noaa.gov/climo/reports/230729_rpts.html)   
    * Identified as a billion dollar disaster  
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 8. July 19-21, 2023  
    * [Storm reports: Baseball-sized hail and high winds Wednesday | MPR News](https://www.mprnews.org/story/2023/07/19/storm-reports-tennis-ballsized-hail-and-high-winds-wednesday)  
    * [July 20, 2023 Severe Storms](https://www.weather.gov/dtx/severeweather07202023#:~:text=In%20total%2C%2012%20Severe%20Thunderstorm,vehicles%2C%20homes%2C%20and%20businesses)  
@@ -584,7 +584,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
      * [https://www.spc.noaa.gov/climo/reports/230720\_rpts.html](https://www.spc.noaa.gov/climo/reports/230720_rpts.html)   
      * [https://www.spc.noaa.gov/climo/reports/230721\_rpts.html](https://www.spc.noaa.gov/climo/reports/230721_rpts.html) (more wind this day)  
    * Identified as a billion dollar disaster  
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 9. June 28 \- July 2, 2023  
    * Cross-listed with hail and wind and tornado (though tornado is less than wind/hail)  
    * SPC reports  
@@ -593,7 +593,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
      * [https://www.spc.noaa.gov/climo/reports/230630\_rpts.html](https://www.spc.noaa.gov/climo/reports/230630_rpts.html)   
      * [https://www.spc.noaa.gov/climo/reports/230701\_rpts.html](https://www.spc.noaa.gov/climo/reports/230701_rpts.html) [https://www.spc.noaa.gov/climo/reports/230702\_rpts.html](https://www.spc.noaa.gov/climo/reports/230702_rpts.html)   
    * Identified as a billion dollar disaster  
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 10. June 15-18, 2023  
     * [Tornado outbreak sequence of June 14–19, 2023 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_June_14%E2%80%9319,_2023#Non-tornadic_effects)   
     * Cross-listed with flooding and tornadoes and hail and wind  
@@ -602,7 +602,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/230616\_rpts.html](https://www.spc.noaa.gov/climo/reports/230616_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230617\_rpts.html](https://www.spc.noaa.gov/climo/reports/230617_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 11. June 11-14, 2023  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/230611\_rpts.html](https://www.spc.noaa.gov/climo/reports/230611_rpts.html)   
@@ -611,7 +611,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/230614\_rpts.html](https://www.spc.noaa.gov/climo/reports/230614_rpts.html)   
     * Cross-listed with wind and hail  
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 12. May 10-12, 2023  
     * [The Severe Weather Event of May 11, 2023](https://www.weather.gov/oun/events-20230511)  
     * [May 10-11, 2023 Tornadoes, Flash Flooding, and Severe Weather](https://www.weather.gov/gld/May10112023Tornadoes)  
@@ -621,7 +621,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/230511\_rpts.html](https://www.spc.noaa.gov/climo/reports/230511_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230512\_rpts.html](https://www.spc.noaa.gov/climo/reports/230512_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 13. May 6-8, 2023  
     * [Damaging Winds and Golf Ball Hail \- May 6, 2023](https://www.weather.gov/dvn/summary_050623)  
     * [May 7, 2023: Severe Thunderstorms Produce Damaging Winds, Large Hail, Landspouts, Heavy Rain, and Blowing Dust](https://www.weather.gov/lot/2023_05_07_FloodingSevere)  
@@ -632,7 +632,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/230507\_rpts.html](https://www.spc.noaa.gov/climo/reports/230507_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230508\_rpts.html](https://www.spc.noaa.gov/climo/reports/230508_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 14. April 4-6, 2023  
     * [April 4-5, 2023: Destructive Winds, Very Large Hail, & Tornadoes](https://www.weather.gov/dvn/summary_04042023)  
     * [Event Summary April 4, 2023 Severe Storms and Tornado](https://www.weather.gov/dmx/summary_Apr4_2023)   
@@ -642,7 +642,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/230405\_rpts.html](https://www.spc.noaa.gov/climo/reports/230405_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230406\_rpts.html](https://www.spc.noaa.gov/climo/reports/230406_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 15. March 31 \- April 2, 2023  
     * [Tornado outbreak of March 31 – April 1, 2023 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_March_31_%E2%80%93_April_1,_2023)   
     * Main event is March 31  
@@ -652,7 +652,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/230401\_rpts.html](https://www.spc.noaa.gov/climo/reports/230401_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230402\_rpts.html](https://www.spc.noaa.gov/climo/reports/230402_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 16. March 9-17 2023, Winter Storm Sage  
     * [March 2023 North American winter storm \- Wikipedia](https://en.wikipedia.org/wiki/March_2023_North_American_winter_storm)  
     * Cross-listed with AR and winds   
@@ -679,14 +679,14 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/220412\_rpts.html](https://www.spc.noaa.gov/climo/reports/220412_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/220413\_rpts.html](https://www.spc.noaa.gov/climo/reports/220413_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 22. July 22-23, 2022  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/220722\_rpts.html](https://www.spc.noaa.gov/climo/reports/220722_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/220723\_rpts.html](https://www.spc.noaa.gov/climo/reports/220723_rpts.html)   
     * Cross-listed with wind and tornado  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 23. April 4 \- 6, 2022  
     * [Tornado outbreak sequence of April 4–7, 2022 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_April_4%E2%80%937,_2022)   
     * Cross-listed with hail and tornado and wind  
@@ -695,7 +695,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/220405\_rpts.html](https://www.spc.noaa.gov/climo/reports/220405_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/220406\_rpts.html](https://www.spc.noaa.gov/climo/reports/220406_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 24. January 31 \- Feb 3 2021  
     * [January 31 – February 3, 2021 nor'easter \- Wikipedia](https://en.wikipedia.org/wiki/January_31_%E2%80%93_February_3,_2021_nor%27easter)  
     * Cross-listed with flooding and blizzards and wind   
@@ -711,14 +711,14 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/220607\_rpts.html](https://www.spc.noaa.gov/climo/reports/220607_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/220608\_rpts.html](https://www.spc.noaa.gov/climo/reports/220608_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 27. Dec 9-11 2021, Winter Storm Atticus, Utah   
     * [Tornado outbreak of December 10–11, 2021 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_December_10%E2%80%9311,_2021#Non-tornadic_effects)   
     * Cross-listed with wind and tornado outbreaks and blizzards  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/211210\_rpts.html](https://www.spc.noaa.gov/climo/reports/211210_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 28. Oct 30 \- Nov 7 2021  
     * [October 2021 nor'easter \- Wikipedia](https://en.wikipedia.org/wiki/October_2021_nor%27easter)   
     * Cross-listed with wind and flooding   
@@ -736,7 +736,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/210811\_rpts.html](https://www.spc.noaa.gov/climo/reports/210811_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/210812\_rpts.html](https://www.spc.noaa.gov/climo/reports/210812_rpts.html) [https://www.spc.noaa.gov/climo/reports/210813\_rpts.html](https://www.spc.noaa.gov/climo/reports/210813_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 32. July 8 \- 9, 2021  
     * [July 8, 2021 Supercell Hail and Radar Dome Damage](https://www.weather.gov/unr/2021-07-08)  
     * [N.J. weather: Tennis ball-size hail pelts North Jersey during intense thunderstorms](https://www.nj.com/weather/2021/07/nj-weather-tennis-ball-size-hail-pelts-north-jersey-during-intense-thunderstorms.html)  
@@ -746,7 +746,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/210708\_rpts.html](https://www.spc.noaa.gov/climo/reports/210708_rpts.html)  
       * [https://www.spc.noaa.gov/climo/reports/210709\_rpts.html](https://www.spc.noaa.gov/climo/reports/210709_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with wind and hail  
 33. May 2-4 2021  
     * [Tornado outbreak of May 2–4, 2021 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_May_2%E2%80%934,_2021)  
@@ -758,7 +758,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/210503\_rpts.html](https://www.spc.noaa.gov/climo/reports/210503_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/210504\_rpts.html](https://www.spc.noaa.gov/climo/reports/210504_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with tornado, wind, and hail  
 34. March 24-28, 2021  
     * [Tornado outbreak sequence of March 24–28, 2021 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_March_24%E2%80%9328,_2021)   
@@ -770,7 +770,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/210327\_rpts.html](https://www.spc.noaa.gov/climo/reports/210327_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/210328\_rpts.html](https://www.spc.noaa.gov/climo/reports/210328_rpts.html) (could skip this day)  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 35. Jan 14-19 2020, Winter storm Jacob  
     * [https://en.wikipedia.org/wiki/January\_2020\_North\_American\_storm\_complex](https://en.wikipedia.org/wiki/January_2020_North_American_storm_complex)  
     * Cross-listed with major wind events and snow   
@@ -787,7 +787,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/200710\_rpts.html](https://www.spc.noaa.gov/climo/reports/200710_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200711\_rpts.html](https://www.spc.noaa.gov/climo/reports/200711_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with wind and hail  
 39. May 3-5, 2020  
     * [May 3, 2020 Hail Storms](https://www.weather.gov/unr/2020-05-03)  
@@ -797,14 +797,14 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/200504\_rpts.html](https://www.spc.noaa.gov/climo/reports/200504_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200505\_rpts.html](https://www.spc.noaa.gov/climo/reports/200505_rpts.html) (could leave this day out, smaller impact)  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with wind and hail  
 40. April 28, 2020  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/200428\_rpts.html](https://www.spc.noaa.gov/climo/reports/200428_rpts.html)   
     * Cross-listed with wind and hail  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 41. April 21-22, 2020  
     * [Tornado outbreak of April 21–23, 2020 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_April_21%E2%80%9323,_2020)   
     * SPC reports  
@@ -812,14 +812,14 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/200422\_rpts.html](https://www.spc.noaa.gov/climo/reports/200422_rpts.html)   
     * Cross-listed with wind and hail and tornados  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 42. April 12, 2020  
     * [2020 Easter tornado outbreak \- Wikipedia](https://en.wikipedia.org/wiki/2020_Easter_tornado_outbreak)   
     * Cross-listed with winter storms, major wind, tornadoes, flooding  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/200412\_rpts.html](https://www.spc.noaa.gov/climo/reports/200412_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 43. April 7-8, 2020  
     * [https://www.weather.gov/lot/7April2020\_HailEvent](https://www.weather.gov/lot/7April2020_HailEvent)   
     * [Severe Weather and Tornadoes \- April 8-9, 2020](https://www.weather.gov/iln/20200409)   
@@ -828,7 +828,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/200408\_rpts.html](https://www.spc.noaa.gov/climo/reports/200408_rpts.html)   
     * Cross-listed with wind and hail and tornado  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 44. March 27-28, 2020  
     * [Overview of the March 28 severe storms](https://www.weather.gov/pah/mar28svere)   
     * [The Tornadoes of March 28 2020](https://www.weather.gov/arx/mar2820)   
@@ -836,7 +836,7 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/200327\_rpts.html](https://www.spc.noaa.gov/climo/reports/200327_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200328\_rpts.html](https://www.spc.noaa.gov/climo/reports/200328_rpts.html) (this day is TOR also)  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
       * Cross-listed with wind and hail and tornado  
 45. Feb 5-7, 2020  
     * [Tornado outbreak of February 5–7, 2020 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_February_5%E2%80%937,_2020)   
@@ -846,14 +846,14 @@ Major large-scale wind events including bomb cyclones and others (Note that dere
       * [https://www.spc.noaa.gov/climo/reports/200206\_rpts.html](https://www.spc.noaa.gov/climo/reports/200206_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200207\_rpts.html](https://www.spc.noaa.gov/climo/reports/200207_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 46. January 10–11, 2020  
     * [Tornado outbreak of January 10–11, 2020 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_January_10%E2%80%9311,_2020)   
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/200110\_rpts.html](https://www.spc.noaa.gov/climo/reports/200110_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200111\_rpts.html](https://www.spc.noaa.gov/climo/reports/200111_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with wind and tornado and hail
 
 ## Global wind events
@@ -975,7 +975,7 @@ The data used to select the storms come from the following:
      * [https://www.spc.noaa.gov/climo/reports/230401\_rpts.html](https://www.spc.noaa.gov/climo/reports/230401_rpts.html)   
      * [https://www.spc.noaa.gov/climo/reports/230402\_rpts.html](https://www.spc.noaa.gov/climo/reports/230402_rpts.html)   
    * Identified as a billion dollar disaster   
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 9. March 1-3 2023  
    * [Early-March 2023 North American storm complex \- Wikipedia](https://en.wikipedia.org/wiki/Early-March_2023_North_American_storm_complex)  
    * Cross-listed with tornado, hail and snow    
@@ -984,7 +984,7 @@ The data used to select the storms come from the following:
      * [https://www.spc.noaa.gov/climo/reports/230302\_rpts.html](https://www.spc.noaa.gov/climo/reports/230302_rpts.html)   
      * [https://www.spc.noaa.gov/climo/reports/230303\_rpts.html](https://www.spc.noaa.gov/climo/reports/230303_rpts.html)   
    * Identified as a billion dollar disaster   
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)     
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)     
 10. March 9-17 2023, Winter Storm Sage  
     * [March 2023 North American winter storm \- Wikipedia](https://en.wikipedia.org/wiki/March_2023_North_American_winter_storm)  
     * Cross-listed with AR and winds   
@@ -1022,7 +1022,7 @@ The data used to select the storms come from the following:
       * [https://www.spc.noaa.gov/climo/reports/220412\_rpts.html](https://www.spc.noaa.gov/climo/reports/220412_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/220413\_rpts.html](https://www.spc.noaa.gov/climo/reports/220413_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 20. April 18 \- 20 2022 SE US  
     * [2021–22 North American winter \- Wikipedia](https://en.wikipedia.org/wiki/2021%E2%80%9322_North_American_winter#Mid-April_nor'easter)   
     * Cross-listed with blizzards and flooding (heavy rains and flooding in south and nor’easter northeast)  
@@ -1068,7 +1068,7 @@ The data used to select the storms come from the following:
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/211210\_rpts.html](https://www.spc.noaa.gov/climo/reports/211210_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 33. December 30, 2020 \- January 3, 2021, New Year’s Storm  
     * [2020–21 New Year's North American winter storm \- Wikipedia](https://en.wikipedia.org/wiki/2020%E2%80%9321_New_Year%27s_North_American_winter_storm)   
 34. Dec 15-17, 2020 nor’easter  
@@ -1094,7 +1094,7 @@ The data used to select the storms come from the following:
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/200412\_rpts.html](https://www.spc.noaa.gov/climo/reports/200412_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 40. Feb 9 \- 13 2020, Winter storm Mabel  
     * Precursor to [Storm Dennis \- Wikipedia](https://en.wikipedia.org/wiki/Storm_Dennis) which hit Europe   
     * [Winter Storm Mabel Spread Snow from Southern California to Maine; Blizzard Conditions in the Midwest (RECAP) | The Weather Channel](https://weather.com/forecast/national/news/2020-02-09-winter-storm-snow-ice-plains-midwest-northeast-forecast)   
@@ -1106,7 +1106,7 @@ The data used to select the storms come from the following:
       * [https://www.spc.noaa.gov/climo/reports/200206\_rpts.html](https://www.spc.noaa.gov/climo/reports/200206_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200207\_rpts.html](https://www.spc.noaa.gov/climo/reports/200207_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 42. Feb 1 \- 4 2020, Winter Storm Kade  
     * [Winter Storm Bringing Snow Across the Northeast and Flurries in the Midwest | The Weather Channel](https://weather.com/storms/winter/news/2020-02-02-winter-storm-west-rockies-plains-midwest-northeast-early-february)   
     * Eventually leads to [Storm Ciara \- Wikipedia](https://en.wikipedia.org/wiki/Storm_Ciara) hitting Europe   
@@ -1189,21 +1189,21 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
      * [https://www.spc.noaa.gov/climo/reports/240715\_rpts.html](https://www.spc.noaa.gov/climo/reports/240715_rpts.html)   
      * [https://www.spc.noaa.gov/climo/reports/240716\_rpts.html](https://www.spc.noaa.gov/climo/reports/240716_rpts.html)   
    * Identified as a billion dollar disaster  
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)   
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)   
 2. June 24-26 2024  
    * SPC reports:  
      * [https://www.spc.noaa.gov/climo/reports/240624\_rpts.html](https://www.spc.noaa.gov/climo/reports/240624_rpts.html)   
      * [https://www.spc.noaa.gov/climo/reports/240625\_rpts.html](https://www.spc.noaa.gov/climo/reports/240625_rpts.html)   
      * [https://www.spc.noaa.gov/climo/reports/240626\_rpts.html](https://www.spc.noaa.gov/climo/reports/240626_rpts.html)   
    * Identified as a billion dollar disaster  
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)   
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)   
 3. June 12-14 2024  
    * SPC reports:  
      * [https://www.spc.noaa.gov/climo/reports/240612\_rpts.html](https://www.spc.noaa.gov/climo/reports/240612_rpts.html)  
      * [https://www.spc.noaa.gov/climo/reports/240613\_rpts.html](https://www.spc.noaa.gov/climo/reports/240613_rpts.html)   
      * [https://www.spc.noaa.gov/climo/reports/240614\_rpts.html](https://www.spc.noaa.gov/climo/reports/240614_rpts.html)   
    *  Identified as a billion dollar disaster  
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 4. May 30 2024  
    * From wikipedia: “An unusually strong storm blanketed a large portion of the northeast Denver metro area in the late evening. Golf ball-sized stones damaged homes and vehicles, in an event comparable to the May 2017 hail storm. Due to the late hour the storm hit, much of the hail would not melt until the following day”  
      * [List of costly or deadly hailstorms \- Wikipedia](https://en.wikipedia.org/wiki/List_of_costly_or_deadly_hailstorms)  
@@ -1214,13 +1214,13 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
      * [https://www.spc.noaa.gov/climo/reports/240531\_rpts.html](https://www.spc.noaa.gov/climo/reports/240531_rpts.html)  
      * [https://www.spc.noaa.gov/climo/reports/240601\_rpts.html](https://www.spc.noaa.gov/climo/reports/240601_rpts.html)   
    *  Identified as a billion dollar disaster  
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 6. May 27-28, 2024  
    * SPC reports:  
      * [https://www.spc.noaa.gov/climo/reports/240527\_rpts.html](https://www.spc.noaa.gov/climo/reports/240527_rpts.html)   
      * [https://www.spc.noaa.gov/climo/reports/240528\_rpts.html](https://www.spc.noaa.gov/climo/reports/240528_rpts.html)   
    * Identified as a billion dollar disaster  
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 7. May 19 \- 27, 2024  
    * [Tornado outbreak sequence of May 19–27, 2024 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_May_19%E2%80%9327,_2024)   
    * Cross-listed with tornadoes and derechos and hail  
@@ -1232,14 +1232,14 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
      * [https://www.spc.noaa.gov/climo/reports/240522\_rpts.html](https://www.spc.noaa.gov/climo/reports/240522_rpts.html)   
      * (this starts to run into the next one above so I’m stopping where NCEI does on the 22nd)  
    * Identified as a billion dollar disaster  
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 8. May 11-13 2024  
    * SPC reports  
      * [https://www.spc.noaa.gov/climo/reports/240511\_rpts.html](https://www.spc.noaa.gov/climo/reports/240511_rpts.html)   
      * [https://www.spc.noaa.gov/climo/reports/240512\_rpts.html](https://www.spc.noaa.gov/climo/reports/240512_rpts.html)   
      * [https://www.spc.noaa.gov/climo/reports/240513\_rpts.html](https://www.spc.noaa.gov/climo/reports/240513_rpts.html)   
    * Identified as a billion dollar disaster  
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 9. May 6- 10, 2024  
    * [Tornado outbreak of May 6–10, 2024 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_May_6%E2%80%9310,_2024)   
    * Cross-listed with hail and tornadoes  
@@ -1250,7 +1250,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
      * [https://www.spc.noaa.gov/climo/reports/240509\_rpts.html](https://www.spc.noaa.gov/climo/reports/240509_rpts.html)   
      * [https://www.spc.noaa.gov/climo/reports/240510\_rpts.html](https://www.spc.noaa.gov/climo/reports/240510_rpts.html)   
    * Identified as a billion dollar disaster  
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 10. April 25 \- 28, 2024  
     * [Tornado outbreak of April 25–28, 2024 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_April_25%E2%80%9328,_2024)  
     * Cross-listed with hail and tornadoes  
@@ -1260,13 +1260,13 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/240427\_rpts.html](https://www.spc.noaa.gov/climo/reports/240427_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/240428\_rpts.html](https://www.spc.noaa.gov/climo/reports/240428_rpts.html) (not much hail this day)  
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 11. April 8-9, 2024  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/240408\_rpts.html](https://www.spc.noaa.gov/climo/reports/240408_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/240409\_rpts.html](https://www.spc.noaa.gov/climo/reports/240409_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 12. April 1- 3, 2024  
     * [Tornado outbreak and derecho of April 1–3, 2024 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_and_derecho_of_April_1%E2%80%933,_2024)   
     * Cross-listed with tornado and derecho and hail  
@@ -1275,7 +1275,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/240502\_rpts.html](https://www.spc.noaa.gov/climo/reports/240502_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/240503\_rpts.html](https://www.spc.noaa.gov/climo/reports/240503_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 13. March 13 \- 15, 2024  
     * [Tornado outbreak of March 13–15, 2024 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_March_13%E2%80%9315,_2024)   
     * Cross-listed with tornado and hail  
@@ -1284,33 +1284,33 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/240314\_rpts.html](https://www.spc.noaa.gov/climo/reports/240314_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/240315\_rpts.html](https://www.spc.noaa.gov/climo/reports/240315_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 14. Feb 27, 2024  
     * [Tornadoes of 2024 \- Wikipedia](https://en.wikipedia.org/wiki/Tornadoes_of_2024#:~:text=February%2027%E2%80%9328%20\(United%20States\),-EFU&text=A%20severe%20weather%20outbreak%20produced,other%20along%20the%20Ohio%20River)  
     * Cross-listed with tornado and hail  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/240227\_rpts.html](https://www.spc.noaa.gov/climo/reports/240227_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)   
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)   
 15. Feb 10-11, 2024  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/240210\_rpts.html](https://www.spc.noaa.gov/climo/reports/240210_rpts.html)  
       * [https://www.spc.noaa.gov/climo/reports/240211\_rpts.html](https://www.spc.noaa.gov/climo/reports/240211_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 16. Sep 23-24, 2023  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/230923\_rpts.html](https://www.spc.noaa.gov/climo/reports/230923_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230924\_rpts.html](https://www.spc.noaa.gov/climo/reports/230924_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 17. Aug 11, 2023  
     * [https://www.mprnews.org/story/2023/09/11/twin-cities-august-hailstorm-was-1-of-a-record-23-us-billiondollar-disasters](https://www.mprnews.org/story/2023/09/11/twin-cities-august-hailstorm-was-1-of-a-record-23-us-billiondollar-disasters)   
     * [https://www.dnr.state.mn.us/climate/journal/august-11-2023-hail-and-winds.html](https://www.dnr.state.mn.us/climate/journal/august-11-2023-hail-and-winds.html)   
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/230811\_rpts.html](https://www.spc.noaa.gov/climo/reports/230811_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 18. Aug 4-8, 2023  
     * [Tornado outbreak sequence of August 4–8, 2023 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_August_4%E2%80%938,_2023)   
     * Cross-listed with hail and tornadoes and major wind events  
@@ -1321,7 +1321,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/230807\_rpts.html](https://www.spc.noaa.gov/climo/reports/230807_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230808\_rpts.html](https://www.spc.noaa.gov/climo/reports/230808_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 19. Jul 28-29, 2023  
     * [https://www.weather.gov/lot/2023\_07\_28\_SevereWeather](https://www.weather.gov/lot/2023_07_28_SevereWeather)  
     * [https://www.fox6now.com/weather/severe-storms-cause-havoc-se-wisconsin-friday-july-28](https://www.fox6now.com/weather/severe-storms-cause-havoc-se-wisconsin-friday-july-28)   
@@ -1330,7 +1330,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/230728\_rpts.html](https://www.spc.noaa.gov/climo/reports/230728_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230729\_rpts.html](https://www.spc.noaa.gov/climo/reports/230729_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 20. July 19-21, 2023  
     * [Storm reports: Baseball-sized hail and high winds Wednesday | MPR News](https://www.mprnews.org/story/2023/07/19/storm-reports-tennis-ballsized-hail-and-high-winds-wednesday)  
     * [July 20, 2023 Severe Storms](https://www.weather.gov/dtx/severeweather07202023#:~:text=In%20total%2C%2012%20Severe%20Thunderstorm,vehicles%2C%20homes%2C%20and%20businesses)  
@@ -1340,7 +1340,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/230720\_rpts.html](https://www.spc.noaa.gov/climo/reports/230720_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230721\_rpts.html](https://www.spc.noaa.gov/climo/reports/230721_rpts.html) (more wind this day)  
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with wind and hail  
 21. June 28 \- July 2, 2023  
     * Cross-listed with hail and wind and tornado (though tornado is less than wind/hail)  
@@ -1350,14 +1350,14 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/230630\_rpts.html](https://www.spc.noaa.gov/climo/reports/230630_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230701\_rpts.html](https://www.spc.noaa.gov/climo/reports/230701_rpts.html) [https://www.spc.noaa.gov/climo/reports/230702\_rpts.html](https://www.spc.noaa.gov/climo/reports/230702_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 22. June 21, 2023  
     * From wikipedia: “An evening severe thunderstorm produced several inches of hail, some stones measuring up to the size of golf balls and tennis balls. Over 90 people attending a Louis Tomlinson concert at Red Rocks Amphitheater were treated on-site as a result of hail related injuries. Seven people were hospitalized.”  
       * [List of costly or deadly hailstorms \- Wikipedia](https://en.wikipedia.org/wiki/List_of_costly_or_deadly_hailstorms)  
     * SPC reports:  
       * [https://www.spc.noaa.gov/climo/reports/230621\_rpts.html](https://www.spc.noaa.gov/climo/reports/230621_rpts.html)    
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 23. June 15-18, 2023  
     * [Tornado outbreak sequence of June 14–19, 2023 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_June_14%E2%80%9319,_2023#Non-tornadic_effects)   
     * Cross-listed with flooding and tornadoes and hail and wind  
@@ -1366,7 +1366,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/230616\_rpts.html](https://www.spc.noaa.gov/climo/reports/230616_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230617\_rpts.html](https://www.spc.noaa.gov/climo/reports/230617_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 24. June 11-14, 2023  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/230611\_rpts.html](https://www.spc.noaa.gov/climo/reports/230611_rpts.html)   
@@ -1375,7 +1375,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/230614\_rpts.html](https://www.spc.noaa.gov/climo/reports/230614_rpts.html)   
     * Cross-listed with wind and hail  
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 25. May 10-12, 2023  
     * [The Severe Weather Event of May 11, 2023](https://www.weather.gov/oun/events-20230511)  
     * [May 10-11, 2023 Tornadoes, Flash Flooding, and Severe Weather](https://www.weather.gov/gld/May10112023Tornadoes)  
@@ -1385,7 +1385,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/230511\_rpts.html](https://www.spc.noaa.gov/climo/reports/230511_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230512\_rpts.html](https://www.spc.noaa.gov/climo/reports/230512_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 26. May 6-8, 2023  
     * [Damaging Winds and Golf Ball Hail \- May 6, 2023](https://www.weather.gov/dvn/summary_050623)  
     * [May 7, 2023: Severe Thunderstorms Produce Damaging Winds, Large Hail, Landspouts, Heavy Rain, and Blowing Dust](https://www.weather.gov/lot/2023_05_07_FloodingSevere)  
@@ -1396,7 +1396,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/230507\_rpts.html](https://www.spc.noaa.gov/climo/reports/230507_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230508\_rpts.html](https://www.spc.noaa.gov/climo/reports/230508_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 27. April 25-27, 2023  
     * [‘Baseball Size’ Hail Falls in Texas as Storms Whip Across South \- The New York Times](https://www.nytimes.com/2023/04/27/us/texas-storms-hail-south.html)   
     * SPC reports  
@@ -1404,7 +1404,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/230426\_rpts.html](https://www.spc.noaa.gov/climo/reports/230426_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230427\_rpts.html](https://www.spc.noaa.gov/climo/reports/230427_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 28. April 19-20, 2023  
     * [April 19-20, 2023: Two Rounds of Storms Bring Large Hail and Damaging Winds To the Region](https://www.weather.gov/lot/2023_04_20_Severe)  
     * [Event Summary: April 20, 2023 \- Updated 4/22 with Damage Survey](https://www.weather.gov/dvn/Summary_04202023)    
@@ -1412,14 +1412,14 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/230419\_rpts.html](https://www.spc.noaa.gov/climo/reports/230419_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230420\_rpts.html](https://www.spc.noaa.gov/climo/reports/230420_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 29. April 15, 2023  
     * [April 15, 2023 Tornadoes](https://www.weather.gov/lsx/April152023Tornadoes)   
     * [Saturday April 15 2023 Severe Weather Review](https://www.weather.gov/sgf/April_15_2023_LargeHailandTornado)  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/230415\_rpts.html](https://www.spc.noaa.gov/climo/reports/230415_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 30. April 4-6, 2023  
     * [April 4-5, 2023: Destructive Winds, Very Large Hail, & Tornadoes](https://www.weather.gov/dvn/summary_04042023)  
     * [Event Summary April 4, 2023 Severe Storms and Tornado](https://www.weather.gov/dmx/summary_Apr4_2023)   
@@ -1429,7 +1429,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/230405\_rpts.html](https://www.spc.noaa.gov/climo/reports/230405_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230406\_rpts.html](https://www.spc.noaa.gov/climo/reports/230406_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 31. March 31 \- April 2, 2023  
     * [Tornado outbreak of March 31 – April 1, 2023 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_March_31_%E2%80%93_April_1,_2023)   
     * Main event is March 31  
@@ -1439,7 +1439,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/230401\_rpts.html](https://www.spc.noaa.gov/climo/reports/230401_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230402\_rpts.html](https://www.spc.noaa.gov/climo/reports/230402_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 32. March 1-3 2023  
     * [Early-March 2023 North American storm complex \- Wikipedia](https://en.wikipedia.org/wiki/Early-March_2023_North_American_storm_complex)  
     * Cross-listed with tornado, hail and snow    
@@ -1448,7 +1448,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/230302\_rpts.html](https://www.spc.noaa.gov/climo/reports/230302_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230303\_rpts.html](https://www.spc.noaa.gov/climo/reports/230303_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 33. June 7-8, 2022  
     * [Flash Flooding on June 7-8, 2022](https://www.weather.gov/bmx/event_06082022)   
     * [Severe Weather on June 8, 2022](https://www.weather.gov/iln/20220608)  
@@ -1458,34 +1458,34 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/220607\_rpts.html](https://www.spc.noaa.gov/climo/reports/220607_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/220608\_rpts.html](https://www.spc.noaa.gov/climo/reports/220608_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 34. May 19, 2022  
     * [May 19-20, 2022 Severe Weather](https://www.weather.gov/arx/may1922)  
     * [Southern Minnesota Hailstorms, May 19, 2022](https://www.dnr.state.mn.us/climate/journal/southern-minnesota-hailstorms-may-19-2022.html)    
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/220519\_rpts.html](https://www.spc.noaa.gov/climo/reports/220519_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 35. May 12, 2022  
     * [May 2022 Midwest derecho \- Wikipedia](https://en.wikipedia.org/wiki/May_2022_Midwest_derecho)   
     * Cross-listed with tornado and derecho and hail  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/220512\_rpts.html](https://www.spc.noaa.gov/climo/reports/220512_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 36. May 9, 2022  
     * [https://www.dnr.state.mn.us/climate/journal/severe-thunderstorms-and-more-heavy-rain-may-9-2022.html](https://www.dnr.state.mn.us/climate/journal/severe-thunderstorms-and-more-heavy-rain-may-9-2022.html)   
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/220509\_rpts.html](https://www.spc.noaa.gov/climo/reports/220509_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 37. May 1-2, 2022  
     * [May 1-2, 2022 Severe Weather Event](https://www.weather.gov/ama/may_1-2_2022_severe)   
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/220501\_rpts.html](https://www.spc.noaa.gov/climo/reports/220501_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/220502\_rpts.html](https://www.spc.noaa.gov/climo/reports/220502_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 38. April 11-13, 2022  
     * [https://en.wikipedia.org/wiki/April\_2022\_North\_American\_storm\_complex](https://en.wikipedia.org/wiki/April_2022_North_American_storm_complex)   
     * Cross-listed with tornado outbreaks, major freeze, blizzard, wind (straight line winds) and hail  
@@ -1494,7 +1494,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/220412\_rpts.html](https://www.spc.noaa.gov/climo/reports/220412_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/220413\_rpts.html](https://www.spc.noaa.gov/climo/reports/220413_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 39. April 4 \- 6, 2022  
     * [Tornado outbreak sequence of April 4–7, 2022 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_April_4%E2%80%937,_2022)   
     * Cross-listed with hail and tornado and wind  
@@ -1503,7 +1503,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/220405\_rpts.html](https://www.spc.noaa.gov/climo/reports/220405_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/220406\_rpts.html](https://www.spc.noaa.gov/climo/reports/220406_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 40. July 8 \- 9, 2021  
     * [July 8, 2021 Supercell Hail and Radar Dome Damage](https://www.weather.gov/unr/2021-07-08)  
     * [N.J. weather: Tennis ball-size hail pelts North Jersey during intense thunderstorms](https://www.nj.com/weather/2021/07/nj-weather-tennis-ball-size-hail-pelts-north-jersey-during-intense-thunderstorms.html)  
@@ -1513,7 +1513,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/210708\_rpts.html](https://www.spc.noaa.gov/climo/reports/210708_rpts.html)  
       * [https://www.spc.noaa.gov/climo/reports/210709\_rpts.html](https://www.spc.noaa.gov/climo/reports/210709_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with wind and hail  
 41. June 17 \- 18, 2021  
     * [June 2021 North American storm complex \- Wikipedia](https://en.wikipedia.org/wiki/June_2021_North_American_storm_complex)   
@@ -1521,7 +1521,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/210617\_rpts.html](https://www.spc.noaa.gov/climo/reports/210617_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/210618\_rpts.html](https://www.spc.noaa.gov/climo/reports/210618_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with tornadoes and hail   
 42. May 2-4 2021  
     * [Tornado outbreak of May 2–4, 2021 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_May_2%E2%80%934,_2021)  
@@ -1533,7 +1533,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/210503\_rpts.html](https://www.spc.noaa.gov/climo/reports/210503_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/210504\_rpts.html](https://www.spc.noaa.gov/climo/reports/210504_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with tornado, wind, and hail  
 43. April 28, 2021  
     * [Warn-on-Forecast: Large Hail Strikes Three Cities, April 28, 2021](https://www.nssl.noaa.gov/projects/wof/casestudies/hail-oktx-apr2021/)  
@@ -1541,7 +1541,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/210428\_rpts.html](https://www.spc.noaa.gov/climo/reports/210428_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 44. March 24-28, 2021  
     * [Tornado outbreak sequence of March 24–28, 2021 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_March_24%E2%80%9328,_2021)   
     * Cross-listed with hail and flooding and tornadoes and wind  
@@ -1552,7 +1552,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/210327\_rpts.html](https://www.spc.noaa.gov/climo/reports/210327_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/210328\_rpts.html](https://www.spc.noaa.gov/climo/reports/210328_rpts.html) (could skip this day)  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 45. July 10-11, 2020  
     * [July 10, 2020 Tornadoes and Severe Storms](https://www.weather.gov/unr/2020-07-10)  
     * [Event Summary: July 11, 2020](https://www.weather.gov/dvn/summary_071120)    
@@ -1560,14 +1560,14 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/200710\_rpts.html](https://www.spc.noaa.gov/climo/reports/200710_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200711\_rpts.html](https://www.spc.noaa.gov/climo/reports/200711_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with wind and hail  
 46. May 27, 2020  
     * [Photos: Hail pelts San Antonio as severe storms pass through city](https://www.ksat.com/news/local/2020/05/28/photos-hail-pelts-san-antonio-as-severe-storms-pass-through-city/)   
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/200527\_rpts.html](https://www.spc.noaa.gov/climo/reports/200527_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 47. May 20 \- 23, 2020  
     * [Large hail pounds parts of Lubbock on 20 May 2020](https://www.weather.gov/lub/events-2020-20200520-storms)   
     * [East Central Florida Large Hail Event on May 21, 2020](https://www.weather.gov/media/mlb/surveys/LargeHail_052120_Public.pdf)   
@@ -1578,7 +1578,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/200522\_rpts.html](https://www.spc.noaa.gov/climo/reports/200522_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200523\_rpts.html](https://www.spc.noaa.gov/climo/reports/200523_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 48. May 3-5, 2020  
     * [May 3, 2020 Hail Storms](https://www.weather.gov/unr/2020-05-03)  
     * [Summary of Severe Weather on May 4th, 2020](https://www.weather.gov/sgf/04May2020_StormSummary)   
@@ -1587,14 +1587,14 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/200504\_rpts.html](https://www.spc.noaa.gov/climo/reports/200504_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200505\_rpts.html](https://www.spc.noaa.gov/climo/reports/200505_rpts.html) (could leave this day out, smaller impact)  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with wind and hail  
 49. April 28, 2020  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/200428\_rpts.html](https://www.spc.noaa.gov/climo/reports/200428_rpts.html)   
     * Cross-listed with wind and hail  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 50. April 21-22, 2020  
     * [Tornado outbreak of April 21–23, 2020 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_April_21%E2%80%9323,_2020)   
     * SPC reports  
@@ -1602,7 +1602,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/200422\_rpts.html](https://www.spc.noaa.gov/climo/reports/200422_rpts.html)   
     * Cross-listed with wind and hail and tornados  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 51. April 7-8, 2020  
     * [https://www.weather.gov/lot/7April2020\_HailEvent](https://www.weather.gov/lot/7April2020_HailEvent)   
     * [Severe Weather and Tornadoes \- April 8-9, 2020](https://www.weather.gov/iln/20200409)   
@@ -1611,7 +1611,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/200408\_rpts.html](https://www.spc.noaa.gov/climo/reports/200408_rpts.html)   
     * Cross-listed with wind and hail and tornado  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 52. March 27-28, 2020  
     * [Overview of the March 28 severe storms](https://www.weather.gov/pah/mar28svere)   
     * [The Tornadoes of March 28 2020](https://www.weather.gov/arx/mar2820)   
@@ -1619,7 +1619,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/200327\_rpts.html](https://www.spc.noaa.gov/climo/reports/200327_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200328\_rpts.html](https://www.spc.noaa.gov/climo/reports/200328_rpts.html) (this day is TOR also)  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with wind and hail and tornado  
 53. March 2-3, 2020  
     * [2020 Nashville tornado outbreak \- Wikipedia](https://en.wikipedia.org/wiki/2020_Nashville_tornado_outbreak)   
@@ -1628,7 +1628,7 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/200302\_rpts.html](https://www.spc.noaa.gov/climo/reports/200302_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200303\_rpts.html](https://www.spc.noaa.gov/climo/reports/200303_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 54. Feb 5-7, 2020  
     * [Tornado outbreak of February 5–7, 2020 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_February_5%E2%80%937,_2020)   
     * Cross-listed with winter and tornadoes and major wind and hail  
@@ -1637,14 +1637,14 @@ To be selected as a hail-outbreak, it must be a large-scale event. This means th
       * [https://www.spc.noaa.gov/climo/reports/200206\_rpts.html](https://www.spc.noaa.gov/climo/reports/200206_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200207\_rpts.html](https://www.spc.noaa.gov/climo/reports/200207_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 55. January 10–11, 2020  
     * [Tornado outbreak of January 10–11, 2020 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_January_10%E2%80%9311,_2020)   
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/200110\_rpts.html](https://www.spc.noaa.gov/climo/reports/200110_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200111\_rpts.html](https://www.spc.noaa.gov/climo/reports/200111_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with wind and tornado and hail
 
 ## Global hail events
@@ -1729,12 +1729,12 @@ An outbreak had to have at least 10 tornadoes to be selected.
    * SPC reports  
      * [https://www.spc.noaa.gov/climo/reports/240227\_rpts.html](https://www.spc.noaa.gov/climo/reports/240227_rpts.html)   
    * Identified as a billion dollar disaster  
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)    
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)    
 9. January 8 \- 10 2024  
    * [January 8–10, 2024 North American storm complex \- Wikipedia](https://en.wikipedia.org/wiki/January_8%E2%80%9310,_2024_North_American_storm_complex)   
    * Cross-listed with tornado outbreaks, major snow, flooding  
    * Identified as a billion dollar disaster  
-     * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 10. Dec 9 \- 10, 2023  
     * [December 2023 Tennessee tornado outbreak \- Wikipedia](https://en.wikipedia.org/wiki/December_2023_Tennessee_tornado_outbreak)   
 11. Aug 4-8, 2023  
@@ -1747,7 +1747,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/230807\_rpts.html](https://www.spc.noaa.gov/climo/reports/230807_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230808\_rpts.html](https://www.spc.noaa.gov/climo/reports/230808_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 12. June 28 \- July 2, 2023  
     * Cross-listed with hail and wind and tornado (though tornado is less than wind/hail)  
     * SPC reports  
@@ -1756,7 +1756,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/230630\_rpts.html](https://www.spc.noaa.gov/climo/reports/230630_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230701\_rpts.html](https://www.spc.noaa.gov/climo/reports/230701_rpts.html) [https://www.spc.noaa.gov/climo/reports/230702\_rpts.html](https://www.spc.noaa.gov/climo/reports/230702_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 13. June 20-26, 2023  
     * [Tornado outbreak sequence of June 20–26, 2023 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_June_20%E2%80%9326,_2023)   
 14. June 15-18, 2023  
@@ -1767,7 +1767,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/230616\_rpts.html](https://www.spc.noaa.gov/climo/reports/230616_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230617\_rpts.html](https://www.spc.noaa.gov/climo/reports/230617_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 15. May 10-12, 2023  
     * [The Severe Weather Event of May 11, 2023](https://www.weather.gov/oun/events-20230511)  
     * [May 10-11, 2023 Tornadoes, Flash Flooding, and Severe Weather](https://www.weather.gov/gld/May10112023Tornadoes)  
@@ -1777,7 +1777,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/230511\_rpts.html](https://www.spc.noaa.gov/climo/reports/230511_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230512\_rpts.html](https://www.spc.noaa.gov/climo/reports/230512_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 16. May 6-8, 2023  
     * [Damaging Winds and Golf Ball Hail \- May 6, 2023](https://www.weather.gov/dvn/summary_050623)  
     * [May 7, 2023: Severe Thunderstorms Produce Damaging Winds, Large Hail, Landspouts, Heavy Rain, and Blowing Dust](https://www.weather.gov/lot/2023_05_07_FloodingSevere)  
@@ -1788,7 +1788,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/230507\_rpts.html](https://www.spc.noaa.gov/climo/reports/230507_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230508\_rpts.html](https://www.spc.noaa.gov/climo/reports/230508_rpts.html)   
     * Identified as a billion dollar disaster  
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 17. April 4-6, 2023  
     * [April 4-5, 2023: Destructive Winds, Very Large Hail, & Tornadoes](https://www.weather.gov/dvn/summary_04042023)  
     * [Event Summary April 4, 2023 Severe Storms and Tornado](https://www.weather.gov/dmx/summary_Apr4_2023)   
@@ -1798,7 +1798,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/230405\_rpts.html](https://www.spc.noaa.gov/climo/reports/230405_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230406\_rpts.html](https://www.spc.noaa.gov/climo/reports/230406_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 18. March 31 \- April 2, 2023  
     * [Tornado outbreak of March 31 – April 1, 2023 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_March_31_%E2%80%93_April_1,_2023)   
     * Main event is March 31  
@@ -1808,7 +1808,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/230401\_rpts.html](https://www.spc.noaa.gov/climo/reports/230401_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230402\_rpts.html](https://www.spc.noaa.gov/climo/reports/230402_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 19. March 24-27, 2023  
     * [Tornado outbreak of March 24–27, 2023 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_March_24%E2%80%9327,_2023)   
 20. March 1-3 2023  
@@ -1819,7 +1819,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/230302\_rpts.html](https://www.spc.noaa.gov/climo/reports/230302_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/230303\_rpts.html](https://www.spc.noaa.gov/climo/reports/230303_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)    
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)    
 21. Feb 26 \- 27, 2023  
     * [February 2023 North American storm complex \- Wikipedia](https://en.wikipedia.org/wiki/February_2023_North_American_storm_complex)   
     * Cross-listed with blizzards, wind,  and tornado outbreaks  
@@ -1844,7 +1844,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/220723\_rpts.html](https://www.spc.noaa.gov/climo/reports/220723_rpts.html)   
     * Cross-listed with wind and tornado  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 28. June 7-8, 2022  
     * [Flash Flooding on June 7-8, 2022](https://www.weather.gov/bmx/event_06082022)   
     * [Severe Weather on June 8, 2022](https://www.weather.gov/iln/20220608)  
@@ -1854,14 +1854,14 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/220607\_rpts.html](https://www.spc.noaa.gov/climo/reports/220607_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/220608\_rpts.html](https://www.spc.noaa.gov/climo/reports/220608_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 29. May 12, 2022  
     * [May 2022 Midwest derecho \- Wikipedia](https://en.wikipedia.org/wiki/May_2022_Midwest_derecho)   
     * Cross-listed with tornado and derecho and hail  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/220512\_rpts.html](https://www.spc.noaa.gov/climo/reports/220512_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 30. April 11-13, 2022  
     * [https://en.wikipedia.org/wiki/April\_2022\_North\_American\_storm\_complex](https://en.wikipedia.org/wiki/April_2022_North_American_storm_complex)   
     * Cross-listed with tornado outbreaks, major freeze, blizzard, wind (straight line winds) and hail  
@@ -1870,7 +1870,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/220412\_rpts.html](https://www.spc.noaa.gov/climo/reports/220412_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/220413\_rpts.html](https://www.spc.noaa.gov/climo/reports/220413_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 31. April 4 \- 6, 2022  
     * [Tornado outbreak sequence of April 4–7, 2022 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_April_4%E2%80%937,_2022)   
     * Cross-listed with hail and tornado and wind  
@@ -1879,7 +1879,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/220405\_rpts.html](https://www.spc.noaa.gov/climo/reports/220405_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/220406\_rpts.html](https://www.spc.noaa.gov/climo/reports/220406_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 32. March 30, 2022  
     * ​​[Tornado outbreak of March 29–31, 2022 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_March_29%E2%80%9331,_2022)   
     * SPC reports  
@@ -1894,14 +1894,14 @@ An outbreak had to have at least 10 tornadoes to be selected.
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/211215\_rpts.html](https://www.spc.noaa.gov/climo/reports/211215_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 36. Dec 9-11 2021, Winter Storm Atticus, Utah   
     * [Tornado outbreak of December 10–11, 2021 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_December_10%E2%80%9311,_2021#Non-tornadic_effects)   
     * Cross-listed with wind and tornado outbreaks and blizzards  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/211210\_rpts.html](https://www.spc.noaa.gov/climo/reports/211210_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 37. July 28 \- 29, 2021  
     * [Tornado outbreak of July 28–29, 2021 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_July_28%E2%80%9329,_2021)   
 38. June 17 \- 18, 2021  
@@ -1910,7 +1910,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/210617\_rpts.html](https://www.spc.noaa.gov/climo/reports/210617_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/210618\_rpts.html](https://www.spc.noaa.gov/climo/reports/210618_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with tornadoes and hail   
 39. May 2-4 2021  
     * [Tornado outbreak of May 2–4, 2021 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_May_2%E2%80%934,_2021)  
@@ -1922,7 +1922,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/210503\_rpts.html](https://www.spc.noaa.gov/climo/reports/210503_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/210504\_rpts.html](https://www.spc.noaa.gov/climo/reports/210504_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with tornado, wind, and hail  
 40. March 24-28, 2021  
     * [Tornado outbreak sequence of March 24–28, 2021 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_March_24%E2%80%9328,_2021)   
@@ -1934,7 +1934,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/210327\_rpts.html](https://www.spc.noaa.gov/climo/reports/210327_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/210328\_rpts.html](https://www.spc.noaa.gov/climo/reports/210328_rpts.html) (could skip this day)  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 41. March 16-18 2021  
     * [Tornado outbreak of March 16–18, 2021 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_March_16%E2%80%9318,_2021)   
     * [https://en.wikipedia.org/wiki/2020%E2%80%9321\_North\_American\_winter\#March\_16%E2%80%9317\_blizzard](https://en.wikipedia.org/wiki/2020%E2%80%9321_North_American_winter#March_16%E2%80%9317_blizzard)   
@@ -1962,14 +1962,14 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/200422\_rpts.html](https://www.spc.noaa.gov/climo/reports/200422_rpts.html)   
     * Cross-listed with wind and hail and tornados  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 47. April 12, 2020  
     * [2020 Easter tornado outbreak \- Wikipedia](https://en.wikipedia.org/wiki/2020_Easter_tornado_outbreak)   
     * Cross-listed with winter storms, major wind, tornadoes, flooding  
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/200412\_rpts.html](https://www.spc.noaa.gov/climo/reports/200412_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 48. April 7-8, 2020  
     * [https://www.weather.gov/lot/7April2020\_HailEvent](https://www.weather.gov/lot/7April2020_HailEvent)   
     * [Severe Weather and Tornadoes \- April 8-9, 2020](https://www.weather.gov/iln/20200409)   
@@ -1978,7 +1978,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/200408\_rpts.html](https://www.spc.noaa.gov/climo/reports/200408_rpts.html)   
     * Cross-listed with wind and hail and tornado  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 49. March 27-28, 2020  
     * [Overview of the March 28 severe storms](https://www.weather.gov/pah/mar28svere)   
     * [The Tornadoes of March 28 2020](https://www.weather.gov/arx/mar2820)   
@@ -1986,7 +1986,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/200327\_rpts.html](https://www.spc.noaa.gov/climo/reports/200327_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200328\_rpts.html](https://www.spc.noaa.gov/climo/reports/200328_rpts.html) (this day is TOR also)  
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with wind and hail and tornado  
 50. March 2-3, 2020  
     * [2020 Nashville tornado outbreak \- Wikipedia](https://en.wikipedia.org/wiki/2020_Nashville_tornado_outbreak)   
@@ -1995,7 +1995,7 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/200302\_rpts.html](https://www.spc.noaa.gov/climo/reports/200302_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200303\_rpts.html](https://www.spc.noaa.gov/climo/reports/200303_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 51. Feb 5-7, 2020  
     * [Tornado outbreak of February 5–7, 2020 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_February_5%E2%80%937,_2020)   
     * Cross-listed with winter and tornadoes and major wind and hail  
@@ -2004,14 +2004,14 @@ An outbreak had to have at least 10 tornadoes to be selected.
       * [https://www.spc.noaa.gov/climo/reports/200206\_rpts.html](https://www.spc.noaa.gov/climo/reports/200206_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200207\_rpts.html](https://www.spc.noaa.gov/climo/reports/200207_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 52. January 10–11, 2020  
     * [Tornado outbreak of January 10–11, 2020 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_January_10%E2%80%9311,_2020)   
     * SPC reports  
       * [https://www.spc.noaa.gov/climo/reports/200110\_rpts.html](https://www.spc.noaa.gov/climo/reports/200110_rpts.html)   
       * [https://www.spc.noaa.gov/climo/reports/200111\_rpts.html](https://www.spc.noaa.gov/climo/reports/200111_rpts.html)   
     * Identified as a billion dollar disaster   
-      * [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      * [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     * Cross-listed with wind and tornado and hail
 
 ## Overall Severe Convection
@@ -2074,12 +2074,12 @@ This is a combination tornado and hail and wind days. We do not have the high en
    3. SPC reports  
       1. [https://www.spc.noaa.gov/climo/reports/240227\_rpts.html](https://www.spc.noaa.gov/climo/reports/240227_rpts.html)   
    4. Identified as a billion dollar disaster  
-      1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)    
+      1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)    
 8. January 8 \- 10 2024  
    1. [January 8–10, 2024 North American storm complex \- Wikipedia](https://en.wikipedia.org/wiki/January_8%E2%80%9310,_2024_North_American_storm_complex)   
    2. Cross-listed with tornado outbreaks, major snow, flooding  
    3. Identified as a billion dollar disaster  
-      1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 9. Aug 4-8, 2023  
    1. [Tornado outbreak sequence of August 4–8, 2023 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_August_4%E2%80%938,_2023)   
    2. Cross-listed with hail and tornadoes and major wind events  
@@ -2090,7 +2090,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
       4. [https://www.spc.noaa.gov/climo/reports/230807\_rpts.html](https://www.spc.noaa.gov/climo/reports/230807_rpts.html)   
       5. [https://www.spc.noaa.gov/climo/reports/230808\_rpts.html](https://www.spc.noaa.gov/climo/reports/230808_rpts.html)   
    4. Identified as a billion dollar disaster  
-      1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+      1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 10. June 28 \- July 2, 2023  
     1. Cross-listed with hail and wind and tornado (though tornado is less than wind/hail)  
     2. SPC reports  
@@ -2099,7 +2099,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
        3. [https://www.spc.noaa.gov/climo/reports/230630\_rpts.html](https://www.spc.noaa.gov/climo/reports/230630_rpts.html)   
        4. [https://www.spc.noaa.gov/climo/reports/230701\_rpts.html](https://www.spc.noaa.gov/climo/reports/230701_rpts.html) [https://www.spc.noaa.gov/climo/reports/230702\_rpts.html](https://www.spc.noaa.gov/climo/reports/230702_rpts.html)   
     3. Identified as a billion dollar disaster  
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 11. June 15-18, 2023  
     1. [Tornado outbreak sequence of June 14–19, 2023 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_June_14%E2%80%9319,_2023#Non-tornadic_effects)   
     2. Cross-listed with flooding and tornadoes and hail and wind  
@@ -2108,7 +2108,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
        2. [https://www.spc.noaa.gov/climo/reports/230616\_rpts.html](https://www.spc.noaa.gov/climo/reports/230616_rpts.html)   
        3. [https://www.spc.noaa.gov/climo/reports/230617\_rpts.html](https://www.spc.noaa.gov/climo/reports/230617_rpts.html)   
     4. Identified as a billion dollar disaster  
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 12. May 10-12, 2023  
     1. [The Severe Weather Event of May 11, 2023](https://www.weather.gov/oun/events-20230511)  
     2. [May 10-11, 2023 Tornadoes, Flash Flooding, and Severe Weather](https://www.weather.gov/gld/May10112023Tornadoes)  
@@ -2118,7 +2118,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
        2. [https://www.spc.noaa.gov/climo/reports/230511\_rpts.html](https://www.spc.noaa.gov/climo/reports/230511_rpts.html)   
        3. [https://www.spc.noaa.gov/climo/reports/230512\_rpts.html](https://www.spc.noaa.gov/climo/reports/230512_rpts.html)   
     5. Identified as a billion dollar disaster  
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 13. May 6-8, 2023  
     1. [Damaging Winds and Golf Ball Hail \- May 6, 2023](https://www.weather.gov/dvn/summary_050623)  
     2. [May 7, 2023: Severe Thunderstorms Produce Damaging Winds, Large Hail, Landspouts, Heavy Rain, and Blowing Dust](https://www.weather.gov/lot/2023_05_07_FloodingSevere)  
@@ -2129,7 +2129,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
        2. [https://www.spc.noaa.gov/climo/reports/230507\_rpts.html](https://www.spc.noaa.gov/climo/reports/230507_rpts.html)   
        3. [https://www.spc.noaa.gov/climo/reports/230508\_rpts.html](https://www.spc.noaa.gov/climo/reports/230508_rpts.html)   
     6. Identified as a billion dollar disaster  
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 14. April 4-6, 2023  
     1. [April 4-5, 2023: Destructive Winds, Very Large Hail, & Tornadoes](https://www.weather.gov/dvn/summary_04042023)  
     2. [Event Summary April 4, 2023 Severe Storms and Tornado](https://www.weather.gov/dmx/summary_Apr4_2023)   
@@ -2139,7 +2139,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
        2. [https://www.spc.noaa.gov/climo/reports/230405\_rpts.html](https://www.spc.noaa.gov/climo/reports/230405_rpts.html)   
        3. [https://www.spc.noaa.gov/climo/reports/230406\_rpts.html](https://www.spc.noaa.gov/climo/reports/230406_rpts.html)   
     5. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 15. March 31 \- April 2, 2023  
     1. [Tornado outbreak of March 31 – April 1, 2023 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_March_31_%E2%80%93_April_1,_2023)   
     2. Main event is March 31  
@@ -2149,7 +2149,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
        2. [https://www.spc.noaa.gov/climo/reports/230401\_rpts.html](https://www.spc.noaa.gov/climo/reports/230401_rpts.html)   
        3. [https://www.spc.noaa.gov/climo/reports/230402\_rpts.html](https://www.spc.noaa.gov/climo/reports/230402_rpts.html)   
     5. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 16. March 1-3 2023  
     1. [Early-March 2023 North American storm complex \- Wikipedia](https://en.wikipedia.org/wiki/Early-March_2023_North_American_storm_complex)  
     2. Cross-listed with tornado, hail and snow    
@@ -2158,7 +2158,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
        2. [https://www.spc.noaa.gov/climo/reports/230302\_rpts.html](https://www.spc.noaa.gov/climo/reports/230302_rpts.html)   
        3. [https://www.spc.noaa.gov/climo/reports/230303\_rpts.html](https://www.spc.noaa.gov/climo/reports/230303_rpts.html)   
     4. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)    
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)    
 17. Feb 26 \- 27, 2023  
     1. [February 2023 North American storm complex \- Wikipedia](https://en.wikipedia.org/wiki/February_2023_North_American_storm_complex)   
     2. Cross-listed with blizzards, wind,  and tornado outbreaks  
@@ -2171,7 +2171,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
        2. [https://www.spc.noaa.gov/climo/reports/220723\_rpts.html](https://www.spc.noaa.gov/climo/reports/220723_rpts.html)   
     2. Cross-listed with wind and tornado  
     3. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 19. June 7-8, 2022  
     1. [Flash Flooding on June 7-8, 2022](https://www.weather.gov/bmx/event_06082022)   
     2. [Severe Weather on June 8, 2022](https://www.weather.gov/iln/20220608)  
@@ -2181,14 +2181,14 @@ This is a combination tornado and hail and wind days. We do not have the high en
        1. [https://www.spc.noaa.gov/climo/reports/220607\_rpts.html](https://www.spc.noaa.gov/climo/reports/220607_rpts.html)   
        2. [https://www.spc.noaa.gov/climo/reports/220608\_rpts.html](https://www.spc.noaa.gov/climo/reports/220608_rpts.html)   
     6. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 20. May 12, 2022  
     1. [May 2022 Midwest derecho \- Wikipedia](https://en.wikipedia.org/wiki/May_2022_Midwest_derecho)   
     2. Cross-listed with tornado and derecho and hail  
     3. SPC reports  
        1. [https://www.spc.noaa.gov/climo/reports/220512\_rpts.html](https://www.spc.noaa.gov/climo/reports/220512_rpts.html)   
     4. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 21. April 11-13, 2022  
     1. [https://en.wikipedia.org/wiki/April\_2022\_North\_American\_storm\_complex](https://en.wikipedia.org/wiki/April_2022_North_American_storm_complex)   
     2. Cross-listed with tornado outbreaks, major freeze, blizzard, wind (straight line winds) and hail  
@@ -2197,7 +2197,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
        2. [https://www.spc.noaa.gov/climo/reports/220412\_rpts.html](https://www.spc.noaa.gov/climo/reports/220412_rpts.html)   
        3. [https://www.spc.noaa.gov/climo/reports/220413\_rpts.html](https://www.spc.noaa.gov/climo/reports/220413_rpts.html)   
     4. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 22. April 4 \- 6, 2022  
     1. [Tornado outbreak sequence of April 4–7, 2022 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_April_4%E2%80%937,_2022)   
     2. Cross-listed with hail and tornado and wind  
@@ -2206,28 +2206,28 @@ This is a combination tornado and hail and wind days. We do not have the high en
        2. [https://www.spc.noaa.gov/climo/reports/220405\_rpts.html](https://www.spc.noaa.gov/climo/reports/220405_rpts.html)   
        3. [https://www.spc.noaa.gov/climo/reports/220406\_rpts.html](https://www.spc.noaa.gov/climo/reports/220406_rpts.html)   
     4. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 23. Dec 15-16, 2021  
     1. [December 2021 Midwest derecho and tornado outbreak \- Wikipedia](https://en.wikipedia.org/wiki/December_2021_Midwest_derecho_and_tornado_outbreak)  
     2. Cross-listed with tornado and derecho   
     3. SPC reports  
        1. [https://www.spc.noaa.gov/climo/reports/211215\_rpts.html](https://www.spc.noaa.gov/climo/reports/211215_rpts.html)   
     4. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 24. Dec 9-11 2021, Winter Storm Atticus, Utah   
     1. [Tornado outbreak of December 10–11, 2021 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_December_10%E2%80%9311,_2021#Non-tornadic_effects)   
     2. Cross-listed with wind and tornado outbreaks and blizzards  
     3. SPC reports  
        1. [https://www.spc.noaa.gov/climo/reports/211210\_rpts.html](https://www.spc.noaa.gov/climo/reports/211210_rpts.html)   
     4. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 25. June 17 \- 18, 2021  
     1. [June 2021 North American storm complex \- Wikipedia](https://en.wikipedia.org/wiki/June_2021_North_American_storm_complex)   
     2. SPC reports  
        1. [https://www.spc.noaa.gov/climo/reports/210617\_rpts.html](https://www.spc.noaa.gov/climo/reports/210617_rpts.html)   
        2. [https://www.spc.noaa.gov/climo/reports/210618\_rpts.html](https://www.spc.noaa.gov/climo/reports/210618_rpts.html)   
     3. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     4. Cross-listed with tornadoes and hail   
 26. May 2-4 2021  
     1. [Tornado outbreak of May 2–4, 2021 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_May_2%E2%80%934,_2021)  
@@ -2239,7 +2239,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
        1. [https://www.spc.noaa.gov/climo/reports/210503\_rpts.html](https://www.spc.noaa.gov/climo/reports/210503_rpts.html)   
        2. [https://www.spc.noaa.gov/climo/reports/210504\_rpts.html](https://www.spc.noaa.gov/climo/reports/210504_rpts.html)   
     7. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     8. Cross-listed with tornado, wind, and hail  
 27. March 24-28, 2021  
     1. [Tornado outbreak sequence of March 24–28, 2021 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_sequence_of_March_24%E2%80%9328,_2021)   
@@ -2251,7 +2251,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
        4. [https://www.spc.noaa.gov/climo/reports/210327\_rpts.html](https://www.spc.noaa.gov/climo/reports/210327_rpts.html)   
        5. [https://www.spc.noaa.gov/climo/reports/210328\_rpts.html](https://www.spc.noaa.gov/climo/reports/210328_rpts.html) (could skip this day)  
     4. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 28. April 21-22, 2020  
     1. [Tornado outbreak of April 21–23, 2020 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_April_21%E2%80%9323,_2020)   
     2. SPC reports  
@@ -2259,14 +2259,14 @@ This is a combination tornado and hail and wind days. We do not have the high en
        2. [https://www.spc.noaa.gov/climo/reports/200422\_rpts.html](https://www.spc.noaa.gov/climo/reports/200422_rpts.html)   
     3. Cross-listed with wind and hail and tornados  
     4. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 29. April 12, 2020  
     1. [2020 Easter tornado outbreak \- Wikipedia](https://en.wikipedia.org/wiki/2020_Easter_tornado_outbreak)   
     2. Cross-listed with winter storms, major wind, tornadoes, flooding  
     3. SPC reports  
        1. [https://www.spc.noaa.gov/climo/reports/200412\_rpts.html](https://www.spc.noaa.gov/climo/reports/200412_rpts.html)   
     4. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 30. April 7-8, 2020  
     1. [https://www.weather.gov/lot/7April2020\_HailEvent](https://www.weather.gov/lot/7April2020_HailEvent)   
     2. [Severe Weather and Tornadoes \- April 8-9, 2020](https://www.weather.gov/iln/20200409)   
@@ -2275,7 +2275,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
        2. [https://www.spc.noaa.gov/climo/reports/200408\_rpts.html](https://www.spc.noaa.gov/climo/reports/200408_rpts.html)   
     4. Cross-listed with wind and hail and tornado  
     5. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 31. March 27-28, 2020  
     1. [Overview of the March 28 severe storms](https://www.weather.gov/pah/mar28svere)   
     2. [The Tornadoes of March 28 2020](https://www.weather.gov/arx/mar2820)   
@@ -2283,7 +2283,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
        1. [https://www.spc.noaa.gov/climo/reports/200327\_rpts.html](https://www.spc.noaa.gov/climo/reports/200327_rpts.html)   
        2. [https://www.spc.noaa.gov/climo/reports/200328\_rpts.html](https://www.spc.noaa.gov/climo/reports/200328_rpts.html) (this day is TOR also)  
     4. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     5. Cross-listed with wind and hail and tornado  
 32. March 2-3, 2020  
     1. [2020 Nashville tornado outbreak \- Wikipedia](https://en.wikipedia.org/wiki/2020_Nashville_tornado_outbreak)   
@@ -2292,7 +2292,7 @@ This is a combination tornado and hail and wind days. We do not have the high en
        1. [https://www.spc.noaa.gov/climo/reports/200302\_rpts.html](https://www.spc.noaa.gov/climo/reports/200302_rpts.html)   
        2. [https://www.spc.noaa.gov/climo/reports/200303\_rpts.html](https://www.spc.noaa.gov/climo/reports/200303_rpts.html)   
     4. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 33. Feb 5-7, 2020  
     1. [Tornado outbreak of February 5–7, 2020 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_February_5%E2%80%937,_2020)   
     2. Cross-listed with winter and tornadoes and major wind and hail  
@@ -2301,14 +2301,14 @@ This is a combination tornado and hail and wind days. We do not have the high en
        2. [https://www.spc.noaa.gov/climo/reports/200206\_rpts.html](https://www.spc.noaa.gov/climo/reports/200206_rpts.html)   
        3. [https://www.spc.noaa.gov/climo/reports/200207\_rpts.html](https://www.spc.noaa.gov/climo/reports/200207_rpts.html)   
     4. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 34. January 10–11, 2020  
     1. [Tornado outbreak of January 10–11, 2020 \- Wikipedia](https://en.wikipedia.org/wiki/Tornado_outbreak_of_January_10%E2%80%9311,_2020)   
     2. SPC reports  
        1. [https://www.spc.noaa.gov/climo/reports/200110\_rpts.html](https://www.spc.noaa.gov/climo/reports/200110_rpts.html)   
        2. [https://www.spc.noaa.gov/climo/reports/200111\_rpts.html](https://www.spc.noaa.gov/climo/reports/200111_rpts.html)   
     3. Identified as a billion dollar disaster   
-       1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+       1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
     4. Cross-listed with wind and tornado and hail
 
 ## Worldwide events

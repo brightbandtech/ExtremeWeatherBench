@@ -202,7 +202,6 @@ hi_metric = ewb.metrics.MaximumMeanAbsoluteError(
 )
 ```
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/1PsnEC0jRBUNIJmiE9ekTBu1V7FZx0Emn/view?usp=sharing)
 
 ## Complete Example
 
@@ -217,7 +216,6 @@ from extremeweatherbench.derived import DerivedVariable
 from extremeweatherbench.cases import IndividualCase
 from extremeweatherbench.regions import BoundingBoxRegion
 
-# Mini-case: 2017 Lucifer European Heat Wave — Colab-optimized
 demo_case = IndividualCase(
     case_id_number=9005,
     title="2017 Lucifer European Heat Wave (demo)",

@@ -192,7 +192,6 @@ pnw_stations = (
 print(f"Stations in bounding box: {len(pnw_stations)}")
 ```
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/1J3I1ITWVup-FGFhZz0MkC6QR2bwlO3nt/view?usp=sharing)
 
 ## Complete Example
 
@@ -202,7 +201,6 @@ import extremeweatherbench as ewb
 from extremeweatherbench.cases import IndividualCase
 from extremeweatherbench.regions import BoundingBoxRegion
 
-# Mini-case: 2020 SW US Heat Wave — Colab-optimized
 demo_case = IndividualCase(
     case_id_number=9007,
     title="2020 SW US Heat Wave (demo)",

@@ -15,7 +15,7 @@ single case's spatial domain and time window by default, then aggregated across 
 | [Severe Convection](severe_convection.md) | 115 | Multi-hazard convective outbreaks (tornadoes, hail, and damaging winds) across the US, Canada, and Australia |
 | [Freezes](cold_snaps.md) | 14 | Large-scale cold-air outbreaks validated against ERA5 15th-percentile 2-meter temperature thresholds |
 | [Heat Waves](heat_waves.md) | 46 | Land-based heat waves validated against ERA5 85th-percentile 2-meter temperature thresholds |
-| [Tropical Cyclones](tropical_cyclones.md) | 106 | Landfalling storms from all ocean basins, analysis tracks using IBTrACS data |
+| [Tropical Cyclones](tropical_cyclones.md) | 98 | Landfalling storms from all ocean basins, analysis tracks using IBTrACS data |
 
 ## Planned categories
 

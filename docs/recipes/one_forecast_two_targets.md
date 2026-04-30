@@ -175,7 +175,6 @@ eval_objects = [
 ]
 ```
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://drive.google.com/file/d/11oL_tQVzK6KLimmRFlvZzrtwc74N_1Ot/view?usp=sharing)
 
 ## Complete Example
 
@@ -187,7 +186,6 @@ import extremeweatherbench as ewb
 from extremeweatherbench.cases import IndividualCase
 from extremeweatherbench.regions import BoundingBoxRegion
 
-# Mini-case: 2022 India Heat Wave — Colab-optimized
 demo_case = IndividualCase(
     case_id_number=9009,
     title="2022 India Heat Wave (demo)",

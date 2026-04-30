@@ -203,7 +203,6 @@ The output is a pandas `DataFrame` with one row per
 `(case, metric, lead_time, init_time)` combination. See
 [Usage](../usage.md) for a full walkthrough of the output columns.
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1wSQ2Spznf7_V4tdvrb-WlzdXBcdCQ6Rs?usp=sharing)
 
 ## Complete Example
 
@@ -213,7 +212,6 @@ import extremeweatherbench as ewb
 from extremeweatherbench.cases import IndividualCase
 from extremeweatherbench.regions import BoundingBoxRegion
 
-# Mini-case: 2019 W European Heat Wave — Colab-optimized
 demo_case = IndividualCase(
     case_id_number=9002,
     title="2019 W European Heat Wave (demo)",
