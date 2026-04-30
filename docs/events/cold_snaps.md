@@ -1,4 +1,48 @@
-# Large-scale major freeze events 
+# Major Freeze/Cold-Snap Events 
+## Cases
+
+Case bounds were drawn from the sources listed (Wikipedia winter storm and cold wave articles, ECMWF Severe Event Catalogue, and WMO regional climate reports) and sized to contain the full cold-air outbreak or synoptic trough, generally extending 10–15° of latitude beyond the primary freeze area to capture the polar air mass and its source region. Each case was validated against ERA5 2-meter temperature fields to confirm that minimum temperatures fell at or below the climatological 15th percentile for the affected region.
+
+<details open>
+<summary><strong>Cases — 14 events</strong></summary>
+<input id="case-filter-freeze" type="text" placeholder="Filter cases…"
+       oninput="filterTable(this, 'freeze')" style="margin:8px 0;padding:4px 8px;width:100%;box-sizing:border-box;">
+<table id="case-table-freeze">
+<thead>
+<tr><th>Name</th><th>Time range</th><th>Location</th><th>Sources</th></tr>
+</thead>
+<tbody>
+<tr><td>2021 Texas</td><td>2021-02-10 – 2021-02-22</td><td>Texas</td><td><a href="https://en.wikipedia.org/wiki/February_13%E2%80%9317,_2021_North_American_winter_storm">Feb 13–17 2021 NA winter storm — Wikipedia</a><br><a href="https://en.wikipedia.org/wiki/February_2021_North_American_cold_wave">Feb 2021 NA cold wave — Wikipedia</a></td></tr>
+<tr><td>2022 Arkansas</td><td>2022-02-17 – 2022-03-01</td><td>Arkansas</td><td><a href="https://en.wikipedia.org/wiki/2021%E2%80%9322_North_American_winter#Late_February_winter_storm">2021–22 NA winter (late Feb) — Wikipedia</a></td></tr>
+<tr><td>2023 Germany</td><td>2023-12-02 – 2023-12-08</td><td>Germany</td><td><a href="https://confluence.ecmwf.int/display/FCST/202311+-+Cold+-+Europe">ECMWF: Nov 2023 Cold Europe</a></td></tr>
+<tr><td>2023 China</td><td>2023-12-15 – 2023-12-26</td><td>China</td><td><a href="https://www.reuters.com/world/china/chinas-cold-snap-reaches-shanghai-with-chilliest-year-end-40-years-2023-12-21/">Reuters: China cold snap Dec 2023</a></td></tr>
+<tr><td>2023 Afghanistan</td><td>2023-01-11 – 2023-01-28</td><td>Afghanistan</td><td><a href="https://en.wikipedia.org/wiki/2023_Afghanistan_cold_snap">2023 Afghanistan cold snap — Wikipedia</a></td></tr>
+<tr><td>2022 Colorado</td><td>2022-04-06 – 2022-04-16</td><td>Colorado</td><td><a href="https://en.wikipedia.org/wiki/2021%E2%80%9322_North_American_winter#Late_May_winter_storm">2021–22 NA winter (late May) — Wikipedia</a></td></tr>
+<tr><td>January 2024 Pacific Northwest</td><td>2024-01-11 – 2024-01-20</td><td>Pacific Northwest</td><td><a href="https://en.wikipedia.org/wiki/January_10%E2%80%9313,_2024_North_American_storm_complex">Jan 10–13 2024 NA storm — Wikipedia</a></td></tr>
+<tr><td>April 2022 Nevada</td><td>2022-04-11 – 2022-04-17</td><td>Nevada</td><td><a href="https://en.wikipedia.org/wiki/April_2022_North_American_storm_complex">April 2022 NA storm complex — Wikipedia</a></td></tr>
+<tr><td>February/March 2021 New England</td><td>2021-03-04 – 2021-03-10</td><td>New England</td><td><a href="https://en.wikipedia.org/wiki/2020%E2%80%9321_North_American_winter">2020–21 NA winter — Wikipedia</a></td></tr>
+<tr><td>January 2024 Northern Europe</td><td>2024-01-01 – 2024-01-09</td><td>Northern Europe</td><td><a href="https://confluence.ecmwf.int/display/FCST/202401+-+Cold+-+Northern+Europe">ECMWF: Jan 2024 Cold N. Europe</a></td></tr>
+<tr><td>December 2022 Europe</td><td>2022-12-10 – 2022-12-20</td><td>Europe</td><td></td></tr>
+<tr><td>April 2024 Europe</td><td>2024-04-16 – 2024-04-27</td><td>Europe</td><td><a href="https://confluence.ecmwf.int/display/FCST/202404+-+Cold+-Europe">ECMWF: Apr 2024 Cold Europe</a></td></tr>
+<tr><td>January 2023 North China</td><td>2024-01-20 – 2024-02-04</td><td>North China</td><td><a href="https://www.cnn.com/2023/01/25/asia/east-asia-cold-snap-climate-japan-korea-china-climate-intl-hnk/index.html">CNN: East Asia cold snap Jan 2023</a></td></tr>
+<tr><td>April 2024 Sweden</td><td>2024-04-02 – 2024-04-08</td><td>Sweden</td><td><a href="https://confluence.ecmwf.int/pages/viewpage.action?pageId=402638917">ECMWF: Apr 2024 Snow/Cold Sweden/Finland</a></td></tr>
+</tbody>
+</table>
+</details>
+
+<script>
+function filterTable(input, slug) {
+  const filter = input.value.toLowerCase();
+  const rows = document.querySelectorAll(
+    '#case-table-' + slug + ' tbody tr'
+  );
+  rows.forEach(r => {
+    r.style.display =
+      r.textContent.toLowerCase().includes(filter) ? '' : 'none';
+  });
+}
+</script>
+
 
 ## US-based events
 
@@ -24,7 +68,7 @@
      2. [https://www.spc.noaa.gov/climo/reports/220412\_rpts.html](https://www.spc.noaa.gov/climo/reports/220412_rpts.html)   
      3. [https://www.spc.noaa.gov/climo/reports/220413\_rpts.html](https://www.spc.noaa.gov/climo/reports/220413_rpts.html)   
    * Identified as a billion dollar disaster   
-     1. [https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters\[\]=severe-storm](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
+     1. [NCEI Billion Dollar Disasters - Severe Storms](https://www.ncei.noaa.gov/access/billions/events/US/1980-2024?disasters[]=severe-storm)  
 7. May 20-21, 2022 Winter Storm Tad Colorado and Wyoming  
    * [2021–22 North American winter \- Wikipedia](https://en.wikipedia.org/wiki/2021%E2%80%9322_North_American_winter#Late_May_winter_storm)  
    * Cross-listed with major freezes  
@@ -54,7 +98,7 @@
 
 ## Worldwide events
 
-1. There is a hint of large-scale cold event over Europe just before this heatwave  
+1. There is a hint of large-scale cold event over Europe just before this heat wave  
    1. [https://confluence.ecmwf.int/display/FCST/202212+-+Heatwave+-+Europe](https://confluence.ecmwf.int/display/FCST/202212+-+Heatwave+-+Europe)   
 2. January 2-5 2024 Northern Europe  
    1. [202401 \- Cold \- Northern Europe](https://confluence.ecmwf.int/display/FCST/202401+-+Cold+-+Northern+Europe)   
