@@ -64,7 +64,10 @@ def compute_metpy_reference(
         try:
             cape, cin = mixed_layer_cape_cin(p, t, td)
             cape_ref[i] = cape.magnitude
-            cin_ref[i] = cin.magnitude
+            # MetPy returns CIN with a negative sign; negate to store as a
+            # non-negative inhibition magnitude matching our implementation's
+            # sign convention.
+            cin_ref[i] = -cin.magnitude
         except Exception:
             cape_ref[i] = np.nan
             cin_ref[i] = np.nan
@@ -287,7 +290,7 @@ def create_pathological_profiles():
         "dewpoint": td3,
         "geopotential": z3,
         "expected_cape": 500.0,  # Moderate
-        "expected_cin": -100.0,  # Significant CIN
+        "expected_cin": 100.0,  # Significant CIN (non-negative inhibition magnitude)
         "description": "Elevated convection with significant CIN",
     }
 

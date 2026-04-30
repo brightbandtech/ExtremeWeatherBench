@@ -1062,8 +1062,8 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
-        # Should be 1.0: forecast mask all 1s, target mask all 0s
-        assert np.isclose(result.values[0], 1.0)
+        # 9 consecutive 6 h intervals → 54 h; target = 0 h → ME = 54 h
+        assert np.isclose(result.values[0], 54.0)
 
     def test_me_0_5_half_forecast_exceeds(self):
         """Test MeanError= 0.5 when half forecast exceeds, all target below."""
@@ -1079,8 +1079,8 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
-        # Should be 0.5: forecast mask: 5 ones, 5 zeros; target: all zeros
-        assert np.isclose(result.values[0], 0.5)
+        # 4 consecutive 6 h intervals → 24 h; target = 0 h → ME = 24 h
+        assert np.isclose(result.values[0], 24.0)
 
     def test_me_neg_1_0_all_target_exceeds(self):
         """Test MeanError= -1.0 when all forecast below, all target exceeds."""
@@ -1095,8 +1095,8 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
-        # Should be -1.0: forecast mask all 0s, target mask all 1s
-        assert np.isclose(result.values[0], -1.0)
+        # forecast = 0 h; target = 9 intervals × 6 h = 54 h → ME = -54 h
+        assert np.isclose(result.values[0], -54.0)
 
     def test_me_0_0_forecast_equals_target(self):
         """Test MeanError= 0.0 when forecast equals target."""
@@ -1128,8 +1128,8 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast, target=target)
 
-        # Should be 0.3: forecast mask: 3 ones, 7 zeros; target: all zeros
-        assert np.isclose(result.values[0], 0.3)
+        # 2 consecutive 6 h intervals → 12 h; target = 0 h → ME = 12 h
+        assert np.isclose(result.values[0], 12.0)
 
     def test_me_with_lead_time_dimension(self):
         """Test MeanErrorwith forecast having lead_time dimension.
@@ -1201,16 +1201,22 @@ class TestDurationMeanError:
         # Expected pattern: [1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 4, 3, 2, 1]
         # This reflects the number of (lead_time, valid_time) combos per init
 
-        # All values should be positive (forecast exceeds, target doesn't)
-        assert np.all(result.values > 0)
+        # First init_time covers only the first valid_time (no previous
+        # timestep), so its consecutive duration is 0 h; all others >= 0
+        assert np.all(result.values >= 0)
+        assert np.any(result.values > 0)
 
-        # Middle init_times should have the maximum value (n_lead_times)
+        # Middle init_times have n_lead_times timesteps → n_lead_times - 1
+        # consecutive intervals each spanning 6 h → max = 4 × 6 = 24 h
         max_value = np.max(result.values)
-        assert max_value == n_lead_times
+        assert max_value == (n_lead_times - 1) * 6
 
-        # Edge init_times should have value 1 (only one combination)
-        assert result.values[0] == 1
-        assert result.values[-1] == 1
+        # First init_time: only (lt=max, vt=t0) — no prior timestep → 0 h
+        assert result.values[0] == 0
+        # Last init_time: only (lt=0, vt=t_max) — 1 cell, no pairs → 0 h
+        assert result.values[-1] == 0
+        # Second-to-last: 2 cells → 1 consecutive pair → 6 h
+        assert result.values[-2] == 6
 
     def test_me_with_lead_time_partial_target_exceedance(self):
         """Test MeanErrorwith lead_time dims where target partially exceeds.
@@ -1320,13 +1326,11 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
-        # Should still be positive (forecast exceeds where not NaN)
-        # Result is reduced to scalar per init_time
+        # NaN at vt 2-3 (all locations) breaks the run into two segments:
+        # [0,1] → 1 interval and [4..9] → 5 intervals → (1+5)×6 = 36 h
         mean_result = float(result.values[0])
         assert mean_result > 0
-        # 8 out of 10 timesteps exceed (2 are NaN), target never exceeds
-        # So result should be 0.8 (8 timesteps where forecast=1, target=0)
-        assert np.isclose(mean_result, 0.8)
+        assert np.isclose(mean_result, 36.0)
 
     def test_me_with_nans_one_target_exceedance(self):
         """Test MeanErrorwith NaNs when one target value exceeds threshold.
@@ -1353,12 +1357,11 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
-        # Should be less than 1.0 because:
-        # - timestep 0: both exceed (diff=0)
-        # - timesteps 1-4, 7-9: forecast exceeds, target doesn't (diff=1)
-        # - timesteps 5-6: NaN positions excluded
-        assert result.values[0] < 1.0
+        # Partial NaN (one grid cell) does not affect the spatial mean;
+        # all 10 forecast timesteps still exceed → 9 intervals × 6 h = 54 h
+        # Target: only vt=0 is True; no consecutive pair → 0 h → ME = 54 h
         assert result.values[0] > 0
+        assert np.isclose(result.values[0], 54.0)
 
     def test_me_with_nans_all_but_nan_exceed(self):
         """Test MeanErrorwhen all non-NaN forecast/target values exceed threshold.
@@ -1416,10 +1419,11 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=climatology)
         result = metric.compute_metric(forecast=forecast_with_nans, target=target)
 
-        # Result should be positive but less than previous tests
-        # because some positions where forecast>target are NaN
+        # Partial NaN does not affect spatial mean; forecast [0..5] True
+        # → 5 intervals × 6 h = 30 h; target [0..2] True → 2 intervals
+        # × 6 h = 12 h; ME = 30 − 12 = 18 h
         assert result.values[0] > 0
-        assert result.values[0] < 1.0
+        assert np.isclose(result.values[0], 18.0)
 
         # Verify that the computation completed without errors
         assert not np.isnan(result.values[0])
@@ -1445,8 +1449,8 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=300.0)
         result = metric.compute_metric(forecast=forecast, target=target)
 
-        # Should be 1.0: forecast mask all 1s, target mask all 0s
-        assert np.isclose(result.values[0], 1.0)
+        # 9 consecutive 6 h intervals → 54 h; target = 0 h → ME = 54 h
+        assert np.isclose(result.values[0], 54.0)
 
     def test_me_with_float_threshold_mixed(self):
         """Test MeanErrorwith float threshold and mixed exceedance."""
@@ -1463,9 +1467,9 @@ class TestDurationMeanError:
         metric = metrics.DurationMeanError(threshold_criteria=300.0)
         result = metric.compute_metric(forecast=forecast, target=target)
 
-        # Forecast: 6 timesteps exceed, Target: 3 timesteps exceed
-        # MeanError= (6 - 3) / 10 = 0.3
-        assert np.isclose(result.values[0], 0.3)
+        # Forecast: 5 consecutive intervals × 6 h = 30 h
+        # Target: 2 consecutive intervals × 6 h = 12 h → ME = 18 h
+        assert np.isclose(result.values[0], 18.0)
 
     def test_float_and_climatology_produce_same_result(self):
         """Test that float threshold and equivalent climatology give same result."""
@@ -1515,9 +1519,8 @@ class TestDurationMeanError:
 
         # Result should be valid (not NaN) and correct
         assert not np.isnan(result.values[0])
-        assert np.isclose(
-            result.values[0], 1.0
-        )  # All forecast exceeds, all target below
+        # 9 consecutive 6 h intervals → 54 h; target = 0 h → ME = 54 h
+        assert np.isclose(result.values[0], 54.0)
 
     def test_sparse_array_with_climatology(self):
         """Test sparse arrays with climatology threshold criteria."""
@@ -1544,8 +1547,8 @@ class TestDurationMeanError:
 
         # Result should be valid
         assert not np.isnan(result.values[0])
-        # Forecast: 6 timesteps exceed, Target: 3 timesteps exceed
-        assert np.isclose(result.values[0], 0.3)
+        # Forecast: 5 intervals × 6 h = 30 h; Target: 2 × 6 h = 12 h
+        assert np.isclose(result.values[0], 18.0)
 
 
 class TestThresholdMetric:
@@ -2347,6 +2350,542 @@ class TestLandfallMetrics:
             # Allow some tolerance for floating point calculations
             assert 39.0 < result.values[0] < 41.0
 
+    def test_multi_landfall_displacement_uses_first_per_init(self):
+        """Verify displacement uses only the first forecast landfall per
+        init_time, not an average across multiple forecast landfalls.
+
+        Mimics TC Yagi's pattern: Philippines landfall (~16N, 120E) then
+        Vietnam landfall (~20N, 106E). The target is the Philippines
+        landfall. Without the fix, the displacement would be inflated
+        by averaging in the Vietnam forecast landfall distance (~1500 km).
+        With the fix, only the first (Philippines) forecast landfall
+        is used, giving a small displacement (~15 km).
+        """
+        target = xr.Dataset(
+            {
+                "latitude": (["valid_time"], [16.0]),
+                "longitude": (["valid_time"], [120.0]),
+                "surface_wind_speed": (["valid_time"], [55.0]),
+            },
+            coords={
+                "valid_time": [pd.Timestamp("2024-09-01 12:00")],
+            },
+        )
+
+        forecast = xr.Dataset(
+            {
+                "latitude": (
+                    ["lead_time", "valid_time"],
+                    [[16.0]],
+                ),
+                "longitude": (
+                    ["lead_time", "valid_time"],
+                    [[120.0]],
+                ),
+                "surface_wind_speed": (
+                    ["lead_time", "valid_time"],
+                    [[52.0]],
+                ),
+            },
+            coords={
+                "lead_time": [24],
+                "valid_time": [
+                    pd.Timestamp("2024-09-01 12:00"),
+                ],
+            },
+        )
+
+        init_ts = pd.Timestamp("2024-08-31 12:00")
+
+        # Target: single observed landfall near Philippines
+        mock_target_landfall = xr.DataArray(
+            [55.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0],
+                "latitude": ("landfall", [16.0]),
+                "longitude": ("landfall", [120.0]),
+                "valid_time": (
+                    "landfall",
+                    [pd.Timestamp("2024-09-01 12:00")],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Forecast: TWO landfalls for the same init_time.
+        # Landfall 0 = Philippines (16.1N, 120.1E, close)
+        # Landfall 1 = Vietnam (20N, 106E, ~1500 km away)
+        mock_forecast_landfall = xr.DataArray(
+            [[52.0, 45.0]],
+            dims=["init_time", "landfall"],
+            coords={
+                "init_time": [init_ts],
+                "landfall": [0, 1],
+                "latitude": (
+                    ["init_time", "landfall"],
+                    [[16.1, 20.0]],
+                ),
+                "longitude": (
+                    ["init_time", "landfall"],
+                    [[120.1, 106.0]],
+                ),
+                "valid_time": (
+                    ["init_time", "landfall"],
+                    [
+                        [
+                            pd.Timestamp("2024-09-01 12:00"),
+                            pd.Timestamp("2024-09-07 06:00"),
+                        ]
+                    ],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+
+            def side_effect(track_data, **kw):
+                if "lead_time" not in track_data.dims:
+                    return mock_target_landfall
+                return mock_forecast_landfall
+
+            mock_find.side_effect = side_effect
+
+            metric = metrics.LandfallDisplacement(
+                approach="first",
+            )
+            result = metric._compute_metric(
+                forecast["surface_wind_speed"],
+                target["surface_wind_speed"],
+            )
+
+            assert isinstance(result, xr.DataArray)
+            assert result.dims == ("init_time",)
+            displacement_km = result.values[0]
+            # First forecast landfall is ~15 km from target.
+            # If the bug were present (averaging both landfalls),
+            # the displacement would be ~750 km.
+            assert displacement_km < 50, (
+                f"Displacement {displacement_km:.1f} km is too large; "
+                f"multi-landfall averaging bug is likely present"
+            )
+
+            # Verify landfall metadata is attached
+            expected_coords = [
+                "forecast_landfall_latitude",
+                "forecast_landfall_longitude",
+                "forecast_landfall_valid_time",
+                "target_landfall_latitude",
+                "target_landfall_longitude",
+                "target_landfall_valid_time",
+            ]
+            for coord_name in expected_coords:
+                assert coord_name in result.coords, (
+                    f"Missing metadata coord: {coord_name}"
+                )
+            assert abs(float(result.forecast_landfall_latitude) - 16.1) < 0.01
+            assert abs(float(result.target_landfall_latitude) - 16.0) < 0.01
+
+    def test_first_approach_skips_init_with_late_track_start(self):
+        """Verify approach='first' filters out init_times whose
+        forecast track starts after the first target landfall.
+
+        Mimics TC Debby (case 154): the target's first landfall is
+        Cuba at Aug 3 17Z, but the forecast track for init Aug 2
+        12Z doesn't start until Aug 3 18Z (tracker doesn't detect
+        the TC until then). That init_time should be excluded
+        because the forecast can't predict the Cuba landfall.
+
+        The forecast grid has two init_times sharing the same
+        valid_time column (Aug 3 18Z): init Aug 3 18Z at lt=0
+        and init Aug 2 12Z at lt=30. This tests that the
+        track-start detection scans all cells in the
+        (lead_time, valid_time) grid, not just the first
+        non-NaN per column.
+        """
+        forecast = xr.Dataset(
+            {
+                "surface_wind_speed": (
+                    ["lead_time", "valid_time"],
+                    [
+                        [np.nan, 40.0],
+                        [np.nan, 35.0],
+                    ],
+                ),
+                "latitude": (
+                    ["lead_time", "valid_time"],
+                    [
+                        [np.nan, 25.0],
+                        [np.nan, 29.0],
+                    ],
+                ),
+                "longitude": (
+                    ["lead_time", "valid_time"],
+                    [
+                        [np.nan, -80.0],
+                        [np.nan, -83.0],
+                    ],
+                ),
+            },
+            coords={
+                "lead_time": [0, 30],
+                "valid_time": [
+                    pd.Timestamp("2024-08-02 12:00"),
+                    pd.Timestamp("2024-08-03 18:00"),
+                ],
+            },
+        )
+
+        target = xr.Dataset(
+            {
+                "surface_wind_speed": (["valid_time"], [55.0]),
+                "latitude": (["valid_time"], [22.0]),
+                "longitude": (["valid_time"], [-79.5]),
+            },
+            coords={
+                "valid_time": [
+                    pd.Timestamp("2024-08-03 17:00"),
+                ],
+            },
+        )
+
+        # Target: Cuba landfall at Aug 3 17Z
+        mock_target_landfall = xr.DataArray(
+            [55.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0],
+                "latitude": ("landfall", [22.0]),
+                "longitude": ("landfall", [-79.5]),
+                "valid_time": (
+                    "landfall",
+                    [pd.Timestamp("2024-08-03 17:00")],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        init_ts = pd.Timestamp("2024-08-02 12:00")
+
+        # Forecast landfall: Florida at Aug 5
+        # (only landfall the tracker can see)
+        mock_forecast_landfall = xr.DataArray(
+            [[35.0]],
+            dims=["init_time", "landfall"],
+            coords={
+                "init_time": [init_ts],
+                "landfall": [0],
+                "latitude": (
+                    ["init_time", "landfall"],
+                    [[29.0]],
+                ),
+                "longitude": (
+                    ["init_time", "landfall"],
+                    [[-83.0]],
+                ),
+                "valid_time": (
+                    ["init_time", "landfall"],
+                    [[pd.Timestamp("2024-08-05 00:00")]],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+
+            def side_effect(track_data, **kw):
+                if "lead_time" not in track_data.dims:
+                    return mock_target_landfall
+                return mock_forecast_landfall
+
+            mock_find.side_effect = side_effect
+
+            metric = metrics.LandfallDisplacement(
+                approach="first",
+            )
+            result = metric._compute_metric(
+                forecast["surface_wind_speed"],
+                target["surface_wind_speed"],
+            )
+
+            # The init_time should be filtered out because
+            # the track starts at Aug 3 18Z, AFTER the Cuba
+            # landfall at Aug 3 17Z. Result should be NaN
+            # (no valid init_times remain).
+            assert np.isnan(result.values).all(), (
+                "Init with track starting after target "
+                "landfall should have been filtered out"
+            )
+
+    def test_first_approach_falls_back_to_next_target(self):
+        """When the first IBTrACS landfall has no forecast
+        coverage, fall back to the next one that does.
+
+        Mimics TC Debby: Cuba landfall at Aug 3 17Z has no
+        forecast data (track starts Aug 3 18Z). Florida
+        landfall at Aug 5 15Z does. The metric should compare
+        against the Florida landfall instead of returning NaN.
+        """
+        forecast = xr.Dataset(
+            {
+                "surface_wind_speed": (
+                    ["lead_time", "valid_time"],
+                    [
+                        [np.nan, 40.0],
+                        [np.nan, 35.0],
+                    ],
+                ),
+                "latitude": (
+                    ["lead_time", "valid_time"],
+                    [
+                        [np.nan, 25.0],
+                        [np.nan, 29.0],
+                    ],
+                ),
+                "longitude": (
+                    ["lead_time", "valid_time"],
+                    [
+                        [np.nan, -80.0],
+                        [np.nan, -83.0],
+                    ],
+                ),
+            },
+            coords={
+                "lead_time": [0, 30],
+                "valid_time": [
+                    pd.Timestamp("2024-08-02 12:00"),
+                    pd.Timestamp("2024-08-03 18:00"),
+                ],
+            },
+        )
+
+        target = xr.Dataset(
+            {
+                "surface_wind_speed": (
+                    ["valid_time"],
+                    [55.0, 50.0],
+                ),
+                "latitude": (
+                    ["valid_time"],
+                    [22.0, 29.5],
+                ),
+                "longitude": (
+                    ["valid_time"],
+                    [-79.5, -83.5],
+                ),
+            },
+            coords={
+                "valid_time": [
+                    pd.Timestamp("2024-08-03 17:00"),
+                    pd.Timestamp("2024-08-05 15:00"),
+                ],
+            },
+        )
+
+        # Two target landfalls: Cuba (Aug 3 17Z), Florida
+        # (Aug 5 15Z)
+        mock_target_landfall = xr.DataArray(
+            [55.0, 50.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1],
+                "latitude": ("landfall", [22.0, 29.5]),
+                "longitude": (
+                    "landfall",
+                    [-79.5, -83.5],
+                ),
+                "valid_time": (
+                    "landfall",
+                    [
+                        pd.Timestamp("2024-08-03 17:00"),
+                        pd.Timestamp("2024-08-05 15:00"),
+                    ],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        init_ts = pd.Timestamp("2024-08-02 12:00")
+
+        mock_forecast_landfall = xr.DataArray(
+            [[35.0]],
+            dims=["init_time", "landfall"],
+            coords={
+                "init_time": [init_ts],
+                "landfall": [0],
+                "latitude": (
+                    ["init_time", "landfall"],
+                    [[29.0]],
+                ),
+                "longitude": (
+                    ["init_time", "landfall"],
+                    [[-83.0]],
+                ),
+                "valid_time": (
+                    ["init_time", "landfall"],
+                    [[pd.Timestamp("2024-08-05 00:00")]],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+
+            def side_effect(track_data, **kw):
+                if "lead_time" not in track_data.dims:
+                    return mock_target_landfall
+                return mock_forecast_landfall
+
+            mock_find.side_effect = side_effect
+
+            metric = metrics.LandfallDisplacement(
+                approach="first",
+            )
+            result = metric._compute_metric(
+                forecast["surface_wind_speed"],
+                target["surface_wind_speed"],
+            )
+
+            assert isinstance(result, xr.DataArray)
+            assert not np.isnan(result.values).all(), (
+                "Should fall back to Florida landfall, not return NaN"
+            )
+            # Target is Florida (29.5N, -83.5W),
+            # forecast is (29.0N, -83.0W) — close match
+            assert result.values[0] < 100, (
+                f"Displacement {result.values[0]:.1f} km should be small (FL vs FL)"
+            )
+            # Verify metadata uses the Florida target
+            assert abs(float(result.target_landfall_latitude) - 29.5) < 0.01
+
+    def test_multi_landfall_displacement_next_approach(self):
+        """Verify approach='next' also uses first forecast landfall
+        per init_time after matching to the correct target.
+
+        Two target landfalls (Philippines, Vietnam) and two forecast
+        landfalls per init_time. find_next_landfall_for_init_time
+        runs with real logic to match by closest valid_time. Then
+        select_first_forecast_landfall_per_init keeps only the
+        earliest forecast landfall, preventing averaging inflation.
+        """
+        target = xr.Dataset(
+            {
+                "latitude": (["valid_time"], [16.0]),
+                "longitude": (["valid_time"], [120.0]),
+                "surface_wind_speed": (["valid_time"], [55.0]),
+            },
+            coords={
+                "valid_time": [pd.Timestamp("2024-09-01 12:00")],
+            },
+        )
+
+        forecast = xr.Dataset(
+            {
+                "latitude": (
+                    ["lead_time", "valid_time"],
+                    [[16.0]],
+                ),
+                "longitude": (
+                    ["lead_time", "valid_time"],
+                    [[120.0]],
+                ),
+                "surface_wind_speed": (
+                    ["lead_time", "valid_time"],
+                    [[52.0]],
+                ),
+            },
+            coords={
+                "lead_time": [24],
+                "valid_time": [
+                    pd.Timestamp("2024-09-01 12:00"),
+                ],
+            },
+        )
+
+        init_ts = pd.Timestamp("2024-08-31 12:00")
+
+        # Target: TWO observed landfalls (Philippines then Vietnam)
+        mock_target_landfall = xr.DataArray(
+            [55.0, 48.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1],
+                "latitude": ("landfall", [16.0, 20.0]),
+                "longitude": ("landfall", [120.0, 106.0]),
+                "valid_time": (
+                    "landfall",
+                    [
+                        pd.Timestamp("2024-09-01 12:00"),
+                        pd.Timestamp("2024-09-07 06:00"),
+                    ],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Forecast: TWO landfalls for the same init_time.
+        # Landfall 0 = Philippines (16.1N, 120.1E) at Sep 1
+        # Landfall 1 = Vietnam (20N, 106E) at Sep 7
+        mock_forecast_landfall = xr.DataArray(
+            [[52.0, 45.0]],
+            dims=["init_time", "landfall"],
+            coords={
+                "init_time": [init_ts],
+                "landfall": [0, 1],
+                "latitude": (
+                    ["init_time", "landfall"],
+                    [[16.1, 20.0]],
+                ),
+                "longitude": (
+                    ["init_time", "landfall"],
+                    [[120.1, 106.0]],
+                ),
+                "valid_time": (
+                    ["init_time", "landfall"],
+                    [
+                        [
+                            pd.Timestamp("2024-09-01 12:00"),
+                            pd.Timestamp("2024-09-07 06:00"),
+                        ]
+                    ],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        with mock.patch.object(calc, "find_landfalls") as mock_find:
+
+            def side_effect(track_data, **kw):
+                if "lead_time" not in track_data.dims:
+                    return mock_target_landfall
+                return mock_forecast_landfall
+
+            mock_find.side_effect = side_effect
+
+            metric = metrics.LandfallDisplacement(
+                approach="next",
+            )
+            result = metric._compute_metric(
+                forecast["surface_wind_speed"],
+                target["surface_wind_speed"],
+            )
+
+            assert isinstance(result, xr.DataArray)
+            assert result.dims == ("init_time",)
+            displacement_km = result.values[0]
+            # find_next_landfall_for_init_time matches the
+            # forecast (Philippines, Sep 1) to the target
+            # (Philippines, Sep 1) by closest valid_time.
+            # select_first_forecast_landfall_per_init then
+            # keeps only the first forecast landfall (~15 km).
+            # Without the fix, averaging would give ~750 km.
+            assert displacement_km < 50, (
+                f"Displacement {displacement_km:.1f} km is too "
+                f"large; multi-landfall averaging bug is "
+                f"likely present (next approach)"
+            )
+
     def test_landfall_intensity_mae_with_known_values(self):
         """Test LandfallIntensityMeanAbsoluteError with manually calculated expected
         values."""
@@ -2939,6 +3478,454 @@ class TestLandfallMetrics:
             assert isinstance(forecast_landfall, xr.DataArray)
             assert isinstance(target_landfall, xr.DataArray)
 
+    def test_filter_by_landfall_time_tolerance(self):
+        """Proportional time-tolerance filter on paired landfalls.
+
+        Rule: keep iff
+          abs(fc_vt - tgt_vt) <= 0.5 * (tgt_vt - init_time)
+        """
+        d = np.datetime64
+
+        # init day-1, target day-3, fc day-5 → mismatch 2d,
+        # threshold 0.5*2d=1d → DROP
+        # init day-1, target day-3, fc day-3.5 → mismatch 0.5d,
+        # threshold 1d → KEEP
+        # init day-1, target day-3, fc day-4 → mismatch 1d,
+        # threshold 1d → KEEP (<=)
+        init_times = np.array(
+            [
+                d("2024-08-01"),
+                d("2024-08-01"),
+                d("2024-08-01"),
+            ]
+        )
+        tgt_vts = np.array(
+            [
+                d("2024-08-03"),
+                d("2024-08-03"),
+                d("2024-08-03"),
+            ]
+        )
+        fc_vts = np.array(
+            [
+                d("2024-08-05"),
+                d("2024-08-03T12"),
+                d("2024-08-04"),
+            ]
+        )
+
+        fc = xr.DataArray(
+            [1.0, 2.0, 3.0],
+            dims=["init_time"],
+            coords={
+                "init_time": init_times,
+                "valid_time": ("init_time", fc_vts),
+                "latitude": ("init_time", [25.0, 26.0, 27.0]),
+                "longitude": ("init_time", [-80.0, -81.0, -82.0]),
+            },
+        )
+        tgt = xr.DataArray(
+            [10.0, 20.0, 30.0],
+            dims=["init_time"],
+            coords={
+                "init_time": init_times,
+                "valid_time": ("init_time", tgt_vts),
+                "latitude": ("init_time", [25.5, 26.5, 27.5]),
+                "longitude": ("init_time", [-80.5, -81.5, -82.5]),
+            },
+        )
+
+        fc_out, tgt_out = calc.filter_by_landfall_time_tolerance(fc, tgt)
+
+        assert len(fc_out) == 2
+        np.testing.assert_array_equal(fc_out.values, [2.0, 3.0])
+        np.testing.assert_array_equal(tgt_out.values, [20.0, 30.0])
+
+    def test_filter_by_landfall_time_tolerance_all_dropped(self):
+        """All init_times fail → returns empty arrays."""
+        d = np.datetime64
+        init_times = np.array([d("2024-08-01")])
+        fc = xr.DataArray(
+            [1.0],
+            dims=["init_time"],
+            coords={
+                "init_time": init_times,
+                "valid_time": ("init_time", [d("2024-08-07")]),
+                "latitude": ("init_time", [25.0]),
+                "longitude": ("init_time", [-80.0]),
+            },
+        )
+        tgt = xr.DataArray(
+            [10.0],
+            dims=["init_time"],
+            coords={
+                "init_time": init_times,
+                "valid_time": ("init_time", [d("2024-08-03")]),
+                "latitude": ("init_time", [25.5]),
+                "longitude": ("init_time", [-80.5]),
+            },
+        )
+
+        fc_out, tgt_out = calc.filter_by_landfall_time_tolerance(fc, tgt)
+        assert len(fc_out) == 0
+        assert len(tgt_out) == 0
+
+    def test_filter_by_landfall_time_tolerance_all_pass(self):
+        """All init_times pass → arrays returned unchanged."""
+        d = np.datetime64
+        init_times = np.array([d("2024-08-01")])
+        fc = xr.DataArray(
+            [1.0],
+            dims=["init_time"],
+            coords={
+                "init_time": init_times,
+                "valid_time": ("init_time", [d("2024-08-03")]),
+                "latitude": ("init_time", [25.0]),
+                "longitude": ("init_time", [-80.0]),
+            },
+        )
+        tgt = xr.DataArray(
+            [10.0],
+            dims=["init_time"],
+            coords={
+                "init_time": init_times,
+                "valid_time": ("init_time", [d("2024-08-03")]),
+                "latitude": ("init_time", [25.5]),
+                "longitude": ("init_time", [-80.5]),
+            },
+        )
+
+        fc_out, tgt_out = calc.filter_by_landfall_time_tolerance(fc, tgt)
+        assert len(fc_out) == 1
+        xr.testing.assert_equal(fc_out, fc)
+        xr.testing.assert_equal(tgt_out, tgt)
+
+    def test_filter_by_landfall_time_window(self):
+        """Fixed +-24h window filter on paired landfalls."""
+        d = np.datetime64
+
+        # init day-1, target day-3, fc day-5 → mismatch 48h → DROP
+        # init day-1, target day-3, fc day-3T12 → mismatch 12h → KEEP
+        # init day-1, target day-3, fc day-4 → mismatch 24h → KEEP (<=)
+        init_times = np.array(
+            [
+                d("2024-08-01"),
+                d("2024-08-01"),
+                d("2024-08-01"),
+            ]
+        )
+        tgt_vts = np.array(
+            [
+                d("2024-08-03"),
+                d("2024-08-03"),
+                d("2024-08-03"),
+            ]
+        )
+        fc_vts = np.array(
+            [
+                d("2024-08-05"),
+                d("2024-08-03T12"),
+                d("2024-08-04"),
+            ]
+        )
+
+        fc = xr.DataArray(
+            [1.0, 2.0, 3.0],
+            dims=["init_time"],
+            coords={
+                "init_time": init_times,
+                "valid_time": ("init_time", fc_vts),
+                "latitude": ("init_time", [25.0, 26.0, 27.0]),
+                "longitude": ("init_time", [-80.0, -81.0, -82.0]),
+            },
+        )
+        tgt = xr.DataArray(
+            [10.0, 20.0, 30.0],
+            dims=["init_time"],
+            coords={
+                "init_time": init_times,
+                "valid_time": ("init_time", tgt_vts),
+                "latitude": ("init_time", [25.5, 26.5, 27.5]),
+                "longitude": ("init_time", [-80.5, -81.5, -82.5]),
+            },
+        )
+
+        fc_out, tgt_out = calc.filter_by_landfall_time_window(
+            fc, tgt, window_hours=24.0
+        )
+
+        assert len(fc_out) == 2
+        np.testing.assert_array_equal(fc_out.values, [2.0, 3.0])
+        np.testing.assert_array_equal(tgt_out.values, [20.0, 30.0])
+
+    def test_filter_by_landfall_time_window_custom(self):
+        """Custom 12h window keeps only the closest."""
+        d = np.datetime64
+        init_times = np.array([d("2024-08-01"), d("2024-08-01")])
+        tgt_vts = np.array([d("2024-08-03"), d("2024-08-03")])
+        fc_vts = np.array([d("2024-08-04"), d("2024-08-03T06")])
+
+        fc = xr.DataArray(
+            [1.0, 2.0],
+            dims=["init_time"],
+            coords={
+                "init_time": init_times,
+                "valid_time": ("init_time", fc_vts),
+                "latitude": ("init_time", [25.0, 26.0]),
+                "longitude": ("init_time", [-80.0, -81.0]),
+            },
+        )
+        tgt = xr.DataArray(
+            [10.0, 20.0],
+            dims=["init_time"],
+            coords={
+                "init_time": init_times,
+                "valid_time": ("init_time", tgt_vts),
+                "latitude": ("init_time", [25.5, 26.5]),
+                "longitude": ("init_time", [-80.5, -81.5]),
+            },
+        )
+
+        fc_out, tgt_out = calc.filter_by_landfall_time_window(
+            fc, tgt, window_hours=12.0
+        )
+        assert len(fc_out) == 1
+        np.testing.assert_array_equal(fc_out.values, [2.0])
+
+    def test_landfall_metric_default_filter(self):
+        """LandfallMetric defaults to 24h window filter."""
+        m = metrics.LandfallDisplacement(approach="first")
+        assert m.landfall_time_filter == ("window", 24.0)
+
+    def test_time_window_with_mismatched_init_times_next(self):
+        """approach='next' where forecast has more init_times
+        than target matches.  Regression test for the ValueError
+        caused by shape (N,) vs (M,) when N != M.
+        """
+        ts = pd.Timestamp
+        # 3 init_times, but only the first two have matching
+        # target landfalls (the third forecast init is too late).
+        init_a = ts("2024-08-28 00:00")
+        init_b = ts("2024-08-29 00:00")
+        init_c = ts("2024-08-30 00:00")
+
+        target = xr.Dataset(
+            {
+                "latitude": ("valid_time", [25.0]),
+                "longitude": ("valid_time", [-80.0]),
+                "surface_wind_speed": ("valid_time", [50.0]),
+            },
+            coords={
+                "valid_time": [ts("2024-08-30 06:00")],
+            },
+        )
+
+        forecast = xr.Dataset(
+            {
+                "latitude": (
+                    ["lead_time", "valid_time"],
+                    [[25.0, 25.0, 25.0]],
+                ),
+                "longitude": (
+                    ["lead_time", "valid_time"],
+                    [[-80.0, -80.0, -80.0]],
+                ),
+                "surface_wind_speed": (
+                    ["lead_time", "valid_time"],
+                    [[50.0, 50.0, 50.0]],
+                ),
+            },
+            coords={
+                "lead_time": [24],
+                "valid_time": [
+                    ts("2024-08-28 00:00"),
+                    ts("2024-08-29 00:00"),
+                    ts("2024-08-30 00:00"),
+                ],
+            },
+        )
+
+        # Target: one observed landfall
+        mock_target = xr.DataArray(
+            [50.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0],
+                "latitude": ("landfall", [25.0]),
+                "longitude": ("landfall", [-80.0]),
+                "valid_time": (
+                    "landfall",
+                    [ts("2024-08-30 06:00")],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Forecast: 3 init_times each with one landfall, but
+        # init_c's landfall time is 4 days late so it won't
+        # match any target in find_next_landfall_for_init_time.
+        mock_forecast = xr.DataArray(
+            [[48.0], [49.0], [51.0]],
+            dims=["init_time", "landfall"],
+            coords={
+                "init_time": [init_a, init_b, init_c],
+                "landfall": [0],
+                "latitude": (
+                    ["init_time", "landfall"],
+                    [[25.1], [25.05], [30.0]],
+                ),
+                "longitude": (
+                    ["init_time", "landfall"],
+                    [[-80.1], [-80.05], [-75.0]],
+                ),
+                "valid_time": (
+                    ["init_time", "landfall"],
+                    [
+                        [ts("2024-08-30 06:00")],
+                        [ts("2024-08-30 06:00")],
+                        [ts("2024-09-03 00:00")],
+                    ],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        with mock.patch.object(calc, "find_landfalls") as mf:
+
+            def side_effect(track_data, **kw):
+                if "lead_time" not in track_data.dims:
+                    return mock_target
+                return mock_forecast
+
+            mf.side_effect = side_effect
+
+            metric = metrics.LandfallDisplacement(
+                approach="next",
+                landfall_time_filter=("window", 24.0),
+            )
+            result = metric._compute_metric(
+                forecast["surface_wind_speed"],
+                target["surface_wind_speed"],
+            )
+
+            assert isinstance(result, xr.DataArray)
+            assert "init_time" in result.dims
+            # init_c should have been dropped (no target match
+            # or window mismatch), so at most 2 init_times.
+            assert len(result.init_time) <= 2
+
+    def test_time_window_with_first_approach(self):
+        """approach='first' with time window filter succeeds
+        and drops init_times whose forecast landfall is far
+        from the target.
+        """
+        ts = pd.Timestamp
+        init_a = ts("2024-08-28 00:00")
+        init_b = ts("2024-08-29 00:00")
+
+        target = xr.Dataset(
+            {
+                "latitude": ("valid_time", [25.0]),
+                "longitude": ("valid_time", [-80.0]),
+                "surface_wind_speed": ("valid_time", [50.0]),
+            },
+            coords={
+                "valid_time": [ts("2024-08-31 00:00")],
+            },
+        )
+
+        forecast = xr.Dataset(
+            {
+                "latitude": (
+                    ["lead_time", "valid_time"],
+                    [[25.0, 25.0]],
+                ),
+                "longitude": (
+                    ["lead_time", "valid_time"],
+                    [[-80.0, -80.0]],
+                ),
+                "surface_wind_speed": (
+                    ["lead_time", "valid_time"],
+                    [[50.0, 50.0]],
+                ),
+            },
+            coords={
+                "lead_time": [24],
+                "valid_time": [
+                    ts("2024-08-28 00:00"),
+                    ts("2024-08-29 00:00"),
+                ],
+            },
+        )
+
+        # Target: one observed landfall at Aug 31 00Z
+        mock_target = xr.DataArray(
+            [50.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0],
+                "latitude": ("landfall", [25.0]),
+                "longitude": ("landfall", [-80.0]),
+                "valid_time": (
+                    "landfall",
+                    [ts("2024-08-31 00:00")],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Forecast: init_a landfall close to target (Aug 31 12Z
+        # = 12h off), init_b landfall 3 days late (Sep 3).
+        mock_forecast = xr.DataArray(
+            [[48.0], [51.0]],
+            dims=["init_time", "landfall"],
+            coords={
+                "init_time": [init_a, init_b],
+                "landfall": [0],
+                "latitude": (
+                    ["init_time", "landfall"],
+                    [[25.1], [30.0]],
+                ),
+                "longitude": (
+                    ["init_time", "landfall"],
+                    [[-80.1], [-75.0]],
+                ),
+                "valid_time": (
+                    ["init_time", "landfall"],
+                    [
+                        [ts("2024-08-31 12:00")],
+                        [ts("2024-09-03 00:00")],
+                    ],
+                ),
+            },
+            name="surface_wind_speed",
+        )
+
+        with mock.patch.object(calc, "find_landfalls") as mf:
+
+            def side_effect(track_data, **kw):
+                if "lead_time" not in track_data.dims:
+                    return mock_target
+                return mock_forecast
+
+            mf.side_effect = side_effect
+
+            metric = metrics.LandfallDisplacement(
+                approach="first",
+                landfall_time_filter=("window", 24.0),
+            )
+            result = metric._compute_metric(
+                forecast["surface_wind_speed"],
+                target["surface_wind_speed"],
+            )
+
+            assert isinstance(result, xr.DataArray)
+            assert "init_time" in result.dims
+            # init_b's forecast landfall (Sep 3) is 3 days from
+            # target (Aug 31) — exceeds 24h → dropped.
+            assert len(result.init_time) == 1
+            assert result.init_time.values[0] == init_a
+
 
 class TestThresholdMetricComposite:
     """Tests for ThresholdMetric composite functionality."""
@@ -3496,7 +4483,8 @@ class TestEarlySignal:
     def test_default_init(self):
         """Default EarlySignal has expected attribute values."""
         m = self._make_metric()
-        assert m.threshold == 0.5
+        assert m.forecast_threshold == 0.5
+        assert m.overlap_target_threshold is None
         assert m.spatial_aggregation == "any"
         assert m.temporal_aggregation == "any"
         assert m.aggregation_order == ("spatial", "temporal")
@@ -3504,12 +4492,14 @@ class TestEarlySignal:
     def test_custom_init(self):
         """Custom params are stored correctly."""
         m = self._make_metric(
-            threshold=1.0,
+            forecast_threshold=1.0,
+            overlap_target_threshold=0.8,
             spatial_aggregation="all",
             temporal_aggregation="half",
             aggregation_order=("temporal", "spatial"),
         )
-        assert m.threshold == 1.0
+        assert m.forecast_threshold == 1.0
+        assert m.overlap_target_threshold == 0.8
         assert m.spatial_aggregation == "all"
         assert m.temporal_aggregation == "half"
         assert m.aggregation_order == ("temporal", "spatial")
@@ -3602,7 +4592,11 @@ class TestEarlySignal:
 
     def test_compute_metric_target_zero_excluded(self):
         """Forecast not evaluated at locations where target is 0."""
-        m = self._make_metric(threshold=0.5, spatial_aggregation="any")
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
         # target row 0: all 0 → excluded; row 1: all 1 → included
         # forecast row 1: all above threshold → should detect
         forecast, target = self._make_forecast_target(
@@ -3615,7 +4609,11 @@ class TestEarlySignal:
 
     def test_compute_metric_target_nan_excluded(self):
         """Forecast not evaluated where target is NaN."""
-        m = self._make_metric(threshold=0.5, spatial_aggregation="any")
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
         # Only target==1 at space=1, t=0; forecast is below threshold there
         forecast, target = self._make_forecast_target(
             forecast_vals=[[0.9, 0.1]],
@@ -3627,7 +4625,11 @@ class TestEarlySignal:
 
     def test_compute_metric_only_target_one_locations_matter(self):
         """High forecast values at target==0 locations don't trigger True."""
-        m = self._make_metric(threshold=0.5, spatial_aggregation="any")
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
         # target: space=0 → 0 (excluded), space=1 → 1 (included)
         # forecast: space=0 → 0.9 (would fire if not masked), space=1 → 0.1
         forecast, target = self._make_forecast_target(
@@ -3676,27 +4678,216 @@ class TestEarlySignal:
                 spatial_aggregation="any",
                 temporal_aggregation="any",
                 aggregation_order=order,
+                overlap_target_threshold=0.5,
             )
             result = m._compute_metric(forecast, target)
             assert bool(result.values), f"Expected True for order={order}"
 
-    def test_compute_metric_works_with_dask_backed_arrays(self):
-        """_compute_metric must not raise on dask-backed inputs.
+    def test_no_target_masking_when_overlap_target_threshold_is_none(self):
+        """Without overlap_target_threshold, all forecast locations count."""
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=None,
+            spatial_aggregation="any",
+        )
+        # target is all 0, but with no overlap threshold
+        # the target is ignored and forecast is evaluated everywhere
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.9]],
+            target_vals=[[0.0, 0.0]],
+        )
+        result = m._compute_metric(forecast, target)
+        assert bool(result.any().values)
 
-        drop=True in xr.DataArray.where() uses boolean indexing which
-        is unsupported for dask arrays; drop=False avoids this.
-        """
-        pytest.importorskip("dask.array")
+    def test_target_masking_applied_when_overlap_target_threshold_set(self):
+        """With overlap_target_threshold, target==0 locations are excluded."""
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
+        # Same data as above but now overlap is enforced;
+        # target is all 0 so all forecast locations are masked → False
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.9]],
+            target_vals=[[0.0, 0.0]],
+        )
+        result = m._compute_metric(forecast, target)
+        assert not bool(result.any().values)
 
-        m = self._make_metric(threshold=0.5, spatial_aggregation="any")
+    def test_overlap_target_threshold_differs_from_forecast_threshold(self):
+        """overlap_target_threshold can be different from forecast_threshold."""
+        m = self._make_metric(
+            forecast_threshold=0.3,
+            overlap_target_threshold=0.8,
+            spatial_aggregation="any",
+        )
+        # target value 0.7 is below overlap_target_threshold 0.8 → masked
+        # target value 0.9 is above → included; forecast 0.5 >= 0.3 → True
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.5, 0.5]],
+            target_vals=[[0.7, 0.9]],
+        )
+        result = m._compute_metric(forecast, target)
+        assert bool(result.any().values)
+
+    def test_overlap_target_threshold_high_excludes_low_target(self):
+        """High overlap_target_threshold excludes moderate target values."""
+        m = self._make_metric(
+            forecast_threshold=0.3,
+            overlap_target_threshold=0.8,
+            spatial_aggregation="all",
+        )
+        # target 0.7 fails overlap threshold (0.8) → masked to NaN
+        # target 0.9 passes → included; forecast 0.5 >= 0.3 → True
+        # With "all" aggregation, NaN is filled True so result is True
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.5, 0.5]],
+            target_vals=[[0.7, 0.9]],
+        )
+        result = m._compute_metric(forecast, target)
+        assert bool(result.any().values)
+
+        # Now both targets below overlap threshold → all masked, no signal
+        # "all" over all-NaN fillna(True) → True (vacuous truth)
+        forecast2, target2 = self._make_forecast_target(
+            forecast_vals=[[0.5, 0.5]],
+            target_vals=[[0.1, 0.2]],
+        )
+        result2 = m._compute_metric(forecast2, target2)
+        assert bool(result2.any().values)
+
+    def test_no_overlap_ignores_target_values_entirely(self):
+        """With no overlap, forecast detection is independent of target."""
+        m_no_overlap = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=None,
+            spatial_aggregation="any",
+        )
+        m_overlap = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
+        # forecast high at space=0, low at space=1
+        # target 0 at space=0, 1 at space=1
         forecast, target = self._make_forecast_target(
             forecast_vals=[[0.9, 0.1]],
             target_vals=[[0.0, 1.0]],
         )
-        forecast_dask = forecast.chunk({"valid_time": 1, "space": 1})
-        target_dask = target.chunk({"valid_time": 1, "space": 1})
+        # No overlap: forecast=0.9 at space=0 fires → True
+        result_no = m_no_overlap._compute_metric(forecast, target)
+        assert bool(result_no.any().values)
 
-        result = m._compute_metric(forecast_dask, target_dask)
-        result_computed = result.compute()
-        # space=0 excluded (target=0); space=1: forecast=0.1 < 0.5 → False
-        assert not bool(result_computed.any().values)
+        # With overlap: space=0 masked (target=0), space=1 forecast=0.1 → False
+        result_yes = m_overlap._compute_metric(forecast, target)
+        assert not bool(result_yes.any().values)
+
+    @staticmethod
+    def _to_backend(forecast, target, backend):
+        """Convert numpy-backed DataArrays to the requested backend."""
+        if backend == "numpy":
+            return forecast, target
+        elif backend == "dask":
+            return (
+                forecast.chunk({"valid_time": 1, "space": 1}),
+                target.chunk({"valid_time": 1, "space": 1}),
+            )
+        elif backend == "sparse":
+            return (
+                forecast.copy(data=sparse.COO.from_numpy(forecast.values)),
+                target.copy(data=sparse.COO.from_numpy(target.values)),
+            )
+        raise ValueError(f"Unknown backend: {backend}")
+
+    @staticmethod
+    def _resolve(result):
+        """Compute dask results; pass through numpy/sparse."""
+        if hasattr(result, "compute"):
+            return result.compute()
+        return result
+
+    @pytest.mark.parametrize("backend", ["numpy", "dask", "sparse"])
+    def test_no_overlap_across_backends(self, backend):
+        """Without overlap, forecast fires at all locations."""
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=None,
+            spatial_aggregation="any",
+        )
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.1]],
+            target_vals=[[0.0, 1.0]],
+        )
+        f, t = self._to_backend(forecast, target, backend)
+        result = self._resolve(m._compute_metric(f, t))
+        # No overlap: space=0 forecast=0.9 >= 0.5 → True
+        assert bool(result.any().values)
+
+    @pytest.mark.parametrize("backend", ["numpy", "dask", "sparse"])
+    def test_overlap_masking_across_backends(self, backend):
+        """With overlap, target==0 locations are excluded."""
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.1]],
+            target_vals=[[0.0, 1.0]],
+        )
+        f, t = self._to_backend(forecast, target, backend)
+        result = self._resolve(m._compute_metric(f, t))
+        # space=0 excluded (target=0); space=1: f=0.1 < 0.5 → False
+        assert not bool(result.any().values)
+
+    @pytest.mark.parametrize("backend", ["numpy", "dask", "sparse"])
+    def test_overlap_detection_across_backends(self, backend):
+        """With overlap enabled, high forecast at target==1 fires."""
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.9]],
+            target_vals=[[1.0, 1.0]],
+        )
+        f, t = self._to_backend(forecast, target, backend)
+        result = self._resolve(m._compute_metric(f, t))
+        assert bool(result.any().values)
+
+    @pytest.mark.parametrize("backend", ["numpy", "dask", "sparse"])
+    def test_different_thresholds_across_backends(self, backend):
+        """Separate forecast and target thresholds work on all backends."""
+        m = self._make_metric(
+            forecast_threshold=0.3,
+            overlap_target_threshold=0.8,
+            spatial_aggregation="any",
+        )
+        # target 0.7 < 0.8 → masked; target 0.9 >= 0.8 → kept
+        # forecast 0.5 >= 0.3 at kept location → True
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.5, 0.5]],
+            target_vals=[[0.7, 0.9]],
+        )
+        f, t = self._to_backend(forecast, target, backend)
+        result = self._resolve(m._compute_metric(f, t))
+        assert bool(result.any().values)
+
+    @pytest.mark.parametrize("backend", ["numpy", "dask", "sparse"])
+    def test_nan_target_across_backends(self, backend):
+        """NaN in target is handled correctly on all backends."""
+        m = self._make_metric(
+            forecast_threshold=0.5,
+            overlap_target_threshold=0.5,
+            spatial_aggregation="any",
+        )
+        forecast, target = self._make_forecast_target(
+            forecast_vals=[[0.9, 0.1]],
+            target_vals=[[np.nan, 1.0]],
+        )
+        f, t = self._to_backend(forecast, target, backend)
+        result = self._resolve(m._compute_metric(f, t))
+        # space=0 excluded (NaN); space=1: f=0.1 < 0.5 → False
+        assert not bool(result.any().values)

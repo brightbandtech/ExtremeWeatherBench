@@ -75,8 +75,21 @@ def atmospheric_river_mask(
         np.where((label_counts >= min_size_gridpoints) & (unique_labels != 0))
     ]
 
+    # Filter out tropical ARs: the mean latitude of each labeled feature
+    # must be > 15 degrees N or S of the equator.
+    latitudes = ivt.coords["latitude"].values
+    lat_axis = list(coords_dict.keys()).index("latitude")
+    lat_shape = [1] * labeled_array.ndim
+    lat_shape[lat_axis] = len(latitudes)
+    lat_grid = np.broadcast_to(latitudes.reshape(lat_shape), labeled_array.shape)
+    valid_labels = [
+        label
+        for label in size_valid_labels
+        if abs(lat_grid[labeled_array == label].mean()) > 15
+    ]
+
     # Create final mask using valid features
-    feature_mask = np.isin(labeled_array, size_valid_labels)
+    feature_mask = np.isin(labeled_array, valid_labels)
 
     # Final result with size threshold applied
     ar_mask = xr.DataArray(

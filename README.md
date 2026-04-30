@@ -15,10 +15,10 @@ EWB has cases broken down by multiple event types within `src/extremeweatherbenc
 | ---------- | --------------- | 
 | 🌇 Heat Waves | 46 |
 | 🧊 Freezes | 14 |
-| 🌀 Tropical Cyclones | 106 |
+| 🌀 Tropical Cyclones |  98 |
 | ☔️ Atmospheric Rivers | 56 |
 | 🌪️ Severe Convection | 115 | 
-| **Total Cases** | 337 |
+| **Total Cases** | 329 |
 
 # EWB paper and talks
 

@@ -391,7 +391,14 @@ def sample_calc_dataset():
     lon = np.linspace(-120, -80, 21)
     level = [1000, 850, 700, 500, 300, 200]
 
-    # Create realistic meteorological data
+    # Create realistic meteorological data.
+    # Use a seeded generator so results are bit-reproducible across Python
+    # versions; the global numpy RNG state can differ between interpreters and
+    # caused flaky failures when extreme draws produced physically impossible
+    # surface heights (negative elevation far below sea level) that pushed
+    # barometric-formula surface pressures above the 105 000 Pa test bound.
+    rng = np.random.default_rng(42)
+
     data_shape_3d = (len(time), len(lat), len(lon))
     data_shape_4d = (len(time), len(level), len(lat), len(lon))
 
@@ -399,35 +406,35 @@ def sample_calc_dataset():
         {
             "air_pressure_at_mean_sea_level": (
                 ["time", "latitude", "longitude"],
-                np.random.normal(101325, 1000, data_shape_3d),
+                rng.normal(101325, 1000, data_shape_3d),
             ),
             "surface_eastward_wind": (
                 ["time", "latitude", "longitude"],
-                np.random.normal(0, 10, data_shape_3d),
+                rng.normal(0, 10, data_shape_3d),
             ),
             "surface_northward_wind": (
                 ["time", "latitude", "longitude"],
-                np.random.normal(0, 10, data_shape_3d),
+                rng.normal(0, 10, data_shape_3d),
             ),
             "geopotential": (
                 ["time", "level", "latitude", "longitude"],
-                np.random.normal(5000, 1000, data_shape_4d) * calc.g0,
+                rng.normal(5000, 1000, data_shape_4d) * calc.g0,
             ),
             "geopotential_at_surface": (
                 ["time", "latitude", "longitude"],
-                np.random.normal(500, 200, data_shape_3d) * calc.g0,
+                rng.normal(500, 200, data_shape_3d) * calc.g0,
             ),
             "eastward_wind": (
                 ["time", "level", "latitude", "longitude"],
-                np.random.normal(0, 15, data_shape_4d),
+                rng.normal(0, 15, data_shape_4d),
             ),
             "northward_wind": (
                 ["time", "level", "latitude", "longitude"],
-                np.random.normal(0, 15, data_shape_4d),
+                rng.normal(0, 15, data_shape_4d),
             ),
             "specific_humidity": (
                 ["time", "level", "latitude", "longitude"],
-                np.random.uniform(0.001, 0.02, data_shape_4d),
+                rng.uniform(0.001, 0.02, data_shape_4d),
             ),
         },
         coords={

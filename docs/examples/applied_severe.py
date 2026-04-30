@@ -40,7 +40,7 @@ pph_metrics = [
         forecast_threshold=15000,
         target_threshold=0.3,
     ),
-    ewb.metrics.EarlySignal(threshold=15000),
+    ewb.metrics.EarlySignal(forecast_threshold=15000),
 ]
 
 # Define LSR metrics as thresholdmetric to share scores contingency table
