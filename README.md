@@ -1,6 +1,7 @@
 # Extreme Weather Bench (EWB)
 
 [![Documentation Status](https://readthedocs.org/projects/extremeweatherbench/badge/?version=latest)](https://extremeweatherbench.readthedocs.io/en/latest/?badge=latest)
+[![DOI](https://zenodo.org/badge/843011678.svg)](https://doi.org/10.5281/zenodo.19560347)
 
 [Read our blog post here](https://www.brightband.com/blog/extreme-weather-bench) | [Documentation](https://extremeweatherbench.readthedocs.io/)
 
