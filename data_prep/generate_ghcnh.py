@@ -1,4 +1,4 @@
-"""Streaming GHCN-H data download script that processes files immediately
+"""Streaming GHCNh data download script that processes files immediately
 to save disk space and skip already processed data.
 """
 
@@ -11,9 +11,11 @@ import pandas as pd
 import polars as pl
 from tqdm.asyncio import tqdm
 
+REJECTED_QC_CODES = {"2", "3", "6", "7"}
+
 
 async def download_station_list():
-    """Download and parse the official GHCN-H station list."""
+    """Download and parse the official GHCNh station list."""
     station_list_url = "https://www.ncei.noaa.gov/oa/global-historical-climatology-network/hourly/doc/ghcnh-station-list.txt"  # noqa: E501
 
     async with aiohttp.ClientSession() as session:
@@ -26,7 +28,7 @@ async def download_station_list():
 
 
 def parse_station_list(content):
-    """Parse the GHCN-H station list text format."""
+    """Parse the GHCNh station list text format."""
     stations = []
     lines = content.strip().split("\n")
 
@@ -83,11 +85,11 @@ def check_station_already_processed(station_id, year, main_parquet_file):
         # Only read the parquet file once and build station-year set
         if _existing_station_years is None or _cache_file_path != main_parquet_file:
             print("Loading existing data for duplicate checking with Polars...")
-            df = pl.read_parquet(main_parquet_file, columns=["station", "time"])
+            df = pl.read_parquet(main_parquet_file, columns=["station", "valid_time"])
 
-            # Extract year from time and create station-year combinations
+            # Extract year from valid_time and create station-year combinations
             station_years = (
-                df.with_columns(pl.col("time").dt.year().alias("year"))
+                df.with_columns(pl.col("valid_time").dt.year().alias("year"))
                 .select(["station", "year"])
                 .unique()
                 .to_pandas()  # Convert to pandas for set creation
@@ -232,7 +234,7 @@ def flush_batch_to_parquet(main_parquet_file):
         # Append to main parquet file
         if Path(main_parquet_file).exists():
             existing_df = pl.read_parquet(main_parquet_file)
-            combined_df = pl.concat([existing_df, batch_polars])
+            combined_df = pl.concat([existing_df, batch_polars], how="diagonal")
             combined_df.write_parquet(main_parquet_file)
         else:
             batch_polars.write_parquet(main_parquet_file)
@@ -254,21 +256,13 @@ def process_psv_file(file_path):
     try:
         df = pd.read_csv(file_path, sep="|", low_memory=False)
 
-        # Drop rows where temperature_quality_check is not 1 or 5
-        if "temperature_Quality_Code" in df.columns:
-            if isinstance(df["temperature_Quality_Code"].iloc[0], dict):
-                df = df[
-                    df["temperature_Quality_Code"].apply(
-                        lambda x: x.get("member0") in [1, 5]
-                        if x is not None and isinstance(x, dict)
-                        else False
-                    )
-                ]
-            else:
-                df["temperature_Quality_Code"] = df["temperature_Quality_Code"].astype(
-                    str
-                )
-                df = df[df["temperature_Quality_Code"].isin(["1", "5"])]
+        for qc_col in (
+            "temperature_Quality_Code",
+            "wind_speed_Quality_Code",
+        ):
+            if qc_col in df.columns:
+                codes = df[qc_col].astype(str)
+                df = df[~codes.isin(REJECTED_QC_CODES)]
 
         # Select required columns
         required_cols = [
@@ -312,7 +306,7 @@ def aggregate_to_hourly(data):
             lambda df: df.bfill().iloc[0], include_groups=False
         )
     data = data.reset_index(drop=True)
-    data["time"] = data["DATE"].dt.round("h")
+    data["valid_time"] = data["DATE"].dt.round("h")
     return data
 
 
@@ -346,7 +340,7 @@ def apply_data_transformations(df):
     )
 
     # Drop unnecessary columns if they exist
-    columns_to_drop = ["DATE", "hour"]
+    columns_to_drop = ["DATE", "hour", "hour_dist"]
     columns_to_drop = [col for col in columns_to_drop if col in df.columns]
     if columns_to_drop:
         df = df.drop(columns_to_drop, axis=1)
@@ -365,10 +359,10 @@ async def download_and_process_station_file_with_semaphore(
 
 
 async def download_all_stations_streaming(
-    years, output_dir, overwrite=False, max_concurrent=10
+    years, output_dir, overwrite=False, max_concurrent=100
 ):
-    """Download and immediately process GHCN-H stations to save disk space."""
-    print("Downloading and processing GHCN-H stations with streaming approach...")
+    """Download and immediately process GHCNh stations."""
+    print("Downloading and processing GHCNh stations with streaming approach...")
     station_df = await download_station_list()
     print(f"Found {len(station_df)} stations in official list")
 
@@ -532,18 +526,18 @@ async def download_all_stations_streaming(
                 print("\nFinal dataset summary:")
                 print(f"  Total rows: {len(final_df)}")
                 print(f"  Unique stations: {final_df['station'].nunique()}")
-                if "time" in final_df.columns:
+                if "valid_time" in final_df.columns:
                     print(
-                        f"  Date range: {final_df['time'].min()} to "
-                        f"{final_df['time'].max()}"
+                        f"  Date range: {final_df['valid_time'].min()} to "
+                        f"{final_df['valid_time'].max()}"
                     )
             except Exception as e:
                 print(f"Error reading final dataset: {e}")
 
 
 def main():
-    """Main function for streaming GHCN-H download."""
-    print("GHCN-H Streaming Download Script")
+    """Main function for streaming GHCNh download."""
+    print("GHCNh Streaming Download Script")
     print("===============================")
     print("This script downloads, processes, and deletes files immediately!")
     print("Files are checked for existing data and skipped if already processed.")
@@ -563,7 +557,7 @@ def main():
     print(f"Streaming data for years: {years}")
     asyncio.run(
         download_all_stations_streaming(
-            years, output_dir, overwrite=False, max_concurrent=10
+            years, output_dir, overwrite=False, max_concurrent=1000
         )
     )
 

@@ -129,17 +129,18 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         name: Optional[str] = None,
         slp_contour_magnitude: float = 200.0,
         dz_contour_magnitude: float = -6.0,
-        min_distance_between_peaks: int = 5,
+        min_distance_between_peaks_degrees: float = 1.0,
         max_spatial_distance_degrees: float = 5.0,
         max_temporal_hours: float = 48.0,
         use_contour_validation: bool = True,
-        min_track_timesteps: int = 10,
+        timestep_count_wind_minimum: int = 10,
         latitude_max_degrees: float = 50.0,
-        surface_pressure_threshold: float = 100500.0,
+        surface_pressure_threshold: float = 101000.0,
         orography: Optional[xr.DataArray] = None,
         max_gc_distance_slp_contour_degrees: float = 5.5,
         max_gc_distance_dz_contour_degrees: float = 6.5,
         orography_filter_threshold: float = 150.0,
+        wind_search_radius_degrees: float = 2.0,
     ):
         """Initialize the TropicalCycloneTrackVariables variable.
 
@@ -152,20 +153,25 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 Defaults to 200.0.
             dz_contour_magnitude: Geopotential thickness contour threshold in m.
                 Defaults to -6.0.
-            min_distance_between_peaks: Minimum grid points between detected peaks.
-                Defaults to 5.
+            min_distance_between_peaks_degrees: Minimum distance
+                between detected peaks in degrees. Defaults
+                to 1.0.
             max_spatial_distance_degrees: Maximum distance in degrees for track matching.
                 Defaults to 5.0.
             max_temporal_hours: Maximum hours between detections for track continuity.
                 Defaults to 48.0.
             use_contour_validation: Whether to apply closed contour validation.
                 Defaults to True.
-            min_track_timesteps: Minimum number of timesteps required for a valid track.
-                Defaults to 10.
+            timestep_count_wind_minimum: Minimum number of lead times where
+                the neighbourhood peak wind (max within
+                wind_search_radius_degrees) is >= 10 m/s for a track to be
+                retained. Defaults to 10.
             latitude_max_degrees: Maximum latitude in degrees for TC detection.
                 Defaults to 50.0.
-            surface_pressure_threshold: Surface pressure threshold in Pa.
-                Defaults to 100500.0.
+            surface_pressure_threshold: Maximum SLP (Pa) a candidate grid
+                point may have to be considered for peak detection. Defaults
+                to 101000.0 Pa, so only below-average pressure cells are
+                examined.
             orography: Optional orography DataArray for terrain filtering.
                 Defaults to None.
             max_gc_distance_slp_contour_degrees: Maximum great circle distance for
@@ -175,21 +181,25 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 degrees.
             orography_filter_threshold: Orography filter threshold in meters.
                 Defaults to 150.0.
+            wind_search_radius_degrees: GCD radius in degrees for
+                neighbourhood wind sampling, per TempestExtremes 2.1.
+                Converted to grid points at runtime. Defaults to 2.0.
         """
         super().__init__(output_variables=output_variables, name=name)
         self.slp_contour_magnitude = slp_contour_magnitude
         self.dz_contour_magnitude = dz_contour_magnitude
-        self.min_distance_between_peaks = min_distance_between_peaks
+        self.min_distance_between_peaks_degrees = min_distance_between_peaks_degrees
         self.max_spatial_distance_degrees = max_spatial_distance_degrees
         self.max_temporal_hours = max_temporal_hours
         self.use_contour_validation = use_contour_validation
-        self.min_track_timesteps = min_track_timesteps
+        self.timestep_count_wind_minimum = timestep_count_wind_minimum
         self.latitude_max_degrees = latitude_max_degrees
         self.surface_pressure_threshold = surface_pressure_threshold
         self.orography = orography
         self.max_gc_distance_slp_contour_degrees = max_gc_distance_slp_contour_degrees
         self.max_gc_distance_dz_contour_degrees = max_gc_distance_dz_contour_degrees
         self.orography_filter_threshold = orography_filter_threshold
+        self.wind_search_radius_degrees = wind_search_radius_degrees
 
     def get_or_compute_tracks(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Get cached track data or compute if not already cached.
@@ -253,17 +263,18 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             geopotential_thickness=prepared_data.get("geopotential_thickness", None),
             slp_contour_magnitude=self.slp_contour_magnitude,
             dz_contour_magnitude=self.dz_contour_magnitude,
-            min_distance_between_peaks=self.min_distance_between_peaks,
+            min_distance_between_peaks_degrees=self.min_distance_between_peaks_degrees,
             max_spatial_distance_degrees=self.max_spatial_distance_degrees,
             max_temporal_hours=self.max_temporal_hours,
             use_contour_validation=self.use_contour_validation,
-            min_track_timesteps=self.min_track_timesteps,
+            timestep_count_wind_minimum=self.timestep_count_wind_minimum,
             latitude_max_degrees=self.latitude_max_degrees,
             surface_pressure_threshold=self.surface_pressure_threshold,
             orography=self.orography,
             max_gc_distance_slp_contour_degrees=self.max_gc_distance_slp_contour_degrees,
             max_gc_distance_dz_contour_degrees=self.max_gc_distance_dz_contour_degrees,
             orography_filter_threshold=self.orography_filter_threshold,
+            wind_search_radius_degrees=self.wind_search_radius_degrees,
         )
         return tctracks_ds
 
@@ -415,26 +426,58 @@ class AtmosphericRiverVariables(DerivedVariable):
 
     def __init__(
         self,
+        name: str = "atmospheric_river",
+        top_pressure_level: int = 300,
         output_variables: Optional[List[str]] = [
             "atmospheric_river_mask",
             "integrated_vapor_transport",
             "atmospheric_river_land_intersection",
         ],
-        name: Optional[str] = "atmospheric_river",
     ):
         """Initialize the AtmosphericRiverVariables variable.
 
         Args:
+            top_pressure_level: The top pressure level to compute integrated variables
+                for. Defaults to 300 hPa.
             output_variables: Optional list of variable names that specify
                 which outputs to use from the derived computation.
             name: The name of the derived variable. Defaults to class-level
                 name attribute if present, otherwise the class name.
         """
         super().__init__(output_variables=output_variables, name=name)
+        self.top_pressure_level = top_pressure_level
 
     def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Derive the atmospheric river mask and land intersection."""
-        return ar.build_atmospheric_river_mask_and_land_intersection(data)
+
+        # Subset the data to the top pressure level
+        data = data.sel(level=data.level[data.level >= self.top_pressure_level])
+
+        # Generate IVT
+        ivt_data = ar.integrated_vapor_transport(
+            specific_humidity=data["specific_humidity"],
+            eastward_wind=data["eastward_wind"],
+            northward_wind=data["northward_wind"],
+        )
+
+        # Compute IVT Laplacian
+        ivt_laplacian = ar.integrated_vapor_transport_laplacian(ivt=ivt_data, sigma=3)
+
+        # Compute AR mask with default parameters
+        ar_mask_result = ar.atmospheric_river_mask(
+            ivt=ivt_data, ivt_laplacian=ivt_laplacian
+        )
+
+        # Compute land intersection
+        land_intersection = calc.find_land_intersection(ar_mask_result)
+
+        return xr.Dataset(
+            {
+                "atmospheric_river_mask": ar_mask_result,
+                "atmospheric_river_land_intersection": land_intersection,
+                "integrated_vapor_transport": ivt_data,
+            }
+        )
 
 
 def maybe_derive_variables(

@@ -29,6 +29,7 @@ hres_forecast = ewb.forecasts.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=["surface_air_temperature"],
     variable_mapping=ewb.HRES_metadata_variable_mapping,
+    preprocess=ewb.defaults.preprocess_heatwave_forecast_dataset,
 )
 
 # Load the climatology for DurationMeanError
@@ -65,5 +66,7 @@ if __name__ == "__main__":
     )
 
     # Run the workflow
-    outputs = heatwave_ewb.run(parallel_config={"backend": "loky", "n_jobs": 2})
+    outputs = heatwave_ewb.run_evaluation(
+        parallel_config={"backend": "loky", "n_jobs": 2}
+    )
     outputs.to_csv("applied_heatwave_outputs.csv")
