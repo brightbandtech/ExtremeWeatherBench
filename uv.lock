@@ -1109,7 +1109,7 @@ wheels = [
 
 [[package]]
 name = "extremeweatherbench"
-version = "1.0.2"
+version = "1.0.2.post1"
 source = { editable = "." }
 dependencies = [
     { name = "cartopy" },
