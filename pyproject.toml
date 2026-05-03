@@ -1,6 +1,6 @@
 [project]
 name = "extremeweatherbench"
-version = "1.0.2"
+version = "1.0.2.post1"
 description = "Benchmarking weather and weather AI models using extreme events"
 keywords = [
     "weather",
@@ -89,9 +89,8 @@ dev = [
     "twine>=5.1.1",
 ]
 docs = [
-    "mkdocs>=1.6.1",
+    "zensical>=0.0.38",
     "mkdocs-autoapi[python]>=0.4.1",
-    "mkdocs-material>=9.7.0",
     "mkdocstrings[python]>=1.0.0",
     "pymdown-extensions>=10.19.1",
 ]

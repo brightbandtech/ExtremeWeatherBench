@@ -2282,6 +2282,198 @@ class TestLandfallNextApproach:
         assert isinstance(result, xr.DataArray)
         assert len(result) == 0
 
+    def test_find_next_landfall_max_lead_time(self):
+        """Landfalls beyond the forecast horizon are excluded."""
+        init_times = pd.to_datetime(["2023-09-14 00:00", "2023-09-14 12:00"])
+        forecast_landfalls = xr.DataArray(
+            [35.0, 36.0],
+            dims=["init_time"],
+            coords={
+                "init_time": init_times,
+                "valid_time": (
+                    ["init_time"],
+                    init_times + pd.Timedelta(hours=12),
+                ),
+                "latitude": (["init_time"], [24.0, 24.5]),
+                "longitude": (["init_time"], [280.0, 279.5]),
+            },
+            name="surface_wind_speed",
+        )
+
+        target_times = pd.to_datetime(["2023-09-14 18:00", "2023-09-26 00:00"])
+        target_landfalls = xr.DataArray(
+            [40.0, 45.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1],
+                "valid_time": (["landfall"], target_times),
+                "latitude": (["landfall"], [26.0, 50.0]),
+                "longitude": (["landfall"], [278.0, 300.0]),
+            },
+            name="surface_wind_speed",
+        )
+
+        max_lead = np.timedelta64(240, "h")
+        result = calc.find_next_landfall_for_init_time(
+            forecast_landfalls,
+            target_landfalls,
+            max_lead_time=max_lead,
+        )
+
+        assert isinstance(result, xr.DataArray)
+        assert "init_time" in result.dims
+        vt_vals = np.atleast_1d(result.coords["valid_time"].values)
+        for vt in vt_vals:
+            assert vt == target_times[0]
+
+    def test_find_next_landfall_max_lead_time_all_excluded(self):
+        """All landfalls beyond horizon returns empty."""
+        init_times = pd.to_datetime(["2023-09-01 00:00"])
+        forecast_landfalls = xr.DataArray(
+            [35.0],
+            dims=["init_time"],
+            coords={
+                "init_time": init_times,
+                "valid_time": (
+                    ["init_time"],
+                    init_times + pd.Timedelta(hours=6),
+                ),
+                "latitude": (["init_time"], [24.0]),
+                "longitude": (["init_time"], [280.0]),
+            },
+        )
+
+        target_times = pd.to_datetime(["2023-09-20 00:00"])
+        target_landfalls = xr.DataArray(
+            [40.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0],
+                "valid_time": (["landfall"], target_times),
+                "latitude": (["landfall"], [50.0]),
+                "longitude": (["landfall"], [300.0]),
+            },
+        )
+
+        max_lead = np.timedelta64(240, "h")
+        result = calc.find_next_landfall_for_init_time(
+            forecast_landfalls,
+            target_landfalls,
+            max_lead_time=max_lead,
+        )
+
+        assert isinstance(result, xr.DataArray)
+        assert len(result) == 0
+
+    def test_find_next_landfall_temporal_proximity(self):
+        """Forecast matches the target closest to its predicted time,
+        not the chronologically first target after init."""
+        init_times = pd.to_datetime(["2023-09-14 00:00"])
+
+        # Forecast predicts landfall at day 5 (Sep 19)
+        forecast_landfalls = xr.DataArray(
+            [35.0],
+            dims=["init_time"],
+            coords={
+                "init_time": init_times,
+                "valid_time": (
+                    ["init_time"],
+                    pd.to_datetime(["2023-09-19 00:00"]),
+                ),
+                "latitude": (["init_time"], [30.0]),
+                "longitude": (["init_time"], [270.0]),
+            },
+            name="surface_wind_speed",
+        )
+
+        # Two observed landfalls: one at day 1, one at day 5
+        target_times = pd.to_datetime(["2023-09-15 00:00", "2023-09-19 06:00"])
+        target_landfalls = xr.DataArray(
+            [40.0, 45.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1],
+                "valid_time": (["landfall"], target_times),
+                "latitude": (["landfall"], [25.0, 30.0]),
+                "longitude": (["landfall"], [280.0, 270.0]),
+            },
+            name="surface_wind_speed",
+        )
+
+        result = calc.find_next_landfall_for_init_time(
+            forecast_landfalls,
+            target_landfalls,
+        )
+
+        # Should match target #1 (Sep 19, closest to forecast)
+        # not target #0 (Sep 15, chronologically first).
+        matched_vt = np.atleast_1d(result.coords["valid_time"].values)
+        assert matched_vt[0] == target_times[1]
+
+    def test_find_next_landfall_2d_forecast(self):
+        """Forecast with (init_time, landfall) dims where
+        init_time dim is larger than landfall dim (e.g. after
+        deduplication). Regression test for IndexError."""
+        it1 = np.datetime64("2023-09-14T00:00")
+        it2 = np.datetime64("2023-09-14T12:00")
+        it3 = np.datetime64("2023-09-15T00:00")
+
+        # 2D forecast: 3 init_times, 2 landfalls.
+        # Landfall 0 came from it1, landfall 1 from it2.
+        # it3 has no landfalls (NaN row).
+        forecast_landfalls = xr.DataArray(
+            [[35.0, np.nan], [np.nan, 36.0], [np.nan, np.nan]],
+            dims=["init_time", "landfall"],
+            coords={
+                "init_time": [it1, it2, it3],
+                "landfall": [0, 1],
+                "valid_time": (
+                    "landfall",
+                    pd.to_datetime(["2023-09-16 00:00", "2023-09-17 00:00"]),
+                ),
+                "latitude": ("landfall", [25.0, 26.0]),
+                "longitude": ("landfall", [280.0, 279.0]),
+            },
+            name="surface_wind_speed",
+        )
+
+        target_times = pd.to_datetime(
+            ["2023-09-15 06:00", "2023-09-16 06:00", "2023-09-17 06:00"]
+        )
+        target_landfalls = xr.DataArray(
+            [40.0, 42.0, 44.0],
+            dims=["landfall"],
+            coords={
+                "landfall": [0, 1, 2],
+                "valid_time": ("landfall", target_times),
+                "latitude": ("landfall", [24.0, 25.0, 26.0]),
+                "longitude": ("landfall", [281.0, 280.0, 279.0]),
+            },
+            name="surface_wind_speed",
+        )
+
+        result = calc.find_next_landfall_for_init_time(
+            forecast_landfalls,
+            target_landfalls,
+        )
+
+        # it1 forecasts landfall at Sep 16 -> closest target
+        # is Sep 16 06:00 (target #1).
+        # it2 forecasts landfall at Sep 17 -> closest target
+        # is Sep 17 06:00 (target #2).
+        # it3 has no forecast landfall -> falls back to
+        # chronologically next after Sep 15, which is
+        # Sep 15 06:00 (target #0).
+        result_vts = {
+            pd.Timestamp(it): pd.Timestamp(
+                result.sel(init_time=it).coords["valid_time"].values
+            )
+            for it in result.init_time.values
+        }
+        assert result_vts[pd.Timestamp(it1)] == target_times[1]
+        assert result_vts[pd.Timestamp(it2)] == target_times[2]
+        assert result_vts[pd.Timestamp(it3)] == target_times[0]
+
 
 class TestLandfallMetricAlignment:
     """Test that landfall metrics properly align forecast and target."""
