@@ -386,6 +386,14 @@ class CravenBrooksSignificantSevere(DerivedVariable):
         )
 
         cbss = cape * shear
+
+        # Assign attributes; ensure attributes from CAPE or shear aren't propagated
+        cbss.attrs = {
+            "long_name": "Craven-Brooks significant severe",
+            "units": "m³/s³",
+            "description": "Craven-Brooks significant severe parameter",
+        }
+
         logger.warning(
             "CBSS evaluation requires max over valid_time dimension to "
             "coincide with PPH/LSR being daily aggregates of reports"
