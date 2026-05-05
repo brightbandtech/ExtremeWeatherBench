@@ -147,11 +147,11 @@ class TestPublicFunctionAccess:
 
 
 class TestTopLevelImports:
-    """Test that top-level imports work for commonly used items."""
+    """Test that submodule-path imports work for commonly used items."""
 
     def test_top_level_metric_imports(self):
-        """Test that metrics can be imported at top level."""
-        from extremeweatherbench import (
+        """Test that metrics are accessible via the metrics submodule."""
+        from extremeweatherbench.metrics import (
             MeanAbsoluteError,
             MeanError,
             MeanSquaredError,
@@ -164,8 +164,8 @@ class TestTopLevelImports:
         assert RootMeanSquaredError is not None
 
     def test_top_level_input_imports(self):
-        """Test that input classes can be imported at top level."""
-        from extremeweatherbench import ERA5, GHCN, IBTrACS, ZarrForecast
+        """Test that input classes are accessible via the inputs submodule."""
+        from extremeweatherbench.inputs import ERA5, GHCN, IBTrACS, ZarrForecast
 
         assert ERA5 is not None
         assert GHCN is not None
@@ -173,57 +173,69 @@ class TestTopLevelImports:
         assert ZarrForecast is not None
 
     def test_top_level_region_imports(self):
-        """Test that region classes can be imported at top level."""
-        from extremeweatherbench import BoundingBoxRegion, CenteredRegion, Region
+        """Test that region classes are accessible via the regions submodule."""
+        from extremeweatherbench.regions import (
+            BoundingBoxRegion,
+            CenteredRegion,
+            Region,
+        )
 
         assert Region is not None
         assert BoundingBoxRegion is not None
         assert CenteredRegion is not None
 
     def test_top_level_case_imports(self):
-        """Test that case classes can be imported at top level."""
-        from extremeweatherbench import CaseOperator, IndividualCase
+        """Test that case classes are accessible via the cases submodule."""
+        from extremeweatherbench.cases import CaseOperator, IndividualCase
 
         assert IndividualCase is not None
         assert CaseOperator is not None
 
-    def test_evaluation_alias(self):
-        """Test that evaluation alias works."""
-        from extremeweatherbench import ExtremeWeatherBench, evaluation
+    def test_evaluation_class(self):
+        """Test that ExtremeWeatherBench is accessible via the evaluate submodule."""
+        from extremeweatherbench.evaluate import ExtremeWeatherBench
 
-        assert evaluation is ExtremeWeatherBench
+        assert ExtremeWeatherBench is not None
 
-    def test_load_cases_alias(self):
-        """Test that load_cases alias works."""
-        from extremeweatherbench import (
-            load_cases,
-            load_ewb_events_yaml_into_case_list,
-        )
+    def test_load_cases(self):
+        """Test that load_cases is accessible via the cases submodule."""
+        from extremeweatherbench.cases import load_ewb_events_yaml_into_case_list
 
-        assert load_cases is load_ewb_events_yaml_into_case_list
+        assert load_ewb_events_yaml_into_case_list is not None
 
 
-class TestNamespaceSubmodules:
-    """Test the convenience namespace submodules."""
+class TestSubmoduleAccess:
+    """Test the dot-notation submodule access pattern."""
 
-    def test_targets_namespace(self):
-        """Test targets SimpleNamespace contains expected items."""
-        from extremeweatherbench import targets
+    def test_inputs_submodule_contains_era5(self):
+        """Test ERA5 is accessible via ewb.inputs."""
+        import extremeweatherbench as ewb
 
-        assert isinstance(targets, types.SimpleNamespace)
-        assert hasattr(targets, "ERA5")
-        assert hasattr(targets, "GHCN")
-        assert hasattr(targets, "IBTrACS")
-        assert hasattr(targets, "TargetBase")
+        assert hasattr(ewb.inputs, "ERA5")
+        assert hasattr(ewb.inputs, "GHCN")
+        assert hasattr(ewb.inputs, "IBTrACS")
+        assert hasattr(ewb.inputs, "TargetBase")
 
-    def test_forecasts_namespace(self):
-        """Test forecasts SimpleNamespace contains expected items."""
-        from extremeweatherbench import forecasts
+    def test_inputs_submodule_contains_forecasts(self):
+        """Test forecast classes are accessible via ewb.inputs."""
+        import extremeweatherbench as ewb
 
-        assert isinstance(forecasts, types.SimpleNamespace)
-        assert hasattr(forecasts, "ZarrForecast")
-        assert hasattr(forecasts, "KerchunkForecast")
-        assert hasattr(forecasts, "ForecastBase")
+        assert hasattr(ewb.inputs, "ZarrForecast")
+        assert hasattr(ewb.inputs, "KerchunkForecast")
+        assert hasattr(ewb.inputs, "ForecastBase")
+
+    def test_metrics_submodule_contains_metrics(self):
+        """Test metrics are accessible via ewb.metrics."""
+        import extremeweatherbench as ewb
+
+        assert hasattr(ewb.metrics, "MeanAbsoluteError")
+        assert hasattr(ewb.metrics, "RootMeanSquaredError")
+
+    def test_evaluate_submodule_contains_main_class(self):
+        """Test ExtremeWeatherBench is accessible via ewb.evaluate."""
+        import extremeweatherbench as ewb
+
+        assert hasattr(ewb.evaluate, "ExtremeWeatherBench")
 
 
 class TestMockPatching:
