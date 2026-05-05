@@ -286,17 +286,23 @@ def insert_lcl_level(
         new_dewpoint[i] = dewpoint[i]
         new_geopotential[i] = geopotential[i]
 
-    # Insert LCL level
+    # Insert LCL level — interpolate all environmental fields in log-pressure.
+    # The temperature at the LCL level must be the *environmental* temperature
+    # interpolated from the surrounding levels, NOT the parcel's saturation
+    # temperature t_lcl.  Using t_lcl here makes env_tv ≈ parcel_tv at the LCL,
+    # injecting spurious positive buoyancy that creates a false LFC and hides
+    # the real capping inversion above.
     new_pressure[insert_idx] = p_lcl
-    new_temperature[insert_idx] = t_lcl
 
-    # Interpolate dewpoint and geopotential at LCL
     if insert_idx > 0 and insert_idx < n:
         log_p_below = np.log(pressure[insert_idx - 1])
         log_p_above = np.log(pressure[insert_idx])
         log_p_lcl = np.log(p_lcl)
 
         frac = (log_p_lcl - log_p_below) / (log_p_above - log_p_below)
+        new_temperature[insert_idx] = temperature[insert_idx - 1] + frac * (
+            temperature[insert_idx] - temperature[insert_idx - 1]
+        )
         new_dewpoint[insert_idx] = dewpoint[insert_idx - 1] + frac * (
             dewpoint[insert_idx] - dewpoint[insert_idx - 1]
         )
@@ -304,9 +310,11 @@ def insert_lcl_level(
             geopotential[insert_idx] - geopotential[insert_idx - 1]
         )
     elif insert_idx == 0:
+        new_temperature[insert_idx] = temperature[0]
         new_dewpoint[insert_idx] = dewpoint[0]
         new_geopotential[insert_idx] = geopotential[0]
     else:
+        new_temperature[insert_idx] = temperature[-1]
         new_dewpoint[insert_idx] = dewpoint[-1]
         new_geopotential[insert_idx] = geopotential[-1]
 
@@ -381,9 +389,6 @@ def compute_ml_cape_cin_from_profile(
     variety of inlined helper functions to ensure that the computation is as fast
     as possible.
 
-    WARNING: The CIN computation is not yet implemented correctly and may give
-    erroneous results.
-
     Args:
         pressure: The pressure in hPa.
         temperature: The temperature in Kelvin.
@@ -392,7 +397,10 @@ def compute_ml_cape_cin_from_profile(
         depth: The depth of the mixed layer in hPa.
 
     Returns:
-        The CAPE and CIN in J/kg.
+        A tuple (cape, cin) in J/kg.  Both values are non-negative.  CIN is
+        returned as a positive inhibition magnitude (e.g. 50 J/kg means the
+        parcel must overcome 50 J/kg of negative buoyancy to reach the LFC),
+        matching the convention used by MetPy and xcape.
     """
     n_levels = len(pressure)
 
@@ -553,9 +561,12 @@ def compute_ml_cape_cin_from_profile(
             if energy < 0:
                 cin += energy
 
-        return 0.0, cin
+        return 0.0, -cin
 
-    # Integrate CIN from surface to LFC
+    # Integrate CIN from surface to LFC — only negatively buoyant layers.
+    # Skipping positively buoyant layers is important: a parcel that is briefly
+    # positively buoyant near the surface before encountering a cap inversion
+    # should not have that positive energy cancel its CIN.
     for i in range(n_levels - 1):
         if i >= lfc_level_idx:
             if i == lfc_level_idx:
@@ -563,14 +574,16 @@ def compute_ml_cape_cin_from_profile(
                 tv_avg = (env_tv[i] + env_tv[i + 1]) * 0.5
                 parcel_avg = (parcel_tv[i] + parcel_tv[i + 1]) * 0.5
                 energy = compute_buoyancy_energy_inline(parcel_avg, tv_avg, dz)
-                cin += energy
+                if energy < 0:
+                    cin += energy
             break
 
         dz = heights[i + 1] - heights[i]
         tv_avg = (env_tv[i] + env_tv[i + 1]) * 0.5
         parcel_avg = (parcel_tv[i] + parcel_tv[i + 1]) * 0.5
         energy = compute_buoyancy_energy_inline(parcel_avg, tv_avg, dz)
-        cin += energy
+        if energy < 0:
+            cin += energy
 
     # Integrate CAPE from LFC to EL (or top)
     if el_pressure > 0:
@@ -617,7 +630,7 @@ def compute_ml_cape_cin_from_profile(
             if energy > 0:
                 cape += energy
 
-    return cape, cin
+    return cape, -cin
 
 
 # ============================================================================

@@ -8,25 +8,25 @@ logger.setLevel(logging.INFO)
 
 
 # Load case data from the default events.yaml
-case_yaml = ewb.load_cases()
+case_yaml = ewb.cases.load_cases()
 
 # Subset to one severe convection case for example
 case_list = [n for n in case_yaml if n.case_id_number == 305]
 
 # Define PPH target
-pph_target = ewb.targets.PPH(
+pph_target = ewb.inputs.PPH(
     variables=["practically_perfect_hindcast"],
 )
 
 # Define LSR target
-lsr_target = ewb.targets.LSR()
+lsr_target = ewb.inputs.LSR()
 
 # Define HRES forecast
-hres_forecast = ewb.forecasts.ZarrForecast(
+hres_forecast = ewb.inputs.ZarrForecast(
     name="hres_forecast",
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     variables=[ewb.derived.CravenBrooksSignificantSevere(layer_depth=100)],
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
@@ -58,7 +58,7 @@ lsr_metrics = [
 # Define evaluation objects for severe convection:
 # One evaluation object for PPH
 pph_evaluation_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="severe_convection",
         metric_list=pph_metrics,
         target=pph_target,
@@ -68,7 +68,7 @@ pph_evaluation_objects = [
 
 # One evaluation object for LSR
 lsr_evaluation_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="severe_convection",
         metric_list=lsr_metrics,
         target=lsr_target,
@@ -78,7 +78,7 @@ lsr_evaluation_objects = [
 
 if __name__ == "__main__":
     # Initialize ExtremeWeatherBench with both evaluation objects
-    severe_ewb = ewb.evaluation(
+    severe_ewb = ewb.evaluate.ExtremeWeatherBench(
         case_metadata=case_list,
         evaluation_objects=lsr_evaluation_objects + pph_evaluation_objects,
     )

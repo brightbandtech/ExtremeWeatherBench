@@ -1,6 +1,7 @@
 # Extreme Weather Bench (EWB)
 
 [![Documentation Status](https://readthedocs.org/projects/extremeweatherbench/badge/?version=latest)](https://extremeweatherbench.readthedocs.io/en/latest/?badge=latest)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19560347.svg)](https://doi.org/10.5281/zenodo.19560347)
 
 [Read our blog post here](https://www.brightband.com/blog/extreme-weather-bench) | [Documentation](https://extremeweatherbench.readthedocs.io/)
 
@@ -15,10 +16,10 @@ EWB has cases broken down by multiple event types within `src/extremeweatherbenc
 | ---------- | --------------- | 
 | 🌇 Heat Waves | 46 |
 | 🧊 Freezes | 14 |
-| 🌀 Tropical Cyclones | 106 |
+| 🌀 Tropical Cyclones |  98 |
 | ☔️ Atmospheric Rivers | 56 |
 | 🌪️ Severe Convection | 115 | 
-| **Total Cases** | 337 |
+| **Total Cases** | 329 |
 
 # EWB paper and talks
 
@@ -88,10 +89,10 @@ heatwave_evaluation_list = [
     ),
 ]
 # Load in the EWB default list of event cases
-case_metadata = ewb.cases.load_ewb_events_yaml_into_case_list()
+case_metadata = ewb.cases.load_cases()
 
 # Create the evaluation class, with cases and evaluation objects declared
-ewb_instance = ewb.evaluation(
+ewb_instance = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=case_metadata,
     evaluation_objects=heatwave_evaluation_list,
 )
