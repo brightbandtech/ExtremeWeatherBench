@@ -52,6 +52,8 @@ dependencies = [
     "dask[complete]>=2025.1.0",
     "distributed>=2025.1.0",
     "lazy-loader>=0.4",
+    "frisky>=0.7.0",
+    "dask-array>=0.7.0",
 ]
 
 [project.optional-dependencies]

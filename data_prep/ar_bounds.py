@@ -16,6 +16,7 @@ import scipy.ndimage as ndimage
 import xarray as xr
 from dask.distributed import Client
 from matplotlib.patches import Rectangle
+import frisky
 
 from extremeweatherbench import calc, cases, derived, inputs, regions, utils
 from extremeweatherbench.events import atmospheric_river as ar
@@ -1007,7 +1008,7 @@ def process_ar_event(
 def main():
     """Main execution function for AR bounds processing."""
     client = Client()
-
+    client = frisky.hijack(client)
     # In case the client progress is useful to view
     logger.info(client)
     logger.info(client.dashboard_link)

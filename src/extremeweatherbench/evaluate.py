@@ -21,6 +21,7 @@ import extremeweatherbench.inputs as inputs
 import extremeweatherbench.metrics as metrics
 import extremeweatherbench.sources as sources
 import extremeweatherbench.utils as utils
+from dask_array.xarray import register
 
 if TYPE_CHECKING:
     import extremeweatherbench.regions as regions
@@ -166,6 +167,9 @@ class ExtremeWeatherBench:
         Returns:
             A concatenated dataframe of the evaluation results.
         """
+        # Turn on dask_array
+        register()
+
         logger.info("Running ExtremeWeatherBench evaluations...")
 
         # Check for serial or parallel configuration
