@@ -8,7 +8,11 @@
 #     "xarray>=2023.1",
 #     "tqdm>=4.65",
 #     "zarr>=3.1.0",
+#     "extremeweatherbench",
 # ]
+#
+# [tool.uv.sources]
+# extremeweatherbench = { path = "../", editable = true }
 # ///
 """Generate reference CAPE/CIN data using MetPy for unit testing.
 
@@ -37,6 +41,8 @@ import pathlib
 
 import numpy as np
 import xarray as xr
+
+from extremeweatherbench._cape import EPSILON
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -155,8 +161,9 @@ def fetch_era5_data(radius_deg: float = 5.0):
             q = specific_humidity[i, j]
             t = temperature[i, j]
 
-            # Vapor pressure from specific humidity
-            e = (q * p) / (0.622 + 0.378 * q)
+            # Vapor pressure from specific humidity. The denominator is
+            # eps + (1 - eps) * q, so both terms follow the shared constant.
+            e = (q * p) / (EPSILON + (1.0 - EPSILON) * q)
 
             # Dewpoint from Clausius-Clapeyron (Bolton 1980)
             if e > 0:

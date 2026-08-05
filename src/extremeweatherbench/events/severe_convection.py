@@ -26,6 +26,7 @@ from __future__ import annotations
 import numpy as np
 import xarray as xr
 
+from extremeweatherbench._cape import EPSILON
 from extremeweatherbench._cape import (
     _compute_batch_parallel as compute_ml_cape_cin_parallel,
 )
@@ -48,7 +49,7 @@ Rd: float = 287.04749097718457  # Specific gas constant for dry air (J/kg/K)
 R: float = 8.314462618  # Universal gas constant (J/mol/K)
 Mw: float = 18.015268  # Molecular weight of water (g/mol)
 Rv: float = (R / Mw) * 1000  # Specific gas constant for water vapor (J/kg/K)
-epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
+epsilon: float = EPSILON  # Ratio of molecular weights (H2O/dry air)
 kappa: float = 0.28571428571428564  # Poisson constant (Rd/Cp_d) for dry air
 
 # Specific heat capacities

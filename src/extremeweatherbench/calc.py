@@ -11,8 +11,9 @@ from scipy import ndimage
 from skimage import filters
 
 from extremeweatherbench import utils
+from extremeweatherbench._cape import EPSILON
 
-epsilon: float = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
+epsilon: float = EPSILON  # Ratio of molecular weights (H2O/dry air)
 sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
 g0: float = 9.80665  # Standard gravity (m/s^2)
 _ns_per_hour = 3_600_000_000_000
@@ -48,7 +49,8 @@ def mixing_ratio(
 ) -> float | npt.NDArray[np.float64]:
     r"""Calculate the mixing ratio of water vapor in air.
 
-    Uses the formula: $w = (\epsilon * e) / (p - e)$ where $\epsilon = 0.622$.
+    Uses the formula: $w = (\epsilon * e) / (p - e)$ where $\epsilon \approx
+    0.622$; the code uses the unrounded ratio in `_cape.EPSILON`.
 
     Args:
         partial_pressure: Water vapor partial pressure in hPa.
@@ -60,7 +62,7 @@ def mixing_ratio(
     Notes:
         - Mixing ratio is approximately constant with height for unsaturated air
         - Values typically range from 0 to ~0.025 kg/kg in the atmosphere
-        - ε (epsilon) = 0.622 is the ratio of molecular weights (H2O/dry air)
+        - ε (epsilon) ≈ 0.622 is the ratio of molecular weights (H2O/dry air)
     """
     # Suppress warnings for this specific calculation
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -407,8 +409,9 @@ def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -
     This computation follows the methodology used in
     `metpy.calc.dewpoint_from_specific_humidity`. Given specific humidity $q$, mixing
     ratio $w$, and pressure $p$, we compute first $w = q / (1 - q)$ and
-    $e = p w / (w + \epsilon)$ where $\epsilon=0.622$ is the ratio of the molecular
-    weights of water and dry air and $e$ is the partial pressure of water vapor.
+    $e = p w / (w + \epsilon)$ where $\epsilon \approx 0.622$ is the ratio of the
+    molecular weights of water and dry air and $e$ is the partial pressure of
+    water vapor.
 
     Then, we invert the Bolton (1980) formula to get the dewpoint $T_d$ given $e$:
 
