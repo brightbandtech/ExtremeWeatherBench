@@ -843,3 +843,195 @@ class TestLCLTemperatureInterpolation:
             "check that insert_lcl_level interpolates the environment temperature "
             "rather than using t_lcl."
         )
+
+
+_CAPE_LEVELS = np.array(
+    [
+        1000.0,
+        975,
+        950,
+        925,
+        900,
+        850,
+        800,
+        750,
+        700,
+        650,
+        600,
+        550,
+        500,
+        450,
+        400,
+        350,
+        300,
+        250,
+        200,
+        150,
+        100,
+    ]
+)
+
+
+def _reference_moist_adiabat(p_target, p_lcl, t_lcl, steps):
+    """Forward-Euler moist adiabat from the LCL, at arbitrary resolution.
+
+    Deliberately written out here rather than imported so it stays a fixed
+    reference: refining `steps` converges on the true adiabat, so it can
+    judge whether a change to the production scheme moved toward or away
+    from the right answer.
+    """
+    from extremeweatherbench import _cape
+
+    if p_target >= p_lcl:
+        return t_lcl * (p_target / p_lcl) ** _cape.KAPPA
+
+    d_log_p = (np.log(p_target) - np.log(p_lcl)) / steps
+    t = t_lcl
+    log_p = np.log(p_lcl)
+    for _ in range(steps):
+        e_s = _cape.saturation_vapor_pressure_inline(t)
+        w_s = _cape.mixing_ratio_inline(np.exp(log_p), e_s)
+        latent = _cape.L_V_0 - _cape.L_V_TEMP_COEFF * (t - _cape.KELVIN_TO_CELSIUS)
+        numerator = 1.0 + latent * w_s / (_cape.Rd * t)
+        denominator = 1.0 + latent * latent * w_s * _cape.EPSILON / (
+            _cape.Cp * _cape.Rd * t * t
+        )
+        t += _cape.KAPPA * t * numerator / denominator * d_log_p
+        log_p += d_log_p
+    return t
+
+
+class TestMoistAscentCost:
+    """The parcel ascent must not restart from the LCL at every level.
+
+    Restarting means the lower part of the adiabat is re-integrated once per
+    level above the LCL, and because each restart spreads a fixed step budget
+    over a longer interval, the steps also get coarser the higher you go. A
+    single march up the profile does less work *and* keeps the steps short.
+    """
+
+    P_LCL = 900.0
+    T_LCL = 295.0
+
+    def _targets(self):
+        return _CAPE_LEVELS[_CAPE_LEVELS < self.P_LCL]
+
+    def test_ascent_is_closer_to_a_high_resolution_reference(self):
+        from extremeweatherbench import _cape
+
+        targets = self._targets()
+        reference = np.array(
+            [
+                _reference_moist_adiabat(p, self.P_LCL, self.T_LCL, 40000)
+                for p in targets
+            ]
+        )
+        restarting = np.array(
+            [
+                _reference_moist_adiabat(
+                    p, self.P_LCL, self.T_LCL, _cape.MOIST_ASCENT_STEPS
+                )
+                for p in targets
+            ]
+        )
+
+        marched = np.empty(targets.size)
+        t = self.T_LCL
+        p_previous = self.P_LCL
+        for i, p in enumerate(targets):
+            t = _cape.moist_ascent_gap(p, p_previous, t)
+            marched[i] = t
+            p_previous = p
+
+        restart_error = np.abs(restarting - reference).max()
+        march_error = np.abs(marched - reference).max()
+        assert march_error < restart_error, (
+            f"marching the adiabat should track the reference better than "
+            f"restarting from the LCL, but got {march_error:.4f} K of error "
+            f"against {restart_error:.4f} K"
+        )
+
+    def test_marching_uses_fewer_integration_steps(self):
+        from extremeweatherbench import _cape
+
+        n_above_lcl = self._targets().size
+        restarting_steps = n_above_lcl * _cape.MOIST_ASCENT_STEPS
+        marching_steps = n_above_lcl * _cape.MOIST_ASCENT_SUBSTEPS
+        assert marching_steps < restarting_steps
+
+    def test_a_single_gap_matches_integrating_that_gap_directly(self):
+        from extremeweatherbench import _cape
+
+        got = _cape.moist_ascent_gap(850.0, self.P_LCL, self.T_LCL)
+        expected = _reference_moist_adiabat(
+            850.0, self.P_LCL, self.T_LCL, _cape.MOIST_ASCENT_SUBSTEPS
+        )
+        assert got == pytest.approx(expected, rel=1e-12)
+
+    def test_a_zero_width_gap_leaves_the_parcel_alone(self):
+        from extremeweatherbench import _cape
+
+        assert _cape.moist_ascent_gap(
+            self.P_LCL, self.P_LCL, self.T_LCL
+        ) == pytest.approx(self.T_LCL, rel=1e-12)
+
+
+class TestCapeOutput:
+    """Characterization: CAPE stays physically sound as the ascent changes."""
+
+    def _profile(self):
+        surface_t = 305.0
+        temperature = surface_t - np.linspace(0.0, 75.0, _CAPE_LEVELS.size)
+        dewpoint = temperature - np.linspace(3.0, 30.0, _CAPE_LEVELS.size)
+        geopotential = np.linspace(100.0, 160000.0, _CAPE_LEVELS.size)
+        return _CAPE_LEVELS.copy(), temperature, dewpoint, geopotential
+
+    def test_convective_profile_still_has_cape_and_no_cin(self):
+        from extremeweatherbench._cape import compute_ml_cape_cin_from_profile
+
+        cape, cin = compute_ml_cape_cin_from_profile(*self._profile())
+        assert cape > 500.0
+        assert cin >= 0.0
+
+    def test_batched_and_single_profile_agree(self):
+        from extremeweatherbench._cape import (
+            compute_ml_cape_cin_batched,
+            compute_ml_cape_cin_from_profile,
+        )
+
+        pressure, temperature, dewpoint, geopotential = self._profile()
+        single = compute_ml_cape_cin_from_profile(
+            pressure, temperature, dewpoint, geopotential
+        )
+        batched = compute_ml_cape_cin_batched(
+            np.ascontiguousarray(pressure[None, :]),
+            np.ascontiguousarray(temperature[None, :]),
+            np.ascontiguousarray(dewpoint[None, :]),
+            np.ascontiguousarray(geopotential[None, :]),
+        )
+        np.testing.assert_allclose(batched[0][0], single[0], rtol=1e-10)
+        np.testing.assert_allclose(batched[1][0], single[1], rtol=1e-10)
+
+    def test_cape_stays_within_a_percent_of_the_restarting_scheme(self):
+        """Marching shifts the parcel path slightly; it must not reshape it.
+
+        The reference value was recorded from the restart-per-level scheme.
+        Marching integrates the same adiabat with shorter steps, so a small
+        move is expected and a large one means something else changed.
+        """
+        from extremeweatherbench._cape import compute_ml_cape_cin_from_profile
+
+        cape, _ = compute_ml_cape_cin_from_profile(*self._profile())
+        assert cape == pytest.approx(3894.9, rel=0.01)
+
+    def test_reversed_pressure_order_gives_no_cape(self):
+        from extremeweatherbench._cape import compute_ml_cape_cin_from_profile
+
+        pressure, temperature, dewpoint, geopotential = self._profile()
+        cape, cin = compute_ml_cape_cin_from_profile(
+            pressure[::-1].copy(),
+            temperature[::-1].copy(),
+            dewpoint[::-1].copy(),
+            geopotential[::-1].copy(),
+        )
+        assert cape == 0.0
