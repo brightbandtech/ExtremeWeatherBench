@@ -179,8 +179,9 @@ def generate_tc_tracks_by_init_time(
         dims=["init_time"],
         coords={"init_time": slp_transformed.init_time},
     )
-    if orography is None:
-        orography = xr.full_like(slp_transformed, np.nan)
+    # Orography filtering is not implemented, so no stand-in array is built
+    # here. Materializing a forecast-sized all-NaN field only to pass it
+    # through apply_ufunc embedded that whole array in the graph unused.
 
     # Use apply_ufunc to parallelize over init_time
     logger.debug("Processing %d init_times", n_init_times)
@@ -283,7 +284,7 @@ def _process_single_init_time(
     timestep_count_wind_minimum: int,
     latitude_max_degrees: float,
     surface_pressure_threshold: float,
-    orography: xr.DataArray,
+    orography: Optional[xr.DataArray],
     max_gc_distance_slp_contour_degrees: float,
     max_gc_distance_dz_contour_degrees: float,
     orography_filter_threshold: float,
@@ -436,18 +437,23 @@ def _process_single_init_time(
                 if not unassigned_peaks:
                     break
 
-                best_idx = None
-                best_distance = float("inf")
-
-                for peak_idx in unassigned_peaks:
-                    distance = calc.haversine_distance(
-                        [peak_lats[peak_idx], peak_lons[peak_idx]],
+                # All remaining peaks are measured against this track at once.
+                # Ties still resolve to the earliest peak, as the per-peak loop
+                # did with its strict "closer than" comparison.
+                candidates = np.asarray(unassigned_peaks)
+                distances = np.atleast_1d(
+                    calc.haversine_distance(
+                        [peak_lats[candidates], peak_lons[candidates]],
                         [last_pos["latitude"], last_pos["longitude"]],
                         units="deg",
                     )
-                    if distance <= 8.0 and distance < best_distance:
-                        best_distance = distance
-                        best_idx = peak_idx
+                )
+                in_range = distances <= 8.0
+
+                best_idx = None
+                if in_range.any():
+                    ranked = np.where(in_range, distances, np.inf)
+                    best_idx = int(candidates[np.argmin(ranked)])
 
                 if best_idx is not None:
                     detections.append(
@@ -805,18 +811,21 @@ def _find_peaks_for_time_slice(
             in degrees. Defaults to 6.5 degrees
     """
 
-    # Filter tropical cyclone track data temporally
-    time_diff = np.abs(
-        (tc_track_data_df["valid_time"] - current_valid_time).dt.total_seconds() / 3600
-    )
-
-    # For first timestep (genesis), allow buffer; otherwise exact
+    # Filter tropical cyclone track data temporally. Away from genesis only an
+    # exact time match counts, and comparing the datetimes directly avoids
+    # building a timedelta series and converting it to hours per timestep just
+    # to test it against zero.
     if is_first_timestep:
-        temporal_mask = time_diff <= max_temporal_hours
+        time_diff = np.abs(
+            (tc_track_data_df["valid_time"] - current_valid_time).dt.total_seconds()
+            / 3600
+        )
+        nearby_tc_track_data = tc_track_data_df[time_diff <= max_temporal_hours]
     else:
-        temporal_mask = time_diff == 0
-
-    nearby_tc_track_data = tc_track_data_df[temporal_mask]
+        nearby_tc_track_data = tc_track_data_df[
+            tc_track_data_df["valid_time"].to_numpy()
+            == np.datetime64(current_valid_time)
+        ]
 
     if len(nearby_tc_track_data) == 0:
         logger.debug("No TC track data at time %s", current_valid_time)
@@ -926,27 +935,32 @@ def _create_spatial_mask(
         Spatial mask as a boolean array
     """
 
-    # Create meshgrid of all lat/lon coordinates
-    lat_grid, lon_grid = np.meshgrid(lat_coords, lon_coords, indexing="ij")
+    spatial_mask = np.zeros((lat_coords.size, lon_coords.size), dtype=bool)
 
-    # Initialize mask
-    spatial_mask = np.zeros_like(lat_grid, dtype=bool)
+    track_latitudes = nearby_tc_track_data["latitude"].to_numpy()
+    track_longitudes = nearby_tc_track_data["longitude"].to_numpy()
 
-    # For each tropical cyclone track data point, compute distances to all grid points
-    # vectorized
-    for _, tc_track_data_row in nearby_tc_track_data.iterrows():
-        tc_track_data_lat = tc_track_data_row["latitude"]
-        tc_track_data_lon = tc_track_data_row["longitude"]
+    for tc_track_data_lat, tc_track_data_lon in zip(track_latitudes, track_longitudes):
+        # Great-circle distance is never smaller than the latitude separation,
+        # so rows further than the radius in latitude alone cannot be reached
+        # and do not need the distance formula evaluated on them. Longitude is
+        # left alone because its contribution is scaled by cos(latitude), which
+        # makes the equivalent bound unsafe near the poles.
+        reachable_rows = np.flatnonzero(
+            np.abs(lat_coords - tc_track_data_lat) <= max_distance_degrees
+        )
+        if reachable_rows.size == 0:
+            continue
+        band = slice(reachable_rows[0], reachable_rows[-1] + 1)
 
-        # Vectorized distance calculation
+        lat_grid, lon_grid = np.meshgrid(lat_coords[band], lon_coords, indexing="ij")
         distances = calc.haversine_distance(
             [lat_grid, lon_grid],
             [tc_track_data_lat, tc_track_data_lon],
             units="degrees",
         )
 
-        # Update mask where distance is within threshold
-        spatial_mask |= distances <= max_distance_degrees
+        spatial_mask[band] |= distances <= max_distance_degrees
 
     return spatial_mask
 

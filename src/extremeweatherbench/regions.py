@@ -1,6 +1,7 @@
 """Region classes and utilities for the ExtremeWeatherBench package."""
 
 import abc
+import functools
 import logging
 import pathlib
 import warnings
@@ -19,6 +20,77 @@ if TYPE_CHECKING:
     import extremeweatherbench.cases as cases
 
 logger = logging.getLogger(__name__)
+
+
+def _contiguous_runs(keep: np.ndarray) -> list[slice]:
+    """Split a boolean keep-mask into the runs of consecutive True positions."""
+    positions = np.flatnonzero(keep)
+    if positions.size == 0:
+        return [slice(0, 0)]
+
+    breaks = np.flatnonzero(np.diff(positions) > 1)
+    starts = np.concatenate([[0], breaks + 1])
+    ends = np.concatenate([breaks, [positions.size - 1]])
+    return [
+        slice(int(positions[start]), int(positions[end]) + 1)
+        for start, end in zip(starts, ends)
+    ]
+
+
+def _bbox_subset(
+    dataset: xr.Dataset,
+    latitude_bounds: tuple[float, float],
+    longitude_bounds: tuple[float, float],
+    crosses_antimeridian: bool,
+) -> xr.Dataset:
+    """Cut a dataset down to a latitude/longitude box.
+
+    Both bounds are inclusive, and the coordinates may run in either
+    direction. Where the kept coordinates form one consecutive run, which is
+    every case except an antimeridian crossing, they are taken as a positional
+    slice: selecting with a coordinate array instead makes dask gather and copy
+    the block rather than view it.
+
+    A crossing keeps two runs at opposite ends of the axis. Stitching those
+    back together costs more graph than the gather does, so that case keeps
+    the single fancy-index selection.
+
+    Args:
+        dataset: Dataset with 1-D latitude and longitude coordinates.
+        latitude_bounds: (minimum, maximum) latitude to keep.
+        longitude_bounds: (minimum, maximum) longitude to keep.
+        crosses_antimeridian: Whether the region spans the wrap point, in
+            which case longitudes outside (minimum, maximum) are the ones
+            dropped.
+
+    Returns:
+        The dataset restricted to the box.
+    """
+    latitudes = dataset.indexes["latitude"].to_numpy()
+    longitudes = dataset.indexes["longitude"].to_numpy()
+
+    keep_latitude = (latitudes >= latitude_bounds[0]) & (
+        latitudes <= latitude_bounds[1]
+    )
+    if crosses_antimeridian:
+        keep_longitude = (longitudes >= longitude_bounds[0]) | (
+            longitudes <= longitude_bounds[1]
+        )
+    else:
+        keep_longitude = (longitudes >= longitude_bounds[0]) & (
+            longitudes <= longitude_bounds[1]
+        )
+
+    dataset = dataset.isel(latitude=_contiguous_runs(keep_latitude)[0])
+
+    longitude_runs = _contiguous_runs(keep_longitude)
+    if len(longitude_runs) == 1:
+        return dataset.isel(longitude=longitude_runs[0])
+    return dataset.sel(
+        longitude=dataset.longitude.where(
+            xr.DataArray(keep_longitude, dims="longitude"), drop=True
+        )
+    )
 
 
 class Region(abc.ABC):
@@ -90,15 +162,6 @@ class Region(abc.ABC):
             region_latitude_max,
         ) = self.get_adjusted_bounds(dataset)
 
-        # Avoids slice() which is susceptible to differences in coord order
-        latitude_da = dataset.latitude.where(
-            np.logical_and(
-                dataset.latitude >= region_latitude_min,
-                dataset.latitude <= region_latitude_max,
-            ),
-            drop=True,
-        )
-
         # Detect if region wraps around 0/360 or -180/180 boundary
         # This happens either from:
         # 1. True antimeridian crossing (MultiPolygon geometry)
@@ -109,29 +172,12 @@ class Region(abc.ABC):
             region_longitude_min > region_longitude_max
         )
 
-        if crosses_boundary:
-            # Use OR condition: include lons >= min OR lons <= max
-            longitude_da = dataset.longitude.where(
-                np.logical_or(
-                    dataset.longitude >= region_longitude_min,
-                    dataset.longitude <= region_longitude_max,
-                ),
-                drop=True,
-            )
-        else:
-            longitude_da = dataset.longitude.where(
-                np.logical_and(
-                    dataset.longitude >= region_longitude_min,
-                    dataset.longitude <= region_longitude_max,
-                ),
-                drop=True,
-            )
-        dataset = dataset.sel(
-            latitude=latitude_da,
-            longitude=longitude_da,
+        return _bbox_subset(
+            dataset,
+            latitude_bounds=(region_latitude_min, region_latitude_max),
+            longitude_bounds=(region_longitude_min, region_longitude_max),
+            crosses_antimeridian=crosses_boundary,
         )
-
-        return dataset
 
     def intersects(self, other: "Region") -> bool:
         """Check if this region intersects with another region."""
@@ -329,17 +375,27 @@ class ShapefileRegion(Region):
         """Create a ShapefileRegion with the given parameters."""
         return cls(shapefile_path=str(shapefile_path))
 
-    def as_geopandas(self) -> gpd.GeoDataFrame:
-        """Return representation of this Region as a GeoDataFrame.
+    @functools.cached_property
+    def _geodataframe(self) -> gpd.GeoDataFrame:
+        """The parsed shapefile, read from disk on first access.
 
-        Returns:
-            A GeoDataFrame representing the region.
+        Nothing here mutates the frame, so every caller can share one copy.
+        Because this is a cached_property, a read that raises is not recorded
+        and the next access retries.
         """
         try:
             return gpd.read_file(self.shapefile_path)
         except Exception as e:
             logger.error(f"Error reading shapefile: {e}")
             raise ValueError(f"Error reading shapefile: {e}")
+
+    def as_geopandas(self) -> gpd.GeoDataFrame:
+        """Return representation of this Region as a GeoDataFrame.
+
+        Returns:
+            A GeoDataFrame representing the region.
+        """
+        return self._geodataframe
 
     def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
         """Mask a dataset to the region.
@@ -359,18 +415,13 @@ class ShapefileRegion(Region):
             latitude_max,
         ) = self.get_adjusted_bounds(dataset)
 
-        # Note: ShapefileRegion.mask uses slice which doesn't support
-        # prime/antimeridian crossing with OR logic, but regionmask handles it
-        # Check if latitude is ascending or descending to handle slice correctly
-        lat_ascending = dataset.latitude[0] < dataset.latitude[-1]
-        if lat_ascending:
-            lat_slice = slice(latitude_min, latitude_max)
-        else:
-            lat_slice = slice(latitude_max, latitude_min)
-        dataset = dataset.sel(
-            latitude=lat_slice,
-            longitude=slice(longitude_min, longitude_max),
-            drop=drop,
+        # regionmask handles prime/antimeridian crossing itself, so the box cut
+        # here only has to narrow the grid before the polygon test.
+        dataset = _bbox_subset(
+            dataset,
+            latitude_bounds=(latitude_min, latitude_max),
+            longitude_bounds=(longitude_min, longitude_max),
+            crosses_antimeridian=False,
         )
         # Subset dataset after cutting out a box to minimize memory pressure
         mask = regionmask.mask_geopandas(

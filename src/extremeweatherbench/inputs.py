@@ -172,6 +172,31 @@ def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
     return input_data
 
 
+def _valid_combinations_mask(
+    unique_init_indices: np.ndarray,
+    subset_time_indices: tuple[np.ndarray, ...],
+    n_lead: int,
+) -> np.ndarray:
+    """Mark which (init_time, lead_time) pairs land inside the case window.
+
+    Args:
+        unique_init_indices: Sorted init_time positions kept in the subset.
+        subset_time_indices: The (init_time, lead_time) positions, in the
+            original dataset's numbering, whose valid_time is in range.
+        n_lead: Number of lead times in the subset.
+
+    Returns:
+        A boolean array of shape (len(unique_init_indices), n_lead).
+    """
+    valid_combinations_mask = np.zeros((len(unique_init_indices), n_lead), dtype=bool)
+    # unique_init_indices comes from np.unique, so it is sorted and every
+    # init position in subset_time_indices is present in it. That makes the
+    # row lookup a binary search rather than a scan per point.
+    rows = np.searchsorted(unique_init_indices, subset_time_indices[0])
+    valid_combinations_mask[rows, subset_time_indices[1]] = True
+    return valid_combinations_mask
+
+
 @dataclasses.dataclass
 class InputBase(abc.ABC):
     """Abstract base dataclass for target and forecast data.
@@ -382,19 +407,11 @@ class ForecastBase(InputBase):
         unique_init_indices = np.unique(subset_time_indices[0])
         subset_time_data = data.sel(init_time=data.init_time[unique_init_indices])
 
-        # Create a mask indicating which (init_time, lead_time) combinations
-        # result in valid_times within the case date range
-        valid_combinations_mask = np.zeros(
-            (len(subset_time_data.init_time), len(subset_time_data.lead_time)),
-            dtype=bool,
+        valid_combinations_mask = _valid_combinations_mask(
+            unique_init_indices,
+            subset_time_indices,
+            len(subset_time_data.lead_time),
         )
-
-        # Map the valid indices back to the subset data coordinates
-        for i, j in zip(subset_time_indices[0], subset_time_indices[1]):
-            # Find the position of this init_time in the subset data
-            init_pos = np.where(unique_init_indices == i)[0]
-            if len(init_pos) > 0:
-                valid_combinations_mask[init_pos[0], j] = True
 
         # Add the mask as a coordinate so downstream code can use it
         subset_time_data = subset_time_data.assign_coords(
@@ -1180,9 +1197,13 @@ def zarr_target_subsetter(
     )
     # mask the data to the case location
     fully_subset_data = case_metadata.location.mask(subset_time_data, drop=drop)
-    # chunk the data if it doesn't have chunks, e.g. ARCO ERA5
+    # chunk the data if it doesn't have chunks, e.g. ARCO ERA5. Splitting along
+    # time only leaves each vertical column and horizontal field whole, which
+    # the vertical integrals and the connected-component labeling both need.
+    # A bare chunk() would instead put the whole case window in one chunk, so
+    # nothing downstream could run in parallel or spill.
     if not fully_subset_data.chunks:
-        fully_subset_data = fully_subset_data.chunk()
+        fully_subset_data = fully_subset_data.chunk({time_variable: "auto"})
     return fully_subset_data
 
 
@@ -1209,9 +1230,6 @@ def align_forecast_to_target(
         join="inner",
         exclude=spatial_dims.keys(),
     )
-    # Squeeze the data to remove any single-value dimensions
-    target_data = target_data.squeeze()
-    forecast_data = forecast_data.squeeze()
     # Regrid forecast to target grid using nearest neighbor interpolation
     # extrapolate in the case of targets slightly outside the forecast domain
     if spatial_dims:

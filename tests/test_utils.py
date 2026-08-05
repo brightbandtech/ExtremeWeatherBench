@@ -8,7 +8,6 @@ import pandas as pd
 import pytest
 import sparse
 import xarray as xr
-import yaml
 
 from extremeweatherbench import utils
 
@@ -61,25 +60,6 @@ def test_remove_ocean_gridpoints():
     assert isinstance(result, xr.Dataset)
     assert "temperature" in result.data_vars
     assert result.sizes == ds.sizes
-
-
-def test_read_event_yaml(tmp_path):
-    """Test reading events yaml from file."""
-    # Create a temporary yaml file
-    yaml_content = {
-        "cases": {"test_case": {"start_date": "2020-01-01", "end_date": "2020-01-02"}}
-    }
-
-    yaml_file = tmp_path / "test_events.yaml"
-    with open(yaml_file, "w") as f:
-        yaml.dump(yaml_content, f)
-
-    result = utils.read_event_yaml(yaml_file)
-
-    assert isinstance(result, dict)
-    assert "cases" in result
-    assert "test_case" in result["cases"]
-    assert result["cases"]["test_case"]["start_date"] == "2020-01-01"
 
 
 def test_derive_indices_from_init_time_and_lead_time():

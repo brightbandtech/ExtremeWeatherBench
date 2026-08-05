@@ -3,10 +3,10 @@ import logging
 import operator
 from typing import Any, Callable, Literal, Optional, Sequence, Type, Union
 
+import dask
 import numpy as np
 import scores
 import xarray as xr
-from scipy import ndimage
 
 from extremeweatherbench import calc, derived, utils
 
@@ -296,6 +296,10 @@ class ThresholdMetric(CompositeMetric):
         )
     """
 
+    # Subclasses set exactly one of these to name the score they report.
+    _manager_method: Optional[str] = None
+    _count_name: Optional[str] = None
+
     def __init__(
         self,
         name: str = "threshold_metrics",
@@ -393,14 +397,9 @@ class ThresholdMetric(CompositeMetric):
         Returns:
             Transformed contingency manager.
         """
-        # Apply thresholds to binarize the data
-        op_func = utils.maybe_get_operator(op_func)
-        binary_forecast = utils.maybe_densify_dataarray(
-            op_func(forecast, forecast_threshold)
-        ).astype(float)
-        binary_target = utils.maybe_densify_dataarray(
-            op_func(target, target_threshold)
-        ).astype(float)
+        binary_forecast, binary_target = self._binarize_pair(
+            forecast, target, forecast_threshold, target_threshold, op_func
+        )
 
         # Create and transform contingency manager
         binary_contingency_manager = scores.categorical.BinaryContingencyManager(
@@ -408,6 +407,54 @@ class ThresholdMetric(CompositeMetric):
         )
         transformed = binary_contingency_manager.transform(preserve_dims=preserve_dims)
 
+        return transformed
+
+    @staticmethod
+    def _binarize_pair(
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        forecast_threshold: float,
+        target_threshold: float,
+        op_func: Union[Callable, str] = operator.ge,
+    ) -> tuple[xr.DataArray, xr.DataArray]:
+        """Turn a forecast/target pair into 0/1 fields at their thresholds.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+            forecast_threshold: Threshold for binarizing forecast.
+            target_threshold: Threshold for binarizing target.
+            op_func: Comparison operator, or its string form.
+
+        Returns:
+            The binarized forecast and target, as floats.
+        """
+        op_func = utils.maybe_get_operator(op_func)
+        return (
+            utils.maybe_densify_dataarray(op_func(forecast, forecast_threshold)).astype(
+                float
+            ),
+            utils.maybe_densify_dataarray(op_func(target, target_threshold)).astype(
+                float
+            ),
+        )
+
+    def _resolve_manager(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        """Reuse a composite's shared manager, or build one for this metric."""
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=self.forecast_threshold,
+                target_threshold=self.target_threshold,
+                preserve_dims=self.preserve_dims,
+            )
         return transformed
 
     def maybe_prepare_composite_kwargs(
@@ -430,7 +477,9 @@ class ThresholdMetric(CompositeMetric):
         """
         kwargs = base_kwargs.copy()
 
-        if self.is_composite() and len(self._metric_instances) > 1:
+        # A one-metric composite shares with itself: the sub-metric would
+        # otherwise build the same manager on its own, at the same cost.
+        if self.is_composite():
             kwargs["transformed_manager"] = self.transformed_contingency_manager(
                 forecast=forecast_data,
                 target=target_data,
@@ -450,22 +499,35 @@ class ThresholdMetric(CompositeMetric):
         target: xr.DataArray,
         **kwargs: Any,
     ) -> Any:
-        """Compute metric (not supported for ThresholdMetric base).
+        """Read one score off the contingency table.
 
-        ThresholdMetric must be subclassed (like CriticalSuccessIndex, FalseAlarmRatio)
-        or used as a composite with metrics list.
+        Subclasses say which score they want by setting either
+        ``_manager_method`` (a method on the transformed manager) or
+        ``_count_name`` (a cell of the counts table, reported as a fraction
+        of the total). The base class itself sets neither and so cannot be
+        computed directly.
 
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
-            **kwargs: Additional keyword arguments.
+            **kwargs: May carry a transformed_manager shared by a composite.
+
+        Returns:
+            The score for this metric.
         """
-        raise NotImplementedError(
-            "ThresholdMetric._compute_metric must be implemented "
-            "by subclasses (CriticalSuccessIndex, FalseAlarmRatio, etc.) or use "
-            "ThresholdMetric as a composite with metrics=[...] list. Composites are "
-            "automatically expanded in the evaluation pipeline."
-        )
+        if self._manager_method is None and self._count_name is None:
+            raise NotImplementedError(
+                "ThresholdMetric._compute_metric must be implemented "
+                "by subclasses (CriticalSuccessIndex, FalseAlarmRatio, etc.) or use "
+                "ThresholdMetric as a composite with metrics=[...] list. Composites "
+                "are automatically expanded in the evaluation pipeline."
+            )
+
+        transformed = self._resolve_manager(forecast, target, **kwargs)
+        if self._manager_method is not None:
+            return getattr(transformed, self._manager_method)()
+        counts = transformed.get_counts()
+        return counts[self._count_name] / counts["total_count"]
 
 
 class CriticalSuccessIndex(ThresholdMetric):
@@ -475,6 +537,8 @@ class CriticalSuccessIndex(ThresholdMetric):
     the preserve_dims dimensions. CSI measures the fraction of correctly
     predicted events.
     """
+
+    _manager_method = "critical_success_index"
 
     def __init__(self, name: str = "CriticalSuccessIndex", *args, **kwargs):
         """Initialize the Critical Success Index metric.
@@ -487,24 +551,6 @@ class CriticalSuccessIndex(ThresholdMetric):
         """
         super().__init__(name, *args, **kwargs)
 
-    def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
-    ) -> Any:
-        # Use pre-computed manager if provided, else compute
-        transformed = kwargs.get("transformed_manager")
-        if transformed is None:
-            transformed = self.transformed_contingency_manager(
-                forecast=forecast,
-                target=target,
-                forecast_threshold=self.forecast_threshold,
-                target_threshold=self.target_threshold,
-                preserve_dims=self.preserve_dims,
-            )
-        return transformed.critical_success_index()
-
 
 class FalseAlarmRatio(ThresholdMetric):
     """Compute False Alarm Ratio (FAR) from binary classifications.
@@ -513,6 +559,8 @@ class FalseAlarmRatio(ThresholdMetric):
     the preserve_dims dimensions. FAR measures the fraction of predicted
     events that did not occur. Note: FAR is not the same as False Alarm Rate.
     """
+
+    _manager_method = "false_alarm_ratio"
 
     def __init__(self, name: str = "FalseAlarmRatio", *args, **kwargs):
         """Initialize the False Alarm Ratio metric.
@@ -524,24 +572,6 @@ class FalseAlarmRatio(ThresholdMetric):
         """
         super().__init__(name, *args, **kwargs)
 
-    def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
-    ) -> Any:
-        # Use pre-computed manager if provided, else compute
-        transformed = kwargs.get("transformed_manager")
-        if transformed is None:
-            transformed = self.transformed_contingency_manager(
-                forecast=forecast,
-                target=target,
-                forecast_threshold=self.forecast_threshold,
-                target_threshold=self.target_threshold,
-                preserve_dims=self.preserve_dims,
-            )
-        return transformed.false_alarm_ratio()
-
 
 class TruePositives(ThresholdMetric):
     """Compute True Positive ratio from binary classifications.
@@ -550,6 +580,8 @@ class TruePositives(ThresholdMetric):
     predicted events) to the total number of observations. Corresponds to the
     top right cell in the contingency table.
     """
+
+    _count_name = "tp_count"
 
     def __init__(self, name: str = "TruePositives", *args, **kwargs):
         """Initialize the True Positives metric.
@@ -561,25 +593,6 @@ class TruePositives(ThresholdMetric):
         """
         super().__init__(name, *args, **kwargs)
 
-    def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
-    ) -> Any:
-        # Use pre-computed manager if provided, else compute
-        transformed = kwargs.get("transformed_manager")
-        if transformed is None:
-            transformed = self.transformed_contingency_manager(
-                forecast=forecast,
-                target=target,
-                forecast_threshold=self.forecast_threshold,
-                target_threshold=self.target_threshold,
-                preserve_dims=self.preserve_dims,
-            )
-        counts = transformed.get_counts()
-        return counts["tp_count"] / counts["total_count"]
-
 
 class FalsePositives(ThresholdMetric):
     """Compute False Positive ratio from binary classifications.
@@ -587,6 +600,8 @@ class FalsePositives(ThresholdMetric):
     Extends ThresholdMetric to compute the ratio of false positives
     (incorrectly predicted events) to the total number of observations.
     """
+
+    _count_name = "fp_count"
 
     def __init__(self, name: str = "FalsePositives", *args, **kwargs):
         """Initialize the False Positives metric.
@@ -598,25 +613,6 @@ class FalsePositives(ThresholdMetric):
         """
         super().__init__(name, *args, **kwargs)
 
-    def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
-    ) -> Any:
-        # Use pre-computed manager if provided, else compute
-        transformed = kwargs.get("transformed_manager")
-        if transformed is None:
-            transformed = self.transformed_contingency_manager(
-                forecast=forecast,
-                target=target,
-                forecast_threshold=self.forecast_threshold,
-                target_threshold=self.target_threshold,
-                preserve_dims=self.preserve_dims,
-            )
-        counts = transformed.get_counts()
-        return counts["fp_count"] / counts["total_count"]
-
 
 class TrueNegatives(ThresholdMetric):
     """Compute True Negative ratio from binary classifications.
@@ -624,6 +620,8 @@ class TrueNegatives(ThresholdMetric):
     Extends ThresholdMetric to compute the ratio of true negatives (correctly
     predicted non-events) to the total number of observations.
     """
+
+    _count_name = "tn_count"
 
     def __init__(self, name: str = "TrueNegatives", *args, **kwargs):
         """Initialize the True Negatives metric.
@@ -635,25 +633,6 @@ class TrueNegatives(ThresholdMetric):
         """
         super().__init__(name, *args, **kwargs)
 
-    def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
-    ) -> Any:
-        # Use pre-computed manager if provided, else compute
-        transformed = kwargs.get("transformed_manager")
-        if transformed is None:
-            transformed = self.transformed_contingency_manager(
-                forecast=forecast,
-                target=target,
-                forecast_threshold=self.forecast_threshold,
-                target_threshold=self.target_threshold,
-                preserve_dims=self.preserve_dims,
-            )
-        counts = transformed.get_counts()
-        return counts["tn_count"] / counts["total_count"]
-
 
 class FalseNegatives(ThresholdMetric):
     """Compute False Negative ratio from binary classifications.
@@ -662,6 +641,8 @@ class FalseNegatives(ThresholdMetric):
     events) to the total number of observations. Corresponds to the top left
     cell in the contingency table.
     """
+
+    _count_name = "fn_count"
 
     def __init__(self, name: str = "FalseNegatives", *args, **kwargs):
         """Initialize the False Negatives metric.
@@ -673,25 +654,6 @@ class FalseNegatives(ThresholdMetric):
         """
         super().__init__(name, *args, **kwargs)
 
-    def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
-    ) -> Any:
-        # Use pre-computed manager if provided, else compute
-        transformed = kwargs.get("transformed_manager")
-        if transformed is None:
-            transformed = self.transformed_contingency_manager(
-                forecast=forecast,
-                target=target,
-                forecast_threshold=self.forecast_threshold,
-                target_threshold=self.target_threshold,
-                preserve_dims=self.preserve_dims,
-            )
-        counts = transformed.get_counts()
-        return counts["fn_count"] / counts["total_count"]
-
 
 class Accuracy(ThresholdMetric):
     """Compute classification accuracy from binary classifications.
@@ -700,6 +662,8 @@ class Accuracy(ThresholdMetric):
     positives + true negatives) to the total number of observations. Measures
     overall correctness of the forecast.
     """
+
+    _manager_method = "accuracy"
 
     def __init__(self, name: str = "Accuracy", *args, **kwargs):
         """Initialize the Accuracy metric.
@@ -710,24 +674,6 @@ class Accuracy(ThresholdMetric):
             **kwargs: Additional keyword arguments passed to ThresholdMetric.
         """
         super().__init__(name, *args, **kwargs)
-
-    def _compute_metric(
-        self,
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        **kwargs: Any,
-    ) -> Any:
-        # Use pre-computed manager if provided, else compute
-        transformed = kwargs.get("transformed_manager")
-        if transformed is None:
-            transformed = self.transformed_contingency_manager(
-                forecast=forecast,
-                target=target,
-                forecast_threshold=self.forecast_threshold,
-                target_threshold=self.target_threshold,
-                preserve_dims=self.preserve_dims,
-            )
-        return transformed.accuracy()
 
 
 class ReceiverOperatingCharacteristic(ThresholdMetric):
@@ -743,15 +689,16 @@ class ReceiverOperatingCharacteristic(ThresholdMetric):
         **kwargs: Any,
     ) -> Any:
         preserve_dims = kwargs.get("preserve_dims", self.preserve_dims)
-        op_func = utils.maybe_get_operator(kwargs.get("op_func", operator.ge))
 
-        # Binarize forecast and target using thresholds
-        binary_forecast = utils.maybe_densify_dataarray(
-            op_func(forecast, kwargs.get("forecast_threshold", self.forecast_threshold))
-        ).astype(float)
-        binary_target = utils.maybe_densify_dataarray(
-            op_func(target, kwargs.get("target_threshold", self.target_threshold))
-        ).astype(float)
+        # roc_curve_data needs the binary fields themselves rather than a
+        # contingency manager, but the binarization is the shared one.
+        binary_forecast, binary_target = self._binarize_pair(
+            forecast,
+            target,
+            kwargs.get("forecast_threshold", self.forecast_threshold),
+            kwargs.get("target_threshold", self.target_threshold),
+            kwargs.get("op_func", operator.ge),
+        )
 
         return scores.probability.roc_curve_data(
             binary_forecast,
@@ -1182,10 +1129,15 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
         Returns:
             MeanAbsoluteError of the maximum values.
         """
-        # Enforced spatial reduction for MaximumMeanAbsoluteError
-        reduce_spatial_dims = ["latitude", "longitude"]
+        reduce_spatial_dims = self.reduce_spatial_dims
+        # Computed here because idxmax below turns these values into a label
+        # that .sel and the where(drop=True) window both need concretely.
         target_spatial_mean = utils.reduce_dataarray(
-            target, method="mean", reduce_dims=reduce_spatial_dims, skipna=True
+            target,
+            method="mean",
+            reduce_dims=reduce_spatial_dims,
+            compute=True,
+            skipna=True,
         )
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
         maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
@@ -1193,7 +1145,7 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
         # Handle the case where there are >1 resulting target values
         maximum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
             maximum_timestep, target.valid_time
-        ).compute()
+        )
         forecast_spatial_mean = utils.reduce_dataarray(
             forecast, method="mean", reduce_dims=reduce_spatial_dims, skipna=True
         )
@@ -1266,8 +1218,14 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
         Returns:
             MeanAbsoluteError of the minimum values.
         """
+        # Computed here because idxmin below turns these values into a label
+        # that .sel and the where(drop=True) window both need concretely.
         target_spatial_mean = utils.reduce_dataarray(
-            target, method="mean", reduce_dims=self.reduce_spatial_dims, skipna=True
+            target,
+            method="mean",
+            reduce_dims=self.reduce_spatial_dims,
+            compute=True,
+            skipna=True,
         )
         minimum_timestep = target_spatial_mean.idxmin("valid_time")
         minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
@@ -1356,14 +1314,9 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
         )
 
         time_resolution_hours = utils.determine_temporal_resolution(target)
-        max_min_target_value = (
-            target.groupby("valid_time.dayofyear")
-            .map(
-                utils.min_if_all_timesteps_present,
-                time_resolution_hours=time_resolution_hours,
-            )
-            .max()
-        )
+        max_min_target_value = utils.daily_min_over_complete_days(
+            target, time_resolution_hours
+        ).max()
         max_min_target_datetime = target.where(
             target == max_min_target_value, drop=True
         ).valid_time
@@ -1374,31 +1327,26 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
                 max_min_target_datetime, target.valid_time
             )
         )
-        subset_forecast = (
-            forecast.where(
-                (
-                    forecast.valid_time
-                    >= (
-                        max_min_target_datetime.data
-                        - np.timedelta64(self.tolerance_range_hours // 2, "h")
-                    )
+        subset_forecast = forecast.where(
+            (
+                forecast.valid_time
+                >= (
+                    max_min_target_datetime.data
+                    - np.timedelta64(self.tolerance_range_hours // 2, "h")
                 )
-                & (
-                    forecast.valid_time
-                    <= (
-                        max_min_target_datetime.data
-                        + np.timedelta64(self.tolerance_range_hours // 2, "h")
-                    )
-                ),
-                drop=True,
             )
-            .groupby("valid_time.dayofyear")
-            .map(
-                utils.min_if_all_timesteps_present_forecast,
-                time_resolution_hours=utils.determine_temporal_resolution(forecast),
-            )
-            .min("dayofyear")
+            & (
+                forecast.valid_time
+                <= (
+                    max_min_target_datetime.data
+                    + np.timedelta64(self.tolerance_range_hours // 2, "h")
+                )
+            ),
+            drop=True,
         )
+        subset_forecast = utils.daily_min_over_complete_days(
+            subset_forecast, utils.determine_temporal_resolution(forecast)
+        ).min("dayofyear")
 
         return super()._compute_metric(
             forecast=subset_forecast,
@@ -1897,7 +1845,7 @@ class LandfallMetric(CompositeMetric):
         """
         kwargs = base_kwargs.copy()
 
-        if self.is_composite() and len(self._metric_instances) > 1:
+        if self.is_composite():
             kwargs["forecast_landfall"], kwargs["target_landfall"] = (
                 self.maybe_compute_landfalls(forecast=forecast_data, target=target_data)
             )
@@ -1974,6 +1922,54 @@ class LandfallMetric(CompositeMetric):
         )
 
 
+def _center_of_mass_indices(
+    da: xr.DataArray,
+    latitude_dim: str = "latitude",
+    longitude_dim: str = "longitude",
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """Row and column index of the center of mass of each 2-D field.
+
+    ``ndimage.center_of_mass`` is the weight-weighted mean of the index
+    positions, so it can be written as two xarray reductions over the spatial
+    dims. Doing that keeps the whole thing lazy and blockwise, where calling
+    ndimage through ``vectorize=True`` had to pull every field into memory and
+    loop over it in Python.
+
+    Args:
+        da: DataArray with the two spatial dims plus any leading dims.
+        latitude_dim: Name of the row dim.
+        longitude_dim: Name of the column dim.
+
+    Returns:
+        Fractional (row, column) indices, NaN where a field has no mass.
+    """
+    row_index = xr.DataArray(
+        np.arange(da.sizes[latitude_dim], dtype=float), dims=latitude_dim
+    )
+    column_index = xr.DataArray(
+        np.arange(da.sizes[longitude_dim], dtype=float), dims=longitude_dim
+    )
+
+    # An index only varies along its own axis, so collapsing the other axis
+    # first and weighting the profile afterwards gives the same sums without
+    # ever building a field-sized product array.
+    # skipna=False so a NaN anywhere in a field poisons that field's center,
+    # which is what summing through ndimage did.
+    row_mass = da.sum(longitude_dim, skipna=False)
+    column_mass = da.sum(latitude_dim, skipna=False)
+
+    # ndimage returns a center only when something is actually lit; masking the
+    # denominator rather than the quotient also avoids dividing by zero.
+    total_mass = row_mass.sum(latitude_dim, skipna=False).where(
+        (da > 0).any([latitude_dim, longitude_dim])
+    )
+
+    return (
+        (row_mass * row_index).sum(latitude_dim, skipna=False) / total_mass,
+        (column_mass * column_index).sum(longitude_dim, skipna=False) / total_mass,
+    )
+
+
 class SpatialDisplacement(BaseMetric):
     """Compute spatial displacement between forecast and target patterns.
 
@@ -2009,28 +2005,24 @@ class SpatialDisplacement(BaseMetric):
             The spatial displacement between the forecast and target as a DataArray.
         """
 
-        def center_of_mass_ufunc(data):
-            """ufunc tooling to calculate the center of mass of a 2D array, returning
-            a tuple of the latitude and longitude indices, or np.nan tuple if no
-            non-zero values are present.
-            """
-            if (data > 0).any():
-                return ndimage.center_of_mass(data)
-            else:
-                return (np.nan, np.nan)
+        target_lat_idx, target_lon_idx = _center_of_mass_indices(target)
+        forecast_lat_idx, forecast_lon_idx = _center_of_mass_indices(forecast)
 
-        target_lat_idx, target_lon_idx = xr.apply_ufunc(
-            center_of_mass_ufunc,
-            target,
-            input_core_dims=[["latitude", "longitude"]],
-            output_core_dims=[[], []],
-            vectorize=True,
-            dask="allowed",
+        # idx_to_coords indexes the coordinate arrays with these, so they have
+        # to be concrete. Computing all four together lets the forecast and
+        # target reductions share one pass instead of one each.
+        (
+            target_lat_idx,
+            target_lon_idx,
+            forecast_lat_idx,
+            forecast_lon_idx,
+        ) = dask.compute(
+            np.round(target_lat_idx),
+            np.round(target_lon_idx),
+            np.round(forecast_lat_idx),
+            np.round(forecast_lon_idx),
         )
 
-        # Process target coordinates
-        target_lat_idx = np.round(target_lat_idx)
-        target_lon_idx = np.round(target_lon_idx)
         target_lat_coords, target_lon_coords = utils.idx_to_coords(
             target_lat_idx,
             target_lon_idx,
@@ -2039,17 +2031,6 @@ class SpatialDisplacement(BaseMetric):
         )
         target_coordinates = np.array([target_lat_coords, target_lon_coords])
 
-        # Process forecast coordinates
-        forecast_lat_idx, forecast_lon_idx = xr.apply_ufunc(
-            center_of_mass_ufunc,
-            forecast,
-            input_core_dims=[["latitude", "longitude"]],
-            output_core_dims=[[], []],
-            vectorize=True,
-            dask="allowed",
-        )
-        forecast_lat_idx = np.round(forecast_lat_idx)
-        forecast_lon_idx = np.round(forecast_lon_idx)
         forecast_lat_coords, forecast_lon_coords = utils.idx_to_coords(
             forecast_lat_idx,
             forecast_lon_idx,

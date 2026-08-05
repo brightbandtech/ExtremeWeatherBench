@@ -3975,21 +3975,21 @@ class TestThresholdMetricComposite:
         assert "preserve_dims" in kwargs
         assert kwargs["some_param"] == "value"
 
-    def test_composite_with_single_metric_no_transformed_manager(self):
-        """Test that single metric composite doesn't add transformed manager."""
+    def test_composite_with_single_metric_shares_transformed_manager(self):
+        """A one-metric composite shares the manager it would build anyway."""
         composite = metrics.ThresholdMetric(
             metrics=[metrics.CriticalSuccessIndex],
             forecast_threshold=15000,
             target_threshold=0.3,
+            preserve_dims="x",
         )
 
         forecast = xr.DataArray([[15500, 14000]], dims=["x", "y"])
         target = xr.DataArray([[0.4, 0.2]], dims=["x", "y"])
 
-        # Should NOT add transformed_manager for single metric
         kwargs = composite.maybe_prepare_composite_kwargs(forecast, target)
 
-        assert "transformed_manager" not in kwargs
+        assert "transformed_manager" in kwargs
 
     def test_non_composite_maybe_prepare_kwargs(self):
         """Test that non-composite metrics don't add transformed manager."""
@@ -4154,8 +4154,8 @@ class TestThresholdMetricMethods:
         assert kwargs["target_threshold"] == 0.3
         assert kwargs["preserve_dims"] == "x"
 
-    def test_maybe_prepare_composite_kwargs_no_manager_single_metric(self):
-        """Test no transformed_manager for single-metric composite."""
+    def test_maybe_prepare_composite_kwargs_shares_manager_single_metric(self):
+        """A single-metric composite still passes the manager down."""
         composite = metrics.ThresholdMetric(
             metrics=[metrics.CriticalSuccessIndex],
             forecast_threshold=15000,
@@ -4167,8 +4167,9 @@ class TestThresholdMetricMethods:
 
         kwargs = composite.maybe_prepare_composite_kwargs(forecast, target)
 
-        # Single metric composite shouldn't add transformed_manager
-        assert "transformed_manager" not in kwargs
+        assert "transformed_manager" in kwargs
+        assert kwargs["forecast_threshold"] == 15000
+        assert kwargs["target_threshold"] == 0.3
 
 
 class TestMaybeComputeLandfalls:

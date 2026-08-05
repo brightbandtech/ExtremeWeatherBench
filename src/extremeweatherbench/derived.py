@@ -1,7 +1,9 @@
 import abc
 import logging
+import weakref
 from typing import TYPE_CHECKING, List, Optional, Sequence, Union
 
+import numpy as np
 import xarray as xr
 
 import extremeweatherbench.events.atmospheric_river as ar
@@ -256,6 +258,11 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 "is available in the evaluation pipeline."
             )
 
+        cached = self._cached_tracks_for(prepared_data, tc_track_data)
+        if cached is not None:
+            logger.debug("Reusing cached TC tracks")
+            return cached
+
         tctracks_ds = tropical_cyclone.generate_tc_tracks_by_init_time(
             sea_level_pressure=prepared_data["air_pressure_at_mean_sea_level"],
             wind_speed=prepared_data["surface_wind_speed"],
@@ -276,7 +283,42 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             orography_filter_threshold=self.orography_filter_threshold,
             wind_search_radius_degrees=self.wind_search_radius_degrees,
         )
+        self._track_cache = (
+            weakref.ref(prepared_data),
+            weakref.ref(tc_track_data),
+            tctracks_ds,
+        )
         return tctracks_ds
+
+    def _cached_tracks_for(
+        self, prepared_data: xr.Dataset, tc_track_data: xr.Dataset
+    ) -> Optional[xr.Dataset]:
+        """Tracks from the previous call, if it was given these same datasets.
+
+        Tracking is an eager Python walk over every timestep, so repeating it
+        for the same inputs is pure waste. The two datasets are identified by
+        object rather than by content: hashing a forecast would mean reading
+        all of it, which is the cost being avoided.
+
+        Weak references keep the cache from holding datasets alive, and they
+        also close the hole a plain id() key would leave, where a freed dataset
+        could let an unrelated object land on the same address.
+
+        Args:
+            prepared_data: Forecast fields the tracker would run on.
+            tc_track_data: Observed track dataset used to filter candidates.
+
+        Returns:
+            The cached tracks, or None if this is a different pair of inputs.
+        """
+        cached = getattr(self, "_track_cache", None)
+        if cached is None:
+            return None
+
+        data_ref, track_ref, tracks = cached
+        if data_ref() is prepared_data and track_ref() is tc_track_data:
+            return tracks
+        return None
 
     def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Derive the TC track variables.
@@ -347,7 +389,8 @@ class CravenBrooksSignificantSevere(DerivedVariable):
             data = data.transpose(*dims)
         # Check if pressure levels need to be reversed
         # CAPE expects descending order (surface to top)
-        needs_reverse = data["level"][0] < data["level"][-1]
+        levels = data.indexes["level"]
+        needs_reverse = levels[0] < levels[-1]
         if needs_reverse:
             # Reverse and load to ensure contiguous arrays for Numba
             logger.info("Reversing pressure levels")
@@ -450,34 +493,39 @@ class AtmosphericRiverVariables(DerivedVariable):
     def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Derive the atmospheric river mask and land intersection."""
 
-        # Subset the data to the top pressure level
-        data = data.sel(level=data.level[data.level >= self.top_pressure_level])
+        data = _subset_to_top_pressure_level(data, self.top_pressure_level)
+        return ar.build_atmospheric_river_mask_and_land_intersection(data)
 
-        # Generate IVT
-        ivt_data = ar.integrated_vapor_transport(
-            specific_humidity=data["specific_humidity"],
-            eastward_wind=data["eastward_wind"],
-            northward_wind=data["northward_wind"],
-        )
 
-        # Compute IVT Laplacian
-        ivt_laplacian = ar.integrated_vapor_transport_laplacian(ivt=ivt_data, sigma=3)
+def _subset_to_top_pressure_level(
+    data: xr.Dataset, top_pressure_level: float
+) -> xr.Dataset:
+    """Keep the levels at or below top_pressure_level in height.
 
-        # Compute AR mask with default parameters
-        ar_mask_result = ar.atmospheric_river_mask(
-            ivt=ivt_data, ivt_laplacian=ivt_laplacian
-        )
+    Pressure levels normally run monotonically, so the levels to keep sit in
+    one contiguous run and can be taken as a slice. Selecting them by boolean
+    mask instead turns the level axis into a gather, which dask has to service
+    with a copy rather than a view.
 
-        # Compute land intersection
-        land_intersection = calc.find_land_intersection(ar_mask_result)
+    Args:
+        data: Dataset with a level dim, in hPa.
+        top_pressure_level: Lowest pressure to keep, in hPa.
 
-        return xr.Dataset(
-            {
-                "atmospheric_river_mask": ar_mask_result,
-                "atmospheric_river_land_intersection": land_intersection,
-                "integrated_vapor_transport": ivt_data,
-            }
-        )
+    Returns:
+        The dataset restricted to those levels.
+    """
+    levels = data.indexes["level"].to_numpy()
+    keep = np.flatnonzero(levels >= top_pressure_level)
+    if keep.size == 0:
+        return data.isel(level=keep)
+
+    span = slice(keep[0], keep[-1] + 1)
+    if keep[-1] - keep[0] + 1 == keep.size:
+        return data.isel(level=span)
+
+    # Levels out of order, so the selection is not one run; fall back to the
+    # positions themselves rather than quietly widening the subset.
+    return data.isel(level=keep)
 
 
 def maybe_derive_variables(

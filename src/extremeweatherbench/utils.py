@@ -6,7 +6,7 @@ import inspect
 import logging
 import operator
 import pathlib
-from typing import Any, Callable, Literal, Optional, Sequence, Union
+from typing import Any, Callable, Literal, Optional, Sequence, TypeVar, Union
 
 import cartopy.io.shapereader as shpreader
 import numpy as np
@@ -17,10 +17,11 @@ import shapely
 import sparse
 import tqdm
 import xarray as xr
-import yaml  # type: ignore[import]
 from joblib import Parallel
 
 logger = logging.getLogger(__name__)
+
+T_DatasetOrDataArray = TypeVar("T_DatasetOrDataArray", xr.Dataset, xr.DataArray)
 
 operators = {
     ">": operator.gt,
@@ -93,9 +94,12 @@ def is_valid_landfall(landfall: xr.DataArray | None) -> bool:
         return False
     if "init_time" not in landfall.coords:
         return False
-    if np.isnan(landfall.values).all():
+    if landfall.size == 0:
         return False
-    return True
+    # notnull().any() reduces chunk by chunk. Reading .values first would pull
+    # every chunk into one array and build a full-size boolean beside it, all
+    # to answer a single yes-or-no question.
+    return bool(landfall.notnull().any())
 
 
 def _create_nan_dataarray(
@@ -157,18 +161,6 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     land_mask = land_sea_mask == 0
     # Subset the dataset to only include land gridpoints
     return dataset.where(land_mask)
-
-
-def read_event_yaml(input_pth: str | pathlib.Path) -> dict:
-    """Read events yaml from data."""
-    logger.warning(
-        "This function is deprecated and will be removed in a future release. "
-        "Please use cases.read_incoming_yaml instead."
-    )
-    input_pth = pathlib.Path(input_pth)
-    with open(input_pth, "rb") as f:
-        yaml_event_case = yaml.safe_load(f)
-    return yaml_event_case
 
 
 def derive_indices_from_init_time_and_lead_time(
@@ -268,7 +260,9 @@ def min_if_all_timesteps_present(
         otherwise the original DataArray.
     """
     timesteps_per_day = 24 / time_resolution_hours
-    if da.values.size == timesteps_per_day:
+    # .size rather than .values.size: the element count is known from the
+    # shape, so asking for it should not pull a dask-backed day into memory.
+    if da.size == timesteps_per_day:
         return da.min()
     else:
         return xr.DataArray(np.nan)
@@ -299,6 +293,61 @@ def min_if_all_timesteps_present_forecast(
         )
 
 
+def daily_min_over_complete_days(
+    da: xr.DataArray, time_resolution_hours: float
+) -> xr.DataArray:
+    """Daily minimum, left as NaN for any day missing some of its timesteps.
+
+    Reducing each day through a Python callback with ``groupby(...).map(...)``
+    builds a separate subgraph per day and concatenates the pieces. Which days
+    are complete is decided entirely by the 1-D time coordinate, though, so it
+    can be settled in numpy up front: drop the timesteps belonging to
+    incomplete days, reduce what is left as one evenly divided coarsen, and
+    reinstate the dropped days as NaN.
+
+    Coarsening rather than grouping also sidesteps flox, whose grouped
+    reductions raise "Cannot call len() on object with unknown chunk size" on
+    dask-backed input with the installed flox/dask pair.
+
+    Args:
+        da: DataArray with a valid_time dimension.
+        time_resolution_hours: Spacing between timesteps, in hours.
+
+    Returns:
+        The per-day minimum indexed by dayofyear, NaN on incomplete days.
+    """
+    timesteps_per_day = int(24 / time_resolution_hours)
+    dayofyear = da["valid_time"].dt.dayofyear.values
+    # np.unique sorts, which is the day order groupby would have produced.
+    days, timesteps_per_group = np.unique(dayofyear, return_counts=True)
+    complete_days = days[timesteps_per_group == timesteps_per_day]
+
+    if complete_days.size == 0:
+        # Coarsening nothing would ask for the minimum of a zero-size array,
+        # which has no identity. Every day is incomplete here, so the answer is
+        # NaN throughout, on a day axis sitting where valid_time used to be.
+        return xr.full_like(
+            da.isel(valid_time=0, drop=True), np.nan, dtype=float
+        ).expand_dims(dayofyear=days, axis=da.dims.index("valid_time"))
+
+    # Each coarsen window has to hold exactly one day, and the windows come out
+    # in the order the timesteps are taken. Sorting the kept positions by day
+    # puts them in the same ascending order as complete_days, which matters
+    # only when the series spans a new year and dayofyear restarts below the
+    # days already seen. A stable sort keeps each day internally in time order.
+    kept = np.flatnonzero(np.isin(dayofyear, complete_days))
+    kept = kept[np.argsort(dayofyear[kept], kind="stable")]
+
+    whole_days_only = da.isel(valid_time=kept).drop_vars("valid_time")
+    daily_minimum = (
+        whole_days_only.coarsen(valid_time=timesteps_per_day)
+        .min()
+        .rename({"valid_time": "dayofyear"})
+        .assign_coords(dayofyear=complete_days)
+    )
+    return daily_minimum.reindex(dayofyear=days)
+
+
 def determine_temporal_resolution(
     data: xr.Dataset | xr.DataArray,
 ) -> Optional[float]:
@@ -310,9 +359,15 @@ def determine_temporal_resolution(
     Returns:
         The temporal resolution of the data as a float in hours.
     """
-    num_timesteps = (
-        np.unique(np.diff(data.valid_time)).astype("timedelta64[h]").astype(int)
-    )
+    # Read the times off the index where there is one. Going through
+    # data.valid_time builds a DataArray and diffs it through xarray's
+    # dispatch, which costs several times more than diffing the index.
+    if "valid_time" in data.indexes:
+        valid_time = data.indexes["valid_time"].to_numpy()
+    else:
+        valid_time = np.asarray(data["valid_time"].values)
+
+    num_timesteps = np.unique(np.diff(valid_time)).astype("timedelta64[h]").astype(int)
     if len(num_timesteps) > 1:
         logger.warning(
             "Multiple time resolutions found in dataset, data may be missing in "
@@ -328,53 +383,110 @@ def determine_temporal_resolution(
     return np.min(num_timesteps).astype(float)
 
 
-def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
+def _reshape_across_lead_time(
+    obj: T_DatasetOrDataArray,
+    source_dim: str,
+    target_dim: str,
+    offset_sign: int,
+    fill_value: Any = None,
+) -> T_DatasetOrDataArray:
+    """Re-index ``source_dim`` onto ``target_dim = source_dim + sign * lead_time``.
+
+    Both time conversions are the same gather: every (lead_time, target_dim)
+    cell reads the ``source_dim`` entry that reaches it at that lead, or is
+    filled where no such entry exists.
+
+    Doing that as one pointwise ``isel`` keeps the graph proportional to the
+    data. Slicing per lead and concatenating instead builds a subgraph per
+    lead and then compares coordinates across all of them, which makes both
+    the graph and the runtime grow with the square of init x lead.
+
+    ``fill_value`` defaults to NaN, which promotes integer data to float. Pass
+    a value the input dtype can hold to keep the gather in that dtype.
+    """
+    offsets = obj["lead_time"] if offset_sign > 0 else -obj["lead_time"]
+    target_2d = obj[source_dim] + offsets
+    obj = obj.assign_coords({target_dim: target_2d})
+
+    source_values = obj[source_dim].values
+    lead_values = obj["lead_time"].values
+    target_values = np.unique(target_2d.values)
+    n_lead = lead_values.size
+    n_target = target_values.size
+
+    # The source entry each (lead, target) cell needs, located by binary search
+    # so the lookup cost is n_lead * n_target * log(n_source) rather than a
+    # Python-level pass per lead.
+    wanted = target_values[None, :] - offset_sign * lead_values[:, None]
+    order = np.argsort(source_values)
+    sorted_source = source_values[order]
+    position = np.clip(
+        np.searchsorted(sorted_source, wanted), 0, sorted_source.size - 1
+    )
+    present = sorted_source[position] == wanted
+
+    indexer_dims = ["lead_time", target_dim]
+    source_indexer = xr.DataArray(order[position], dims=indexer_dims)
+    lead_indexer = xr.DataArray(
+        np.broadcast_to(np.arange(n_lead)[:, None], (n_lead, n_target)).copy(),
+        dims=indexer_dims,
+    )
+    reshaped = obj.isel({source_dim: source_indexer, "lead_time": lead_indexer})
+
+    if not present.all():
+        present_da = xr.DataArray(present, dims=indexer_dims)
+        if fill_value is None:
+            reshaped = reshaped.where(present_da)
+        else:
+            reshaped = reshaped.where(present_da, fill_value)
+        # where() does not touch coordinates, so gathered ones still hold the
+        # clipped lookup rather than a fill value.
+        stale = {
+            name: coord.where(present_da)
+            for name, coord in reshaped.coords.items()
+            if name not in indexer_dims and set(indexer_dims).issubset(coord.dims)
+        }
+        if stale:
+            reshaped = reshaped.assign_coords(stale)
+
+    return reshaped.assign_coords(
+        {target_dim: (target_dim, target_values), "lead_time": lead_values}
+    )
+
+
+def convert_init_time_to_valid_time(
+    ds: xr.Dataset, fill_value: Any = None
+) -> xr.Dataset:
     """Convert the init_time coordinate to a valid_time coordinate.
 
     Args:
         ds: The dataset to convert with lead_time and init_time coordinates.
+        fill_value: Value for (lead_time, valid_time) cells no init_time
+            reaches. Defaults to NaN, which promotes integer data to float.
 
     Returns:
         The dataset with a valid_time coordinate.
     """
-    valid_time = xr.DataArray(
-        ds.init_time, coords={"init_time": ds.init_time}
-    ) + xr.DataArray(ds.lead_time, coords={"lead_time": ds.lead_time})
-    ds = ds.assign_coords(valid_time=valid_time)
-    return xr.concat(
-        [
-            ds.sel(lead_time=lead).swap_dims({"init_time": "valid_time"})
-            for lead in ds.lead_time
-        ],
-        "lead_time",
-        coords="different",
-        compat="equals",
-        join="outer",
+    return _reshape_across_lead_time(
+        ds, "init_time", "valid_time", offset_sign=1, fill_value=fill_value
     )
 
 
-def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:
+def convert_valid_time_to_init_time(
+    da: xr.DataArray, fill_value: Any = None
+) -> xr.DataArray:
     """Convert the valid_time dimension to a init_time dimension.
 
     Args:
         da: The dataarray to convert with lead_time and valid_time dimensions.
+        fill_value: Value for (lead_time, init_time) cells no valid_time
+            reaches. Defaults to NaN, which promotes integer data to float.
 
     Returns:
         The dataarray with an init_time dimension.
     """
-    init_time = xr.DataArray(
-        da.valid_time, coords={"valid_time": da.valid_time}
-    ) - xr.DataArray(da.lead_time, coords={"lead_time": da.lead_time})
-    da = da.assign_coords(init_time=init_time)
-    return xr.concat(
-        [
-            da.sel(lead_time=lead).swap_dims({"valid_time": "init_time"})
-            for lead in da.lead_time
-        ],
-        "lead_time",
-        coords="different",
-        compat="equals",
-        join="outer",
+    return _reshape_across_lead_time(
+        da, "valid_time", "init_time", offset_sign=-1, fill_value=fill_value
     )
 
 
@@ -699,7 +811,10 @@ def maybe_densify_dataarray(da: xr.DataArray, max_size: float = 1e9) -> xr.DataA
         The densified xarray dataarray.
     """
     if isinstance(da.data, sparse.COO):
-        da.data = da.data.maybe_densify(max_size=max_size)
+        # Assigning to da.data would rewrite the Variable this DataArray shares
+        # with whatever it came from, so pulling a variable out of a dataset and
+        # densifying it turned the dataset dense too.
+        return da.copy(data=da.data.maybe_densify(max_size=max_size))
     return da
 
 
@@ -707,7 +822,7 @@ def reduce_dataarray(
     da: xr.DataArray,
     method: str | Callable,
     reduce_dims: list[str],
-    compute: bool = True,
+    compute: bool = False,
     **method_kwargs: Any,
 ) -> xr.DataArray:
     """Reduce using xarray methods or numpy functions.
@@ -716,15 +831,18 @@ def reduce_dataarray(
     numpy/callable reductions. Using the built-in methods xarray provides can be more
     efficient than using numpy functions.
 
-    If compute is True, the dataarray will be computed before returning.
-    This is useful to avoid dask exceptions when indexing with a boolean mask.
+    The result stays lazy by default so that callers reducing several arrays
+    build one graph and compute it once. Pass compute=True where the reduced
+    values themselves have to be known before the next step can be built, as
+    when they become labels for .sel or a mask for where(drop=True).
 
     Args:
         da: The xarray dataarray to reduce.
         method: Either an xarray method name (e.g., 'mean', 'sum') or
             a callable function (e.g., np.nanmean).
         reduce_dims: The dimensions to reduce.
-        compute: Whether to compute the dataarray before returning. Defaults to True.
+        compute: Whether to compute the dataarray before returning. Defaults to
+            False.
 
     Returns:
         The reduced xarray dataarray.

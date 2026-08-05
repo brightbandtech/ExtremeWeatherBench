@@ -4,7 +4,6 @@ from typing import Literal, Optional, Sequence, Union
 import numpy as np
 import numpy.typing as npt
 import regionmask
-import scores.categorical as categorical
 import shapely
 import xarray as xr
 from numba import float64, guvectorize
@@ -303,14 +302,19 @@ def _nantrapezoid_kernel(y, x, out):
 
 
 def nantrapezoid_nd(y, x):
-    """
-    Wrapper that moves the integration axis to last position,
-    calls the guvectorize kernel, then returns result.
+    """Integrate over the last axis of y, skipping intervals containing nan.
 
-    y: (..., level, lat, lon)
-    x: (level,) or same shape as y
-    """
+    The guvectorize kernel reduces over the trailing axis, so callers must
+    already have the integration axis there; apply_ufunc does that by listing
+    the level dimension in input_core_dims.
 
+    Args:
+        y: Values to integrate, with the integration axis last.
+        x: Coordinate along the integration axis, broadcastable against y.
+
+    Returns:
+        The integral, with the integration axis reduced away.
+    """
     return _nantrapezoid_kernel(y, x)
 
 
@@ -385,12 +389,16 @@ def find_land_intersection(
         land_mask = regionmask.defined_regions.natural_earth_v5_0_0.land_110.mask(
             mask.longitude, mask.latitude
         )
-        land_mask = land_mask.where(np.isnan(land_mask), 1).where(land_mask == 0, 0)
+        # regionmask marks land with region id 0 and ocean with NaN.
+        land_mask = xr.where(land_mask == 0, 1.0, 0.0)
 
-    # Use the scores.categorical library to compute the binary mask (true positives)
-    contingency_manager = categorical.BinaryContingencyManager(mask, land_mask)
-    # return the true positive mask, where mask is true and land is true
-    return contingency_manager.tp
+    # This is the true-positive quadrant of a binary contingency table, spelled
+    # out rather than obtained from scores.categorical.BinaryContingencyManager.
+    # Building that manager also derives the other three quadrants, the count
+    # table and the summary table, none of which are used here; on a lazy mask
+    # that setup costs more than computing the answer.
+    intersection = (mask == 1) & (land_mask == 1)
+    return intersection.where(~(np.isnan(mask) | np.isnan(land_mask)))
 
 
 def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -> float:
@@ -722,27 +730,94 @@ def _detect_landfalls_wrapper(
     lats_next = lats.shift({time_dim: -1})
     lons_180_next = lons_180.shift({time_dim: -1})
 
-    # Vectorize the landfall check function
-    def _check_landfall_scalar(lon1, lat1, lon2, lat2):
-        """Scalar landfall check for vectorization."""
-        # Handle NaN values (from shift at boundaries)
-        if np.isnan(lon1) or np.isnan(lat1) or np.isnan(lon2) or np.isnan(lat2):
-            return False
-        return _is_true_landfall(lon1, lat1, lon2, lat2, land_geom, ocean_geom)
-
-    # Apply to get landfall mask
     landfall_mask = xr.apply_ufunc(
-        _check_landfall_scalar,
+        _landfall_between_points,
         lons_180,
         lats,
         lons_180_next,
         lats_next,
-        vectorize=True,
+        kwargs={"land_geom": land_geom, "ocean_geom": ocean_geom},
         dask="parallelized",
         output_dtypes=[bool],
     )
 
     return landfall_mask
+
+
+def _landfall_between_points(
+    lon1: npt.NDArray,
+    lat1: npt.NDArray,
+    lon2: npt.NDArray,
+    lat2: npt.NDArray,
+    land_geom: shapely.geometry.Polygon,
+    ocean_geom: shapely.geometry.Polygon,
+) -> npt.NDArray[np.bool_]:
+    """Array form of the ocean-to-land crossing test in _is_true_landfall.
+
+    The Natural Earth land union has on the order of a thousand parts, so an
+    unindexed point-in-polygon test walks most of them. shapely.prepare builds
+    the spatial index once per geometry and shapely.contains_xy then tests a
+    whole array of points against it inside GEOS, instead of paying a Python
+    call and an index-less scan for every point on the track.
+
+    Each stage is narrowed to the pairs still in contention, so the segment
+    intersection, which is the expensive predicate, only ever runs on pairs
+    that started in open ocean and did not simply end over land.
+
+    Args:
+        lon1, lat1: Start positions, in signed degrees.
+        lon2, lat2: End positions, in signed degrees.
+        land_geom: Land geometry for intersection testing.
+        ocean_geom: Open-ocean geometry the start point must lie in.
+
+    Returns:
+        Boolean array, True where the pair represents a landfall.
+    """
+    shapely.prepare(land_geom)
+    shapely.prepare(ocean_geom)
+
+    lon1, lat1, lon2, lat2 = np.broadcast_arrays(lon1, lat1, lon2, lat2)
+    landfall = np.zeros(lon1.shape, dtype=bool)
+
+    # Shifting leaves NaN at the track boundary, and some trackers emit NaN or
+    # infinite positions; none of those can be tested for a crossing.
+    usable = (
+        np.isfinite(lon1) & np.isfinite(lat1) & np.isfinite(lon2) & np.isfinite(lat2)
+    )
+    if not usable.any():
+        return landfall
+
+    from_ocean = np.zeros(lon1.shape, dtype=bool)
+    from_ocean[usable] = shapely.contains_xy(ocean_geom, lon1[usable], lat1[usable])
+    if not from_ocean.any():
+        return landfall
+
+    over_land = np.zeros(lon1.shape, dtype=bool)
+    over_land[from_ocean] = shapely.contains_xy(
+        land_geom, lon2[from_ocean], lat2[from_ocean]
+    )
+    landfall |= over_land
+
+    # Ocean to ocean still counts when the straight segment clips land in
+    # between, which happens when a storm crosses a narrow peninsula or island
+    # between two reported positions.
+    grazing = from_ocean & ~over_land
+    if grazing.any():
+        segments = shapely.linestrings(
+            np.stack(
+                [
+                    np.stack([lon1[grazing], lat1[grazing]], axis=-1),
+                    np.stack([lon2[grazing], lat2[grazing]], axis=-1),
+                ],
+                axis=1,
+            )
+        )
+        # The prepared geometry has to come first for GEOS to use its index;
+        # with the segments first this predicate is an order of magnitude
+        # slower on the same inputs.
+        landfall[grazing] = shapely.intersects(land_geom, segments)
+
+    return landfall
 
 
 def _mask_init_time_boundaries(
@@ -1337,8 +1412,10 @@ def _is_true_landfall(
 def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataArray:
     """Apply binary dilation along the last two (lat, lon) axes.
 
-    Uses axes=(-2, -1) so the function works correctly for any number of
-    leading broadcast dimensions (e.g. valid_time, lead_time).
+    Dilating a binary field with a square all-ones structuring element is the
+    same as a maximum filter over that square, and maximum_filter separates
+    the window into two 1-D passes instead of scanning size**2 neighbours per
+    point. cval=0 reproduces binary_dilation's zero-padded border.
 
     Args:
         data: Array of shape (..., lat, lon)
@@ -1348,10 +1425,10 @@ def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataA
         Dilated array of the same shape as data
     """
     size = dilation_radius * 2 + 1
-    struct = np.ones((size, size))
-    return ndimage.binary_dilation(data, structure=struct, axes=(-2, -1)).astype(
-        np.int8
-    )
+    window = (1,) * (data.ndim - 2) + (size, size)
+    return ndimage.maximum_filter(
+        np.asarray(data, dtype=np.uint8), size=window, mode="constant", cval=0
+    ).astype(np.int8)
 
 
 def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.DataArray:
