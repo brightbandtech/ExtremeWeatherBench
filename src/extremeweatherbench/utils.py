@@ -383,6 +383,77 @@ def determine_temporal_resolution(
     return np.min(num_timesteps).astype(float)
 
 
+def binarize_pair(
+    forecast: xr.DataArray,
+    target: xr.DataArray,
+    forecast_threshold: float,
+    target_threshold: float,
+    op_func: Union[Callable, Literal[">", ">=", "<", "<=", "==", "!="]] = operator.ge,
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """Turn a forecast/target pair into 0/1 fields at their thresholds.
+
+    This is the binarization every threshold-based metric applies before
+    building a contingency table, exposed separately so a custom metric can
+    reuse it and get the same treatment of operators and sparse data.
+
+    Args:
+        forecast: The forecast DataArray.
+        target: The target DataArray.
+        forecast_threshold: Threshold for binarizing forecast.
+        target_threshold: Threshold for binarizing target.
+        op_func: Comparison operator, or its string form such as ">=".
+
+    Returns:
+        The binarized forecast and target, as floats.
+
+    Examples:
+        >>> binary_forecast, binary_target = binarize_pair(
+        ...     forecast, target, 15000.0, 0.3
+        ... )
+    """
+    op_func = maybe_get_operator(op_func)
+    return (
+        maybe_densify_dataarray(op_func(forecast, forecast_threshold)).astype(float),
+        maybe_densify_dataarray(op_func(target, target_threshold)).astype(float),
+    )
+
+
+def resolve_time_dimension(
+    data: xr.Dataset | xr.DataArray,
+    time_dimension: Optional[str] = None,
+) -> str:
+    """Pick the single time axis a forecast or analysis varies along.
+
+    Forecast data carries both ``lead_time`` and ``valid_time``, and treating
+    the two as one axis merges timesteps from different initializations.
+    Choosing ``lead_time`` keeps each initialization separate. Analysis data
+    such as ERA5 has only ``valid_time``, so that is the axis there.
+
+    Args:
+        data: The dataset or dataarray to inspect.
+        time_dimension: An explicit override. Returned unchanged when given,
+            so callers can expose a passthrough argument without repeating
+            this rule.
+
+    Returns:
+        Either ``time_dimension``, ``"lead_time"``, or ``"valid_time"``.
+
+    Raises:
+        ValueError: If neither time dimension is present and no override was
+            given.
+    """
+    if time_dimension is not None:
+        return time_dimension
+    if "lead_time" in data.dims:
+        return "lead_time"
+    if "valid_time" in data.dims:
+        return "valid_time"
+    raise ValueError(
+        "a lead_time or valid_time dimension is needed to resolve a time "
+        f"axis; got dimensions {tuple(data.dims)}"
+    )
+
+
 def _reshape_across_lead_time(
     obj: T_DatasetOrDataArray,
     source_dim: str,

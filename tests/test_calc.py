@@ -5,8 +5,10 @@ import pandas as pd
 import pytest
 import xarray as xr
 from numpy import testing
+from scipy import ndimage
 
-from extremeweatherbench import calc, metrics
+from extremeweatherbench import calc, metrics, utils
+from tests.conftest import assert_lazy
 
 
 class TestBasicCalculations:
@@ -2587,3 +2589,324 @@ class TestLandfallMetricAlignment:
         assert len(result.init_time) == 2
         # Time differences should be calculable (not NaN)
         assert not np.isnan(result.values).all()
+
+
+def _column_dataarray(n_time=4, n_lat=3, n_lon=3, levels=(1000.0, 850.0, 700.0, 500.0)):
+    """Array with a level dimension, as the vertical integrals expect."""
+    rng = np.random.default_rng(7)
+    shape = (n_time, len(levels), n_lat, n_lon)
+    return xr.DataArray(
+        rng.uniform(0.001, 0.02, shape),
+        dims=["valid_time", "level", "latitude", "longitude"],
+        coords={
+            "valid_time": pd.date_range("2023-01-01", periods=n_time, freq="6h"),
+            "level": np.array(levels),
+            "latitude": np.linspace(30.0, 40.0, n_lat),
+            "longitude": np.linspace(-120.0, -110.0, n_lon),
+        },
+    )
+
+
+def _track_dataarray(lons, lats, chunk=False):
+    """Track-shaped DataArray with latitude/longitude along valid_time."""
+    valid_time = pd.date_range("2021-08-28", periods=len(lons), freq="6h")
+    da = xr.DataArray(
+        np.arange(float(len(lons))),
+        dims=["valid_time"],
+        coords={
+            "valid_time": valid_time,
+            "latitude": ("valid_time", np.asarray(lats, dtype=float)),
+            "longitude": ("valid_time", np.asarray(lons, dtype=float)),
+        },
+    )
+    return da.chunk({"valid_time": 4}) if chunk else da
+
+
+def _gulf_coast_track(n_points):
+    """Track running north out of the Gulf of Mexico onto Louisiana."""
+    lons = np.linspace(-91.5, -91.0, n_points)
+    lats = np.linspace(24.0, 32.0, n_points)
+    return lons, lats
+
+
+class TestFindLandIntersectionOutput:
+    """Only the true-positive quadrant is needed, so only it should be built."""
+
+    @staticmethod
+    def _mask_and_land():
+        lat = np.linspace(20.0, 29.0, 10)
+        lon = np.linspace(-160.0, -151.0, 10)
+        rng = np.random.default_rng(7)
+        mask = xr.DataArray(
+            (rng.random((3, 10, 10)) > 0.5).astype(np.int64),
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": pd.date_range("2023-01-01", periods=3, freq="6h"),
+                "latitude": lat,
+                "longitude": lon,
+            },
+        )
+        land = xr.DataArray(
+            (rng.random((10, 10)) > 0.5).astype(float),
+            dims=["latitude", "longitude"],
+            coords={"latitude": lat, "longitude": lon},
+        )
+        return mask, land
+
+    def test_matches_the_contingency_table_true_positives(self):
+        """Characterization against the scores library implementation."""
+        from scores.categorical import BinaryContingencyManager
+
+        mask, land = self._mask_and_land()
+        expected = BinaryContingencyManager(mask, land).tp
+
+        actual = calc.find_land_intersection(mask, land_mask=land)
+
+        xr.testing.assert_equal(actual, expected)
+
+    def test_propagates_nan_from_either_input(self):
+        mask, land = self._mask_and_land()
+        mask = mask.where(mask.latitude > mask.latitude[0])
+        land = land.where(land.longitude > land.longitude[0])
+
+        from scores.categorical import BinaryContingencyManager
+
+        expected = BinaryContingencyManager(mask, land).tp
+        actual = calc.find_land_intersection(mask, land_mask=land)
+
+        xr.testing.assert_equal(actual, expected)
+
+    def test_stays_lazy_for_a_lazy_mask(self):
+        mask, land = self._mask_and_land()
+        result = calc.find_land_intersection(
+            mask.chunk({"valid_time": 1}), land_mask=land
+        )
+        assert_lazy(result)
+
+
+class TestVerticalIntegralLevelChunking:
+    """The level -1 rechunk is required for correctness, not just for speed.
+
+    nantrapezoid_nd integrates whichever levels it is handed, so it has to be
+    handed a whole column. These tests pin the rechunk as the thing that
+    guarantees that, so it is not later mistaken for redundant work: without
+    it apply_ufunc refuses to build the graph, and the answer a partial
+    column would give is genuinely different.
+    """
+
+    def test_level_is_whole_in_every_chunk_the_kernel_sees(self):
+        da = _column_dataarray().chunk({"valid_time": 1, "level": 2})
+        seen = []
+
+        original = calc.nantrapezoid_nd
+
+        def recording(values, levels):
+            seen.append(values.shape[-1])
+            return original(values, levels)
+
+        calc.nantrapezoid_nd = recording
+        try:
+            calc.nantrapezoid_pressure_levels(da).compute()
+        finally:
+            calc.nantrapezoid_nd = original
+
+        assert seen, "the integration kernel never ran"
+        assert set(seen) == {da.sizes["level"]}, (
+            f"kernel saw partial columns of sizes {sorted(set(seen))}; it must "
+            f"always see all {da.sizes['level']} levels"
+        )
+
+    def test_without_the_rechunk_apply_ufunc_refuses_to_build(self):
+        """The same call without the rechunk is an error, not a slow path."""
+        da = _column_dataarray().chunk({"level": 2})
+        with pytest.raises(ValueError, match="core dimension"):
+            xr.apply_ufunc(
+                calc.nantrapezoid_nd,
+                da,
+                da["level"] * 100,
+                input_core_dims=[["level"], ["level"]],
+                output_core_dims=[[]],
+                dask="parallelized",
+                output_dtypes=[float],
+            )
+
+    def test_a_partial_column_integrates_to_a_different_value(self):
+        """Shows the rechunk is load-bearing rather than cosmetic."""
+        da = _column_dataarray()
+        levels_pa = (da["level"] * 100).values
+        column = da.isel(valid_time=0, latitude=0, longitude=0).values
+
+        whole = calc.nantrapezoid_nd(column, levels_pa)
+        halves = calc.nantrapezoid_nd(column[:2], levels_pa[:2]) + calc.nantrapezoid_nd(
+            column[2:], levels_pa[2:]
+        )
+
+        assert not np.isclose(whole, halves), (
+            "integrating two half columns matched the whole column, so this "
+            "test no longer demonstrates why the rechunk is needed"
+        )
+
+    def test_rechunk_is_applied_even_when_level_arrives_split(self):
+        da = _column_dataarray().chunk({"level": 1})
+        result = calc.nantrapezoid_pressure_levels(da)
+        assert_lazy(result)
+        expected = calc.nantrapezoid_pressure_levels(
+            _column_dataarray().chunk({"level": -1})
+        )
+        np.testing.assert_allclose(result.compute().values, expected.compute().values)
+
+
+class TestLandfallDetectionOutput:
+    """Pins the landfalls that detection reports for a known track."""
+
+    @staticmethod
+    def _reference_mask(track, land, ocean):
+        lats = track.coords["latitude"].values
+        lons = (track.coords["longitude"].values + 180) % 360 - 180
+        mask = np.zeros(lons.size, dtype=bool)
+        for i in range(lons.size - 1):
+            mask[i] = calc._is_true_landfall(
+                lons[i], lats[i], lons[i + 1], lats[i + 1], land, ocean
+            )
+        return mask
+
+    @pytest.mark.parametrize("n_points", [8, 33, 60])
+    def test_mask_matches_the_scalar_predicate(self, n_points):
+        land = utils.load_land_geometry()
+        ocean = utils.load_ocean_geometry()
+        track = _track_dataarray(*_gulf_coast_track(n_points))
+
+        got = calc._detect_landfalls_wrapper(track, land, ocean)
+        expected = self._reference_mask(track, land, ocean)
+
+        np.testing.assert_array_equal(got.values, expected)
+        assert expected.any(), "this track should make landfall somewhere"
+
+    def test_a_track_that_stays_at_sea_finds_nothing(self):
+        land = utils.load_land_geometry()
+        ocean = utils.load_ocean_geometry()
+        lons = np.linspace(-40.0, -38.0, 12)
+        lats = np.full(12, 25.0)
+        track = _track_dataarray(lons, lats)
+
+        got = calc._detect_landfalls_wrapper(track, land, ocean)
+        assert not got.values.any()
+
+    def test_a_track_starting_over_land_is_not_a_landfall(self):
+        land = utils.load_land_geometry()
+        ocean = utils.load_ocean_geometry()
+        # Kansas outward; leaving land is not landfall, and no point starts
+        # in the open ocean.
+        lons = np.linspace(-98.0, -96.0, 10)
+        lats = np.full(10, 38.5)
+        track = _track_dataarray(lons, lats)
+
+        got = calc._detect_landfalls_wrapper(track, land, ocean)
+        assert not got.values.any()
+
+    def test_nan_positions_are_not_landfalls(self):
+        land = utils.load_land_geometry()
+        ocean = utils.load_ocean_geometry()
+        lons, lats = _gulf_coast_track(12)
+        lons = lons.copy()
+        lats = lats.copy()
+        lons[3] = np.nan
+        lats[7] = np.nan
+        track = _track_dataarray(lons, lats)
+
+        got = calc._detect_landfalls_wrapper(track, land, ocean)
+        # A pair with a NaN endpoint cannot be evaluated, so neither the pair
+        # starting at the NaN nor the one ending at it may be flagged.
+        assert not got.values[2:4].any()
+        assert not got.values[6:8].any()
+
+    def test_longitudes_given_in_0_360_are_wrapped(self):
+        land = utils.load_land_geometry()
+        ocean = utils.load_ocean_geometry()
+        lons, lats = _gulf_coast_track(24)
+        signed = _track_dataarray(lons, lats)
+        unsigned = _track_dataarray(lons % 360, lats)
+
+        np.testing.assert_array_equal(
+            calc._detect_landfalls_wrapper(signed, land, ocean).values,
+            calc._detect_landfalls_wrapper(unsigned, land, ocean).values,
+        )
+
+
+class TestLandMaskNormalization:
+    """Pins how a land mask is normalized, including NaN handling."""
+
+    @staticmethod
+    def _mask(values):
+        return xr.DataArray(
+            np.asarray(values, dtype=float),
+            dims=["latitude", "longitude"],
+            coords={"latitude": [0.0, 1.0], "longitude": [0.0, 1.0]},
+        )
+
+    def test_land_and_ocean_intersection_values(self):
+        mask = self._mask([[1.0, 1.0], [0.0, 1.0]])
+        land = self._mask([[1.0, 0.0], [1.0, 0.0]])
+
+        result = calc.find_land_intersection(mask, land_mask=land)
+
+        np.testing.assert_array_equal(result.values, [[1.0, 0.0], [0.0, 0.0]])
+
+    def test_nan_in_either_input_propagates(self):
+        mask = self._mask([[1.0, np.nan], [1.0, 1.0]])
+        land = self._mask([[1.0, 1.0], [np.nan, 1.0]])
+
+        result = calc.find_land_intersection(mask, land_mask=land)
+
+        assert np.isnan(result.values[0, 1])
+        assert np.isnan(result.values[1, 0])
+        np.testing.assert_array_equal(result.values[[0, 1], [0, 1]], [1.0, 1.0])
+
+    def test_the_default_land_mask_is_one_over_land_and_zero_over_ocean(self):
+        # A point in Kansas and a point in the mid Pacific.
+        mask = xr.DataArray(
+            np.ones((1, 2)),
+            dims=["latitude", "longitude"],
+            coords={"latitude": [38.0], "longitude": [-98.0, -150.0]},
+        )
+
+        result = calc.find_land_intersection(mask)
+
+        np.testing.assert_array_equal(result.values, [[1.0, 0.0]])
+
+
+class TestDilationKernelEquivalence:
+    """Pins the dilation kernel against an explicit square structure."""
+
+    @staticmethod
+    def _reference(data, radius):
+        size = radius * 2 + 1
+        struct = np.ones((size, size))
+        return ndimage.binary_dilation(data, structure=struct, axes=(-2, -1)).astype(
+            np.int8
+        )
+
+    @pytest.mark.parametrize("radius", [0, 1, 2, 8])
+    @pytest.mark.parametrize("shape", [(7, 11), (3, 7, 11), (2, 3, 9, 9)])
+    def test_matches_the_square_structure(self, radius, shape):
+        rng = np.random.default_rng(radius + len(shape))
+        data = rng.random(shape) < 0.1
+
+        np.testing.assert_array_equal(
+            calc._binary_dilation_ufunc(data, radius),
+            self._reference(data, radius),
+        )
+
+    @pytest.mark.parametrize("corner", [(0, 0), (0, 10), (6, 0), (6, 10)])
+    def test_corners_are_not_padded_as_true(self, corner):
+        data = np.zeros((7, 11), dtype=bool)
+        data[corner] = True
+
+        np.testing.assert_array_equal(
+            calc._binary_dilation_ufunc(data, 2), self._reference(data, 2)
+        )
+
+    def test_the_output_dtype_is_int8(self):
+        data = np.zeros((4, 4), dtype=bool)
+
+        assert calc._binary_dilation_ufunc(data, 1).dtype == np.int8

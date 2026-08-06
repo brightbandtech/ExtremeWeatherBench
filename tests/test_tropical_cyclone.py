@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 import xarray as xr
 
-from extremeweatherbench import derived
+from extremeweatherbench import calc, derived
 from extremeweatherbench.events import tropical_cyclone
 
 
@@ -1268,3 +1268,104 @@ class TestFillTrackGapsFromFields:
             wind_search_radius_gridpts=1,
         )
         assert len(result) == 1
+
+
+def _tc_grid(n_lat=181, n_lon=360):
+    """Global-ish grid, so a local storm covers a small part of it."""
+    return (
+        np.linspace(-90.0, 90.0, n_lat),
+        np.linspace(0.0, 359.0, n_lon),
+    )
+
+
+def _tc_track_frame(n_rows=4, latitude=15.0, longitude=140.0):
+    return pd.DataFrame(
+        {
+            "valid_time": pd.date_range("2021-08-01", periods=n_rows, freq="6h"),
+            "latitude": np.full(n_rows, latitude),
+            "longitude": np.full(n_rows, longitude),
+        }
+    )
+
+
+class TestSpatialMaskOutput:
+    """The storm-proximity mask must not sweep the whole globe per track row.
+
+    Each track row only marks points within a few degrees of itself, so
+    evaluating the distance formula at every grid point for every row does
+    work proportional to rows x whole grid to fill in a small patch.
+    """
+
+    def test_distance_is_not_evaluated_over_the_whole_grid(self):
+        from extremeweatherbench.events import tropical_cyclone as tc
+
+        lat_coords, lon_coords = _tc_grid()
+        frame = _tc_track_frame(n_rows=4)
+        full_grid_points = lat_coords.size * lon_coords.size
+
+        evaluated = []
+        original = calc.haversine_distance
+
+        def recording(input_a, input_b, units="km"):
+            result = original(input_a, input_b, units=units)
+            evaluated.append(np.size(result))
+            return result
+
+        calc.haversine_distance = recording
+        try:
+            tc._create_spatial_mask(lat_coords, lon_coords, frame, 5.0)
+        finally:
+            calc.haversine_distance = original
+
+        assert evaluated, "no distance was evaluated"
+        assert max(evaluated) < full_grid_points, (
+            f"the mask evaluated distance at {max(evaluated)} points, the whole "
+            f"{full_grid_points}-point grid; it should be confined to the band "
+            f"the search radius can reach"
+        )
+
+    def test_mask_matches_the_whole_grid_calculation(self):
+        """Pins the mask, which the latitude banding must not change."""
+        from extremeweatherbench.events import tropical_cyclone as tc
+
+        lat_coords, lon_coords = _tc_grid(n_lat=91, n_lon=180)
+        frame = pd.DataFrame(
+            {
+                "valid_time": pd.date_range("2021-08-01", periods=3, freq="6h"),
+                "latitude": [12.0, 18.0, -40.0],
+                "longitude": [140.0, 145.0, 300.0],
+            }
+        )
+        radius = 6.0
+
+        got = tc._create_spatial_mask(lat_coords, lon_coords, frame, radius)
+
+        lat_grid, lon_grid = np.meshgrid(lat_coords, lon_coords, indexing="ij")
+        expected = np.zeros_like(lat_grid, dtype=bool)
+        for _, row in frame.iterrows():
+            distances = calc.haversine_distance(
+                [lat_grid, lon_grid],
+                [row["latitude"], row["longitude"]],
+                units="degrees",
+            )
+            expected |= distances <= radius
+
+        np.testing.assert_array_equal(got, expected)
+
+    def test_empty_track_frame_gives_an_empty_mask(self):
+        from extremeweatherbench.events import tropical_cyclone as tc
+
+        lat_coords, lon_coords = _tc_grid(n_lat=20, n_lon=40)
+        frame = _tc_track_frame(n_rows=0)
+        mask = tc._create_spatial_mask(lat_coords, lon_coords, frame, 5.0)
+        assert mask.shape == (20, 40)
+        assert not mask.any()
+
+    def test_a_row_outside_the_grid_marks_nothing(self):
+        from extremeweatherbench.events import tropical_cyclone as tc
+
+        lat_coords = np.linspace(0.0, 20.0, 21)
+        lon_coords = np.linspace(100.0, 160.0, 61)
+        frame = _tc_track_frame(n_rows=1, latitude=80.0, longitude=130.0)
+        mask = tc._create_spatial_mask(lat_coords, lon_coords, frame, 5.0)
+        assert not mask.any()

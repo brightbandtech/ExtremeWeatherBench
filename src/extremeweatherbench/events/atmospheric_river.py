@@ -100,22 +100,6 @@ def _label_ar_features_ufunc(
     return labeled_output.reshape(batch_shape + (n_time, n_lat, n_lon))
 
 
-def _resolve_connectivity_dimension(
-    data: xr.DataArray, time_dimension: Optional[str]
-) -> str:
-    """Pick the single axis along which AR features may connect."""
-    if time_dimension is not None:
-        return time_dimension
-    if "lead_time" in data.dims:
-        return "lead_time"
-    if "valid_time" in data.dims:
-        return "valid_time"
-    raise ValueError(
-        "atmospheric_river_mask needs a lead_time or valid_time dimension to "
-        f"connect features along; got dimensions {tuple(data.dims)}"
-    )
-
-
 def atmospheric_river_mask(
     ivt: xr.DataArray,
     ivt_laplacian: xr.DataArray,
@@ -198,7 +182,7 @@ def atmospheric_river_mask(
         # further than the valid times asked for.
         ar_mask = ar_mask.sel(valid_time=original_valid_time)
     else:
-        connect_dim = _resolve_connectivity_dimension(intersection, time_dimension)
+        connect_dim = utils.resolve_time_dimension(intersection, time_dimension)
         ar_mask = _label_ar_features(
             intersection, connect_dim, latitudes, min_size_gridpoints
         )
