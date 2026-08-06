@@ -2618,7 +2618,11 @@ class TestFindLandIntersectionOutput:
         return mask, land
 
     def test_matches_the_contingency_table_true_positives(self):
-        """Characterization against the scores library implementation."""
+        """The intersection is the contingency table's true positives.
+
+        scores computes the same quantity through a contingency manager, so
+        it settles what the intersection of a mask and a land mask means.
+        """
         from scores.categorical import BinaryContingencyManager
 
         mask, land = self._mask_and_land()

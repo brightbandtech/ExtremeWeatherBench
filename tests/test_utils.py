@@ -2055,7 +2055,13 @@ class TestIsValidLandfall:
 
 
 def _daily_min_via_map(da, time_resolution_hours):
-    """The groupby().map() formulation this phase replaces."""
+    """Per-day minimum over complete days, reached by grouping on the day.
+
+    Leaves the day bookkeeping to xarray's grouping rather than working out
+    which days are whole and coarsening them, so agreeing with
+    daily_min_over_complete_days means both arrived at the same answer along
+    genuinely different routes.
+    """
     return da.groupby("valid_time.dayofyear").map(
         utils.min_if_all_timesteps_present,
         time_resolution_hours=time_resolution_hours,

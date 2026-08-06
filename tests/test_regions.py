@@ -2060,7 +2060,13 @@ def shapefile_region(tmp_path):
 
 
 def _fancy_index_subset(ds, region):
-    """The where(drop=True) plus sel formulation this phase replaces."""
+    """Subset to a region's bounds by testing every coordinate value.
+
+    Selects the latitudes and longitudes that fall inside the bounds and
+    indexes with them, which handles a descending axis or a region crossing
+    the antimeridian without any special cases. Region.mask reaches its
+    subset by slicing instead, so the two only agree if both are right.
+    """
     lon_min, lat_min, lon_max, lat_max = region.get_adjusted_bounds(ds)
     latitudes = ds.latitude.where(
         (ds.latitude >= lat_min) & (ds.latitude <= lat_max), drop=True
