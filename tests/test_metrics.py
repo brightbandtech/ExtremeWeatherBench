@@ -9,7 +9,8 @@ import pytest
 import sparse
 import xarray as xr
 
-from extremeweatherbench import calc, metrics
+from extremeweatherbench import calc, metrics, utils
+from tests.conftest import assert_lazy
 
 
 class TestConcreteMetric(metrics.BaseMetric):
@@ -4892,3 +4893,296 @@ class TestEarlySignal:
         result = self._resolve(m._compute_metric(f, t))
         # space=0 excluded (NaN); space=1: f=0.1 < 0.5 → False
         assert not bool(result.any().values)
+
+
+def _pattern_stack(n_lead=3, n_valid=4, n_lat=9, n_lon=11, chunk=False, seed=0):
+    """Stack of 2-D non-negative fields, the shape SpatialDisplacement sees."""
+    rng = np.random.default_rng(seed)
+    values = rng.random((n_lead, n_valid, n_lat, n_lon))
+    values[values < 0.4] = 0.0
+    da = xr.DataArray(
+        values,
+        dims=["lead_time", "valid_time", "latitude", "longitude"],
+        coords={
+            "lead_time": np.arange(0, n_lead * 6, 6),
+            "valid_time": pd.date_range("2021-02-01", periods=n_valid, freq="6h"),
+            "latitude": np.linspace(30.0, 46.0, n_lat),
+            "longitude": np.linspace(-130.0, -110.0, n_lon),
+        },
+    )
+    return da.chunk({"lead_time": 1, "valid_time": 2}) if chunk else da
+
+
+def _center_of_mass_reference(da):
+    """Per-slice ndimage.center_of_mass, the formulation being replaced."""
+    from scipy import ndimage as ndi
+
+    values = da.transpose("lead_time", "valid_time", "latitude", "longitude").values
+    lat_idx = np.empty(values.shape[:2])
+    lon_idx = np.empty(values.shape[:2])
+    for i in range(values.shape[0]):
+        for j in range(values.shape[1]):
+            field = values[i, j]
+            if (field > 0).any():
+                lat_idx[i, j], lon_idx[i, j] = ndi.center_of_mass(field)
+            else:
+                lat_idx[i, j], lon_idx[i, j] = np.nan, np.nan
+    return lat_idx, lon_idx
+
+
+def _spatial_displacement_reference(forecast, target, preserve_dims):
+    """SpatialDisplacement computed through the per-slice center of mass."""
+    pieces = []
+    for da in (forecast, target):
+        lat_idx, lon_idx = _center_of_mass_reference(da)
+        lat_coords, lon_coords = utils.idx_to_coords(
+            np.round(lat_idx),
+            np.round(lon_idx),
+            da.latitude.values,
+            da.longitude.values,
+        )
+        pieces.append(np.array([lat_coords, lon_coords]))
+
+    distance = calc.haversine_distance(pieces[0], pieces[1])
+    result = xr.DataArray(
+        distance,
+        coords={
+            "lead_time": forecast.lead_time,
+            "valid_time": forecast.valid_time,
+        },
+        dims=["lead_time", "valid_time"],
+    )
+    reduce_dims = [d for d in result.dims if d not in preserve_dims]
+    if reduce_dims:
+        result = result.mean(dim=reduce_dims)
+    return result.values
+
+
+class TestCenterOfMassLaziness:
+    """The center of mass stays lazy over dask-backed input."""
+
+    def test_result_is_lazy_for_dask_input(self):
+        da = _pattern_stack(chunk=True)
+        lat_idx, lon_idx = metrics._center_of_mass_indices(da)
+        assert_lazy(lat_idx, "the center of mass should compose lazily")
+        assert_lazy(lon_idx, "the center of mass should compose lazily")
+
+
+class TestCenterOfMassOutput:
+    """Pins the center-of-mass indices for known patterns."""
+
+    @pytest.mark.parametrize("seed", [0, 1, 2])
+    def test_indices_match_ndimage(self, seed):
+        da = _pattern_stack(seed=seed)
+        lat_idx, lon_idx = metrics._center_of_mass_indices(da)
+        expected_lat, expected_lon = _center_of_mass_reference(da)
+
+        np.testing.assert_allclose(lat_idx.values, expected_lat, rtol=1e-12)
+        np.testing.assert_allclose(lon_idx.values, expected_lon, rtol=1e-12)
+
+    def test_an_all_zero_field_is_nan(self):
+        da = _pattern_stack(n_lead=1, n_valid=2)
+        da = xr.zeros_like(da)
+        lat_idx, lon_idx = metrics._center_of_mass_indices(da)
+        assert np.isnan(lat_idx.values).all()
+        assert np.isnan(lon_idx.values).all()
+
+    def test_a_single_lit_cell_sits_on_that_cell(self):
+        da = xr.zeros_like(_pattern_stack(n_lead=1, n_valid=1))
+        da[0, 0, 3, 7] = 1.0
+        lat_idx, lon_idx = metrics._center_of_mass_indices(da)
+        assert lat_idx.values.item() == 3.0
+        assert lon_idx.values.item() == 7.0
+
+    def test_a_nan_in_the_field_propagates_like_ndimage(self):
+        da = _pattern_stack(n_lead=1, n_valid=1)
+        da[0, 0, 2, 2] = np.nan
+        lat_idx, lon_idx = metrics._center_of_mass_indices(da)
+        expected_lat, expected_lon = _center_of_mass_reference(da)
+
+        np.testing.assert_array_equal(np.isnan(lat_idx.values), np.isnan(expected_lat))
+        np.testing.assert_array_equal(np.isnan(lon_idx.values), np.isnan(expected_lon))
+
+    def test_dask_and_numpy_paths_agree(self):
+        eager = _pattern_stack(chunk=False)
+        lazy = _pattern_stack(chunk=True)
+        lat_eager, lon_eager = metrics._center_of_mass_indices(eager)
+        lat_lazy, lon_lazy = metrics._center_of_mass_indices(lazy)
+
+        np.testing.assert_allclose(lat_eager.values, lat_lazy.compute().values)
+        np.testing.assert_allclose(lon_eager.values, lon_lazy.compute().values)
+
+
+class TestSpatialDisplacementOutput:
+    """Pins the SpatialDisplacement metric values."""
+
+    def test_displacement_matches_the_per_slice_formulation(self):
+        forecast = _pattern_stack(seed=3)
+        target = _pattern_stack(seed=4)
+        metric = metrics.SpatialDisplacement(preserve_dims=["lead_time"])
+
+        got = metric._compute_metric(forecast=forecast, target=target)
+        expected = _spatial_displacement_reference(forecast, target, ["lead_time"])
+
+        np.testing.assert_allclose(got.values, expected, rtol=1e-10)
+
+    def test_result_keeps_the_preserved_dimension(self):
+        forecast = _pattern_stack(seed=5)
+        target = _pattern_stack(seed=6)
+        metric = metrics.SpatialDisplacement(preserve_dims=["lead_time"])
+        got = metric._compute_metric(forecast=forecast, target=target)
+        assert got.dims == ("lead_time",)
+
+
+class TestMaximumMeanAbsoluteErrorHonorsSpatialDims:
+    """A configured reduce_spatial_dims must be honored, not discarded."""
+
+    @staticmethod
+    def _pair():
+        rng = np.random.default_rng(0)
+        coords = {
+            "valid_time": pd.date_range("2021-07-01", periods=6, freq="6h"),
+            "latitude": np.linspace(30.0, 40.0, 5),
+            "longitude": np.linspace(-110.0, -100.0, 4),
+        }
+        dims = ["valid_time", "latitude", "longitude"]
+        target = xr.DataArray(
+            rng.random((6, 5, 4)) * 10 + 280, dims=dims, coords=coords
+        )
+        forecast = target + rng.random((6, 5, 4))
+        return forecast, target
+
+    def test_reducing_only_longitude_keeps_latitude(self):
+        forecast, target = self._pair()
+        metric = metrics.MaximumMeanAbsoluteError(
+            reduce_spatial_dims=["longitude"], preserve_dims=["latitude"]
+        )
+        result = metric._compute_metric(forecast=forecast, target=target)
+
+        assert "latitude" in result.dims, (
+            "reduce_spatial_dims=['longitude'] was ignored, so latitude was "
+            "collapsed anyway"
+        )
+        assert result.sizes["latitude"] == target.sizes["latitude"]
+
+    def test_the_default_configuration_is_unchanged(self):
+        forecast, target = self._pair()
+        # The default preserves lead_time, which only the forecast carries.
+        forecast = forecast.expand_dims(lead_time=[0, 6, 12])
+        default = metrics.MaximumMeanAbsoluteError()
+        explicit = metrics.MaximumMeanAbsoluteError(
+            reduce_spatial_dims=["latitude", "longitude"]
+        )
+
+        np.testing.assert_allclose(
+            default._compute_metric(forecast=forecast, target=target).values,
+            explicit._compute_metric(forecast=forecast, target=target).values,
+        )
+
+
+class TestThresholdMetricValues:
+    """Pins every contingency-table metric value at its thresholds."""
+
+    @staticmethod
+    def _pair():
+        forecast = xr.DataArray(
+            [[15500.0, 14000.0, 16000.0], [14500.0, 15100.0, 13000.0]],
+            dims=["x", "y"],
+        )
+        target = xr.DataArray(
+            [[0.4, 0.2, 0.5], [0.25, 0.1, 0.35]],
+            dims=["x", "y"],
+        )
+        return forecast, target
+
+    EXPECTED = {
+        "CriticalSuccessIndex": [1.0, 0.0],
+        "FalseAlarmRatio": [0.0, 1.0],
+        "TruePositives": [2 / 3, 0.0],
+        "FalsePositives": [0.0, 1 / 3],
+        "TrueNegatives": [1 / 3, 1 / 3],
+        "FalseNegatives": [0.0, 1 / 3],
+        "Accuracy": [1.0, 1 / 3],
+    }
+
+    @pytest.mark.parametrize("metric_name", sorted(EXPECTED))
+    def test_each_threshold_metric_value(self, metric_name):
+        forecast, target = self._pair()
+        metric = getattr(metrics, metric_name)(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims="x"
+        )
+
+        result = metric.compute_metric(forecast, target)
+
+        np.testing.assert_allclose(result.values, self.EXPECTED[metric_name])
+
+    @pytest.mark.parametrize("metric_name", sorted(EXPECTED))
+    def test_a_shared_manager_gives_the_same_value(self, metric_name):
+        forecast, target = self._pair()
+        composite = metrics.ThresholdMetric(
+            forecast_threshold=15000,
+            target_threshold=0.3,
+            preserve_dims="x",
+            metrics=[getattr(metrics, metric_name)],
+        )
+        kwargs = composite.maybe_prepare_composite_kwargs(forecast, target)
+        (instance,) = composite.maybe_expand_composite()
+
+        result = instance._compute_metric(forecast, target, **kwargs)
+
+        np.testing.assert_allclose(result.values, self.EXPECTED[metric_name])
+
+    def test_a_multi_metric_composite_gives_the_same_values(self):
+        forecast, target = self._pair()
+        wanted = ["CriticalSuccessIndex", "Accuracy", "TruePositives"]
+        composite = metrics.ThresholdMetric(
+            forecast_threshold=15000,
+            target_threshold=0.3,
+            preserve_dims="x",
+            metrics=[getattr(metrics, name) for name in wanted],
+        )
+        kwargs = composite.maybe_prepare_composite_kwargs(forecast, target)
+
+        for instance, name in zip(composite.maybe_expand_composite(), wanted):
+            np.testing.assert_allclose(
+                instance._compute_metric(forecast, target, **kwargs).values,
+                self.EXPECTED[name],
+            )
+
+    def test_the_base_class_still_refuses_to_compute(self):
+        forecast, target = self._pair()
+
+        with pytest.raises(NotImplementedError):
+            metrics.ThresholdMetric().compute_metric(forecast, target)
+
+    @staticmethod
+    def _flat_pair():
+        # roc_curve_data needs a flat sample dimension. Samples two and three
+        # sit exactly on a threshold, which pins the comparison as inclusive.
+        forecast = xr.DataArray(
+            [15500.0, 15000.0, 16000.0, 14500.0, 15200.0], dims=["sample"]
+        )
+        target = xr.DataArray([0.4, 0.35, 0.3, 0.25, 0.2], dims=["sample"])
+        return forecast, target
+
+    def test_the_roc_curve_is_unchanged(self):
+        forecast, target = self._flat_pair()
+        roc = metrics.ReceiverOperatingCharacteristic(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims=None
+        )
+
+        result = roc.compute_metric(forecast, target)
+
+        np.testing.assert_allclose(result["POD"].values, [1.0, 1.0, 0.0])
+        np.testing.assert_allclose(result["POFD"].values, [1.0, 0.5, 0.0])
+        np.testing.assert_allclose(float(result["AUC"]), 0.75)
+
+    def test_the_roc_skill_score_is_unchanged(self):
+        forecast, target = self._flat_pair()
+        skill = metrics.ReceiverOperatingCharacteristicSkillScore(
+            forecast_threshold=15000, target_threshold=0.3, preserve_dims=None
+        )
+
+        result = skill.compute_metric(forecast, target)
+
+        np.testing.assert_allclose(float(result), 0.5)

@@ -2036,3 +2036,177 @@ class TestLongitudeCoordinateMismatch:
             lon_values <= 8.25,  # Eastern part
         )
         assert np.all(expected_condition)
+
+
+@pytest.fixture
+def shapefile_region(tmp_path):
+    """A ShapefileRegion backed by a small on-disk box shapefile."""
+    import geopandas as gpd
+
+    from extremeweatherbench import regions
+
+    frame = gpd.GeoDataFrame(
+        {"name": ["box"]},
+        geometry=[shapely.geometry.box(-130.0, 20.0, -100.0, 50.0)],
+        crs="EPSG:4326",
+    )
+    path = tmp_path / "box.shp"
+    frame.to_file(path)
+    return regions.ShapefileRegion(path)
+
+
+def _global_grid_dataset():
+    """Coarse global grid for region masking."""
+    return xr.Dataset(
+        {"t": (["latitude", "longitude"], np.zeros((73, 144)))},
+        coords={
+            "latitude": np.linspace(-90, 90, 73),
+            "longitude": np.linspace(-180, 177.5, 144),
+        },
+    )
+
+
+def _chunked_global_grid(n_time=8, n_lat=181, n_lon=360):
+    """Chunked global grid for region subsetting."""
+    return xr.Dataset(
+        {
+            "t": (
+                ["valid_time", "latitude", "longitude"],
+                np.zeros((n_time, n_lat, n_lon), dtype="float32"),
+            )
+        },
+        coords={
+            "valid_time": pd.date_range("2021-06-01", periods=n_time, freq="6h"),
+            "latitude": np.linspace(-90, 90, n_lat),
+            "longitude": np.linspace(-180, 180, n_lon, endpoint=False),
+        },
+    ).chunk({"valid_time": 2})
+
+
+def _fancy_index_subset(ds, region):
+    """The where(drop=True) plus sel formulation this phase replaces."""
+    lon_min, lat_min, lon_max, lat_max = region.get_adjusted_bounds(ds)
+    latitudes = ds.latitude.where(
+        (ds.latitude >= lat_min) & (ds.latitude <= lat_max), drop=True
+    )
+    if lon_min > lon_max:
+        longitudes = ds.longitude.where(
+            (ds.longitude >= lon_min) | (ds.longitude <= lon_max), drop=True
+        )
+    else:
+        longitudes = ds.longitude.where(
+            (ds.longitude >= lon_min) & (ds.longitude <= lon_max), drop=True
+        )
+    return ds.sel(latitude=latitudes, longitude=longitudes)
+
+
+class TestBboxSubset:
+    """Pins the subset that bbox_subset selects for a bounding box."""
+
+    @staticmethod
+    def _box():
+        from extremeweatherbench import regions
+
+        return regions.BoundingBoxRegion(
+            latitude_min=20.0,
+            latitude_max=50.0,
+            longitude_min=-130.0,
+            longitude_max=-100.0,
+        )
+
+    def test_subset_values_match_fancy_indexing(self):
+        ds = _chunked_global_grid()
+        region = self._box()
+        xr.testing.assert_identical(
+            region.mask(ds).compute(), _fancy_index_subset(ds, region).compute()
+        )
+
+    def test_subset_is_narrowed_to_the_region(self):
+        ds = _chunked_global_grid()
+        masked = self._box().mask(ds)
+
+        assert masked.longitude.values.min() >= -130.0
+        assert masked.longitude.values.max() <= -100.0
+        assert masked.latitude.values.min() >= 20.0
+        assert masked.latitude.values.max() <= 50.0
+        assert masked.sizes["longitude"] < ds.sizes["longitude"]
+
+    @pytest.mark.parametrize("descending", [False, True])
+    def test_descending_latitude_gives_the_same_rows(self, descending):
+        ds = _chunked_global_grid()
+        if descending:
+            ds = ds.isel(latitude=slice(None, None, -1))
+        region = self._box()
+
+        masked = region.mask(ds)
+        expected = _fancy_index_subset(ds, region)
+        np.testing.assert_array_equal(masked.latitude.values, expected.latitude.values)
+
+    def test_an_antimeridian_region_keeps_both_ends(self):
+        from extremeweatherbench import regions
+
+        ds = _chunked_global_grid()
+        region = regions.BoundingBoxRegion(
+            latitude_min=20.0,
+            latitude_max=50.0,
+            longitude_min=170.0,
+            longitude_max=-170.0,
+        )
+        masked = region.mask(ds)
+        expected = _fancy_index_subset(ds, region)
+
+        np.testing.assert_array_equal(
+            masked.longitude.values, expected.longitude.values
+        )
+        xr.testing.assert_identical(masked.compute(), expected.compute())
+
+    def test_a_region_outside_the_grid_gives_an_empty_subset(self):
+        from extremeweatherbench import regions
+
+        ds = _chunked_global_grid()
+        region = regions.BoundingBoxRegion(
+            latitude_min=20.0,
+            latitude_max=50.0,
+            longitude_min=-130.0,
+            longitude_max=-100.0,
+        )
+        trimmed = ds.sel(longitude=slice(0.0, 90.0))
+        masked = region.mask(trimmed)
+        assert masked.sizes["longitude"] == 0
+
+
+class TestShapefileReading:
+    """Pins how a shapefile-backed region reads and masks."""
+
+    def test_as_geopandas_returns_equal_frames_each_time(self, shapefile_region):
+        first = shapefile_region.as_geopandas()
+        second = shapefile_region.as_geopandas()
+        assert first.total_bounds.tolist() == second.total_bounds.tolist()
+        assert len(first) == len(second)
+
+    def test_mask_result_is_unchanged_by_caching(self, shapefile_region):
+        ds = _global_grid_dataset()
+        first = shapefile_region.mask(ds)
+        second = shapefile_region.mask(ds)
+        xr.testing.assert_identical(first, second)
+
+        kept_lat = first.latitude.values
+        kept_lon = first.longitude.values
+        assert kept_lat.min() >= 20.0 and kept_lat.max() <= 50.0
+        assert kept_lon.min() >= -130.0 and kept_lon.max() <= -100.0
+
+    def test_a_missing_shapefile_still_raises(self, tmp_path):
+        from extremeweatherbench import regions
+
+        region = regions.ShapefileRegion(tmp_path / "absent.shp")
+        with pytest.raises(ValueError):
+            region.as_geopandas()
+
+    def test_the_failure_is_not_cached_as_a_success(self, tmp_path):
+        from extremeweatherbench import regions
+
+        region = regions.ShapefileRegion(tmp_path / "absent.shp")
+        with pytest.raises(ValueError):
+            region.as_geopandas()
+        with pytest.raises(ValueError):
+            region.as_geopandas()

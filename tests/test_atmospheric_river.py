@@ -7,6 +7,7 @@ import xarray as xr
 
 from extremeweatherbench import calc
 from extremeweatherbench.events import atmospheric_river
+from tests.conftest import assert_lazy
 
 # Set random seed for reproducible tests
 rng = np.random.default_rng(seed=42)
@@ -1009,3 +1010,307 @@ class TestBuildMaskAndLandIntersection:
 
         # Values should be 0 or 1 (boolean mask)
         assert set(ar_mask.values.flatten()).issubset({0, 1})
+
+
+def _ar_inputs(
+    time_dim="valid_time",
+    n_time=3,
+    n_lat=40,
+    n_lon=40,
+    extra_dim=None,
+    n_extra=1,
+    blobs=(),
+    chunk=True,
+):
+    """IVT and Laplacian fields with rectangular blobs above both thresholds.
+
+    Each blob is (time_index, extra_index, lat_slice, lon_slice). Values are
+    set so the AR criteria are met exactly inside the blob and nowhere else,
+    which makes the resulting feature sizes predictable.
+    """
+    lat = np.linspace(20.0, 59.0, n_lat)
+    lon = np.linspace(-160.0, -121.0, n_lon)
+
+    dims = [time_dim, "latitude", "longitude"]
+    shape = [n_time, n_lat, n_lon]
+    coords = {
+        time_dim: (
+            pd.date_range("2023-01-01", periods=n_time, freq="6h")
+            if time_dim == "valid_time"
+            else pd.to_timedelta(np.arange(n_time) * 6, unit="h")
+        ),
+        "latitude": lat,
+        "longitude": lon,
+    }
+    if extra_dim is not None:
+        dims.insert(0, extra_dim)
+        shape.insert(0, n_extra)
+        coords[extra_dim] = pd.date_range("2023-01-01", periods=n_extra, freq="D")
+
+    ivt_values = np.zeros(shape)
+    lap_values = np.zeros(shape)
+    for blob in blobs:
+        t_idx, extra_idx, lat_slice, lon_slice = blob
+        index: tuple = (t_idx, lat_slice, lon_slice)
+        if extra_dim is not None:
+            index = (extra_idx,) + index
+        ivt_values[index] = 800.0
+        lap_values[index] = 5.0
+
+    ivt = xr.DataArray(ivt_values, dims=dims, coords=coords)
+    lap = xr.DataArray(lap_values, dims=dims, coords=coords)
+    if chunk:
+        chunking = {extra_dim: 1} if extra_dim is not None else {time_dim: -1}
+        ivt, lap = ivt.chunk(chunking), lap.chunk(chunking)
+    return ivt, lap
+
+
+class TestAtmosphericRiverLabelConnectivity:
+    """Features connect along exactly one time-like axis.
+
+    An AR keeps its identity as it evolves, so connectivity along the single
+    time axis is wanted. Connecting across separate forecast initializations
+    is not: two different forecasts are independent realizations, and merging
+    them lets a feature that is too small in either one survive the size
+    filter.
+    """
+
+    def test_features_connect_across_valid_time_in_an_analysis(self):
+        """Two 36-cell blobs at consecutive valid times form one 72-cell feature."""
+        ivt, lap = _ar_inputs(
+            time_dim="valid_time",
+            n_time=2,
+            blobs=[
+                (0, 0, slice(10, 16), slice(10, 16)),
+                (1, 0, slice(10, 16), slice(10, 16)),
+            ],
+        )
+
+        result = atmospheric_river.atmospheric_river_mask(
+            ivt=ivt, ivt_laplacian=lap, dilation_radius=0, min_size_gridpoints=50
+        ).compute()
+
+        assert int(result.sum()) == 72, (
+            "blobs at consecutive valid times should merge into one feature "
+            "large enough to survive the size filter"
+        )
+
+    def test_features_do_not_connect_across_separate_initializations(self):
+        """The same 36-cell blob in two forecasts stays two small features.
+
+        Merging them across init_time would produce 72 cells and wrongly pass
+        a 50-cell size filter.
+        """
+        ivt, lap = _ar_inputs(
+            time_dim="lead_time",
+            n_time=1,
+            extra_dim="init_time",
+            n_extra=2,
+            blobs=[
+                (0, 0, slice(10, 16), slice(10, 16)),
+                (0, 1, slice(10, 16), slice(10, 16)),
+            ],
+        )
+
+        result = atmospheric_river.atmospheric_river_mask(
+            ivt=ivt, ivt_laplacian=lap, dilation_radius=0, min_size_gridpoints=50
+        ).compute()
+
+        assert int(result.sum()) == 0, (
+            "a 36-cell feature is below the 50-cell threshold in each forecast "
+            "separately and must not be rescued by merging across init_time"
+        )
+
+    def test_features_connect_across_lead_time_within_one_initialization(self):
+        ivt, lap = _ar_inputs(
+            time_dim="lead_time",
+            n_time=2,
+            extra_dim="init_time",
+            n_extra=2,
+            blobs=[
+                (0, 0, slice(10, 16), slice(10, 16)),
+                (1, 0, slice(10, 16), slice(10, 16)),
+            ],
+        )
+
+        result = atmospheric_river.atmospheric_river_mask(
+            ivt=ivt, ivt_laplacian=lap, dilation_radius=0, min_size_gridpoints=50
+        ).compute()
+
+        by_init = result.sum(dim=["lead_time", "latitude", "longitude"])
+        assert int(by_init[0]) == 72
+        assert int(by_init[1]) == 0
+
+
+class TestAtmosphericRiverMaskLaziness:
+    """The AR mask must stay in the dask graph instead of materializing."""
+
+    def test_mask_from_dask_inputs_is_still_lazy(self):
+        ivt, lap = _ar_inputs(blobs=[(0, 0, slice(10, 30), slice(10, 30))])
+
+        result = atmospheric_river.atmospheric_river_mask(
+            ivt=ivt, ivt_laplacian=lap, min_size_gridpoints=50
+        )
+
+        assert_lazy(
+            result,
+            "ndimage.label on a lazy array pulls the whole volume into memory "
+            "while the graph is being built",
+        )
+
+
+class TestAtmosphericRiverMaskOutput:
+    """Pins how the threshold, size and latitude filters shape the mask."""
+
+    def test_blob_above_all_criteria_is_retained(self):
+        ivt, lap = _ar_inputs(blobs=[(0, 0, slice(5, 25), slice(5, 25))])
+        result = atmospheric_river.atmospheric_river_mask(
+            ivt=ivt, ivt_laplacian=lap, dilation_radius=0, min_size_gridpoints=50
+        ).compute()
+        assert int(result.sum()) == 400
+        assert set(np.unique(result.values)) <= {0, 1}
+
+    def test_a_blob_exactly_at_the_size_threshold_is_kept(self):
+        # A 7x7 blob is 49 gridpoints; the filter keeps features of at least
+        # min_size_gridpoints, so 49 is the smallest surviving size.
+        ivt, lap = _ar_inputs(blobs=[(0, 0, slice(5, 12), slice(5, 12))])
+
+        result = atmospheric_river.atmospheric_river_mask(
+            ivt=ivt, ivt_laplacian=lap, dilation_radius=0, min_size_gridpoints=49
+        )
+
+        assert int(result.sum()) == 49
+
+    def test_a_blob_one_gridpoint_under_the_threshold_is_dropped(self):
+        ivt, lap = _ar_inputs(blobs=[(0, 0, slice(5, 12), slice(5, 12))])
+
+        result = atmospheric_river.atmospheric_river_mask(
+            ivt=ivt, ivt_laplacian=lap, dilation_radius=0, min_size_gridpoints=50
+        )
+
+        assert int(result.sum()) == 0
+
+    def test_blob_below_the_size_threshold_is_dropped(self):
+        ivt, lap = _ar_inputs(blobs=[(0, 0, slice(5, 8), slice(5, 8))])
+        result = atmospheric_river.atmospheric_river_mask(
+            ivt=ivt, ivt_laplacian=lap, dilation_radius=0, min_size_gridpoints=50
+        ).compute()
+        assert int(result.sum()) == 0
+
+    def test_tropical_feature_is_dropped_on_mean_latitude(self):
+        """A large feature centered below 15 degrees is not an AR."""
+        lat = np.linspace(0.0, 39.0, 40)
+        lon = np.linspace(-160.0, -121.0, 40)
+        values = np.zeros((1, 40, 40))
+        values[0, 0:14, 5:35] = 1.0  # latitudes 0 to ~13 degrees
+        ivt = xr.DataArray(
+            values * 800.0,
+            dims=["valid_time", "latitude", "longitude"],
+            coords={
+                "valid_time": pd.date_range("2023-01-01", periods=1),
+                "latitude": lat,
+                "longitude": lon,
+            },
+        )
+        lap = ivt / 160.0
+
+        result = atmospheric_river.atmospheric_river_mask(
+            ivt=ivt, ivt_laplacian=lap, dilation_radius=0, min_size_gridpoints=50
+        )
+        assert int(np.asarray(result).sum()) == 0
+
+    def test_chunked_and_unchunked_inputs_agree(self):
+        blobs = [(0, 0, slice(5, 25), slice(5, 25)), (2, 0, slice(8, 20), slice(8, 20))]
+        chunked = atmospheric_river.atmospheric_river_mask(
+            ivt=_ar_inputs(blobs=blobs)[0],
+            ivt_laplacian=_ar_inputs(blobs=blobs)[1],
+            min_size_gridpoints=50,
+        )
+        unchunked = atmospheric_river.atmospheric_river_mask(
+            ivt=_ar_inputs(blobs=blobs, chunk=False)[0],
+            ivt_laplacian=_ar_inputs(blobs=blobs, chunk=False)[1],
+            min_size_gridpoints=50,
+        )
+        np.testing.assert_array_equal(np.asarray(chunked), np.asarray(unchunked))
+
+
+class TestAtmosphericRiverPipelineOutput:
+    """The derived-variable path and the module path must agree.
+
+    Both entry points run the same pipeline, so these pin that they keep
+    producing identical output.
+    """
+
+    @staticmethod
+    def _dataset():
+        rng = np.random.default_rng(11)
+        valid_time = pd.date_range("2021-01-01", periods=3, freq="6h")
+        level = np.array([1000, 850, 700, 500, 300, 200])
+        lat = np.linspace(30.0, 34.75, 20)
+        lon = np.linspace(-130.0, -125.25, 20)
+        shape = (len(valid_time), len(level), len(lat), len(lon))
+        dims = ["valid_time", "level", "latitude", "longitude"]
+        return xr.Dataset(
+            {
+                "eastward_wind": (dims, rng.uniform(-20, 40, shape)),
+                "northward_wind": (dims, rng.uniform(-20, 40, shape)),
+                "specific_humidity": (dims, rng.uniform(1e-4, 2e-2, shape)),
+            },
+            coords={
+                "valid_time": valid_time,
+                "level": level,
+                "latitude": lat,
+                "longitude": lon,
+            },
+        )
+
+    def test_the_derived_variable_matches_the_module_pipeline(self):
+        from extremeweatherbench import derived
+
+        data = self._dataset()
+        variable = derived.AtmosphericRiverVariables()
+        subset = derived._subset_to_top_pressure_level(data, 300)
+
+        from_derived = variable.derive_variable(data).compute()
+        from_module = (
+            atmospheric_river.build_atmospheric_river_mask_and_land_intersection(
+                subset
+            ).compute()
+        )
+
+        assert set(from_derived.data_vars) == set(from_module.data_vars)
+        for name in from_module.data_vars:
+            np.testing.assert_allclose(
+                from_derived[name].values, from_module[name].values
+            )
+
+    def test_the_pipeline_output_is_pinned(self):
+        data = self._dataset()
+        result = atmospheric_river.build_atmospheric_river_mask_and_land_intersection(
+            data
+        ).compute()
+
+        # One space-time feature spans the box; the box is open Pacific, so
+        # nothing intersects land.
+        assert np.array_equal(
+            np.unique(result["atmospheric_river_mask"].values), [0, 1]
+        )
+        assert int(result["atmospheric_river_mask"].sum()) == 1116
+        np.testing.assert_allclose(
+            float(result["integrated_vapor_transport"].max()), 4174.306510274923
+        )
+        assert float(np.nansum(result["atmospheric_river_land_intersection"])) == 0.0
+
+    def test_the_land_intersection_lights_up_over_land(self):
+        data = self._dataset()
+        over_land = data.assign_coords(
+            latitude=data["latitude"].values + 6.0,
+            longitude=data["longitude"].values + 30.0,
+        )
+
+        result = atmospheric_river.build_atmospheric_river_mask_and_land_intersection(
+            over_land
+        ).compute()
+
+        assert int(result["atmospheric_river_mask"].sum()) == 1116
+        assert float(np.nansum(result["atmospheric_river_land_intersection"])) == 1116.0

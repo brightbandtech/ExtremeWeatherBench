@@ -2,6 +2,7 @@
 
 from unittest import mock
 
+import dask
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -9,7 +10,7 @@ import pytest
 import sparse
 import xarray as xr
 
-from extremeweatherbench import inputs
+from extremeweatherbench import inputs, utils
 
 
 class TestInputBase:
@@ -2588,3 +2589,215 @@ class TestCiraModelNames:
     def test_cira_model_names_no_duplicates(self):
         """Test that CIRA_MODEL_NAMES has no duplicate entries."""
         assert len(inputs.CIRA_MODEL_NAMES) == len(set(inputs.CIRA_MODEL_NAMES))
+
+
+def _unchunked_target(n_time=40, n_lat=64, n_lon=64):
+    """Numpy-backed target dataset, as an unchunked zarr source produces."""
+    rng = np.random.default_rng(5)
+    return xr.Dataset(
+        {
+            "surface_air_temperature": (
+                ["valid_time", "latitude", "longitude"],
+                rng.uniform(280.0, 310.0, (n_time, n_lat, n_lon)),
+            )
+        },
+        coords={
+            "valid_time": pd.date_range("2021-06-20", periods=n_time, freq="6h"),
+            "latitude": np.linspace(30.0, 60.0, n_lat),
+            "longitude": np.linspace(-130.0, -100.0, n_lon),
+        },
+    )
+
+
+class _PassThroughCase:
+    """Case metadata whose mask is the identity, to isolate the chunking."""
+
+    def __init__(self, data):
+        self.start_date = pd.Timestamp("2021-06-20")
+        self.end_date = pd.Timestamp("2021-06-29")
+        self.location = self
+
+    def mask(self, data, drop=False):
+        return data
+
+
+class TestZarrTargetSubsetterChunking:
+    """An unchunked source must not collapse into a single chunk.
+
+    ``chunk()`` with no arguments puts the whole array in one chunk, so every
+    later step over that target runs single-threaded and has to hold the
+    entire case window in memory at once.
+    """
+
+    def test_unchunked_source_is_split_along_time(self):
+        from extremeweatherbench import inputs
+
+        data = _unchunked_target()
+        with dask.config.set({"array.chunk-size": "256kiB"}):
+            result = inputs.zarr_target_subsetter(data, _PassThroughCase(data))
+        time_chunks = result.chunks["valid_time"]
+        assert len(time_chunks) > 1, (
+            f"expected the case window to be split along valid_time, got a "
+            f"single chunk of {time_chunks}"
+        )
+
+    def test_space_and_level_stay_whole(self):
+        """Vertical integration requires whole columns, so level is not split."""
+        from extremeweatherbench import inputs
+
+        data = _unchunked_target()
+        data = data.expand_dims(level=[1000.0, 850.0, 500.0])
+        with dask.config.set({"array.chunk-size": "256kiB"}):
+            result = inputs.zarr_target_subsetter(data, _PassThroughCase(data))
+        assert len(result.chunks["level"]) == 1
+        assert len(result.chunks["latitude"]) == 1
+        assert len(result.chunks["longitude"]) == 1
+
+    def test_already_chunked_source_is_left_alone(self):
+        from extremeweatherbench import inputs
+
+        data = _unchunked_target().chunk({"valid_time": 7})
+        case = _PassThroughCase(data)
+        result = inputs.zarr_target_subsetter(data, case)
+        expected = data.sel(valid_time=slice(case.start_date, case.end_date))
+        assert result.chunks["valid_time"] == expected.chunks["valid_time"]
+
+
+class TestZarrTargetSubsetterOutput:
+    """Pins the subset values, which chunking must not change."""
+
+    def test_values_match_the_unchunked_subset(self):
+        from extremeweatherbench import inputs
+
+        data = _unchunked_target()
+        case = _PassThroughCase(data)
+        with dask.config.set({"array.chunk-size": "256kiB"}):
+            result = inputs.zarr_target_subsetter(data, case)
+        expected = data.sel(valid_time=slice(case.start_date, case.end_date))
+        xr.testing.assert_identical(result.compute(), expected)
+
+
+class TestAlignmentOutput:
+    """Pins the dims and values that forecast/target alignment returns."""
+
+    @staticmethod
+    def _pair():
+        coords = {
+            "valid_time": pd.date_range("2021-07-01", periods=4, freq="6h"),
+            "latitude": np.linspace(30.0, 33.0, 4),
+            "longitude": np.linspace(-110.0, -107.0, 4),
+        }
+        dims = ["valid_time", "latitude", "longitude"]
+        values = np.arange(4.0 * 4 * 4).reshape(4, 4, 4)
+        target = xr.Dataset({"t": (dims, values)}, coords=coords)
+        forecast = xr.Dataset({"t": (dims, values + 1)}, coords=coords)
+        return forecast, target
+
+    def test_a_length_one_dimension_is_not_squeezed_away(self):
+        from extremeweatherbench import inputs
+
+        forecast, target = self._pair()
+        forecast = forecast.isel(valid_time=slice(0, 1))
+        target = target.isel(valid_time=slice(0, 1))
+
+        aligned_forecast, aligned_target = inputs.align_forecast_to_target(
+            forecast, target
+        )
+
+        assert aligned_forecast.sizes["valid_time"] == 1
+        assert aligned_target.sizes["valid_time"] == 1
+
+    def test_aligned_values_are_unchanged(self):
+        from extremeweatherbench import inputs
+
+        forecast, target = self._pair()
+        aligned_forecast, aligned_target = inputs.align_forecast_to_target(
+            forecast, target
+        )
+
+        np.testing.assert_allclose(aligned_target["t"].values, target["t"].values)
+        np.testing.assert_allclose(aligned_forecast["t"].values, forecast["t"].values)
+
+
+class TestValidTimeMaskConstruction:
+    """Pins which init_time/lead_time pairs count as valid."""
+
+    @staticmethod
+    def _reference(unique_init_indices, indices, n_init, n_lead):
+        mask = np.zeros((n_init, n_lead), dtype=bool)
+        for i, j in zip(indices[0], indices[1]):
+            init_pos = np.where(unique_init_indices == i)[0]
+            if len(init_pos) > 0:
+                mask[init_pos[0], j] = True
+        return mask
+
+    def _case_dataset(self):
+        n_init, n_lead = 5, 8
+        lead = pd.to_timedelta(np.arange(0, n_lead * 6, 6), unit="h")
+        return xr.Dataset(
+            {
+                "t": (
+                    ["init_time", "lead_time", "latitude", "longitude"],
+                    np.arange(float(n_init * n_lead * 2 * 2)).reshape(
+                        n_init, n_lead, 2, 2
+                    ),
+                )
+            },
+            coords={
+                "init_time": pd.date_range("2021-06-01", periods=n_init, freq="D"),
+                "lead_time": lead,
+                "latitude": [30.0, 31.0],
+                "longitude": [-100.0, -99.0],
+            },
+        )
+
+    def test_the_mask_matches_the_loop_on_real_case_indices(self):
+        from extremeweatherbench import inputs
+
+        data = self._case_dataset()
+        indices = utils.derive_indices_from_init_time_and_lead_time(
+            data, pd.Timestamp("2021-06-02"), pd.Timestamp("2021-06-04")
+        )
+        unique_init_indices = np.unique(indices[0])
+        n_lead = data.sizes["lead_time"]
+        expected = self._reference(
+            unique_init_indices, indices, len(unique_init_indices), n_lead
+        )
+
+        result = inputs._valid_combinations_mask(unique_init_indices, indices, n_lead)
+
+        assert expected.any(), "fixture must exercise a non-trivial mask"
+        np.testing.assert_array_equal(result, expected)
+
+    @pytest.mark.parametrize(
+        "init_positions,lead_positions",
+        [
+            ([0], [0]),
+            ([0, 0, 3], [1, 2, 0]),
+            ([2, 5, 5, 9], [0, 3, 4, 7]),
+        ],
+    )
+    def test_the_mask_matches_the_loop_on_synthetic_indices(
+        self, init_positions, lead_positions
+    ):
+        from extremeweatherbench import inputs
+
+        indices = (np.array(init_positions), np.array(lead_positions))
+        unique_init_indices = np.unique(indices[0])
+        n_lead = int(max(lead_positions)) + 1
+        expected = self._reference(
+            unique_init_indices, indices, len(unique_init_indices), n_lead
+        )
+
+        result = inputs._valid_combinations_mask(unique_init_indices, indices, n_lead)
+
+        np.testing.assert_array_equal(result, expected)
+
+    def test_an_empty_selection_gives_an_all_false_mask(self):
+        from extremeweatherbench import inputs
+
+        indices = (np.array([], dtype=int), np.array([], dtype=int))
+
+        result = inputs._valid_combinations_mask(np.array([], dtype=int), indices, 4)
+
+        assert result.shape == (0, 4)
