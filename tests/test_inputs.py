@@ -11,6 +11,9 @@ import sparse
 import xarray as xr
 
 from extremeweatherbench import inputs, utils
+from tests.conftest import (
+    make_unchunked_target_dataset,
+)
 
 
 class TestInputBase:
@@ -2591,24 +2594,6 @@ class TestCiraModelNames:
         assert len(inputs.CIRA_MODEL_NAMES) == len(set(inputs.CIRA_MODEL_NAMES))
 
 
-def _unchunked_target(n_time=40, n_lat=64, n_lon=64):
-    """Numpy-backed target dataset, as an unchunked zarr source produces."""
-    rng = np.random.default_rng(5)
-    return xr.Dataset(
-        {
-            "surface_air_temperature": (
-                ["valid_time", "latitude", "longitude"],
-                rng.uniform(280.0, 310.0, (n_time, n_lat, n_lon)),
-            )
-        },
-        coords={
-            "valid_time": pd.date_range("2021-06-20", periods=n_time, freq="6h"),
-            "latitude": np.linspace(30.0, 60.0, n_lat),
-            "longitude": np.linspace(-130.0, -100.0, n_lon),
-        },
-    )
-
-
 class _PassThroughCase:
     """Case metadata whose mask is the identity, to isolate the chunking."""
 
@@ -2632,7 +2617,7 @@ class TestZarrTargetSubsetterChunking:
     def test_unchunked_source_is_split_along_time(self):
         from extremeweatherbench import inputs
 
-        data = _unchunked_target()
+        data = make_unchunked_target_dataset()
         with dask.config.set({"array.chunk-size": "256kiB"}):
             result = inputs.zarr_target_subsetter(data, _PassThroughCase(data))
         time_chunks = result.chunks["valid_time"]
@@ -2645,7 +2630,7 @@ class TestZarrTargetSubsetterChunking:
         """Vertical integration requires whole columns, so level is not split."""
         from extremeweatherbench import inputs
 
-        data = _unchunked_target()
+        data = make_unchunked_target_dataset()
         data = data.expand_dims(level=[1000.0, 850.0, 500.0])
         with dask.config.set({"array.chunk-size": "256kiB"}):
             result = inputs.zarr_target_subsetter(data, _PassThroughCase(data))
@@ -2656,7 +2641,7 @@ class TestZarrTargetSubsetterChunking:
     def test_already_chunked_source_is_left_alone(self):
         from extremeweatherbench import inputs
 
-        data = _unchunked_target().chunk({"valid_time": 7})
+        data = make_unchunked_target_dataset().chunk({"valid_time": 7})
         case = _PassThroughCase(data)
         result = inputs.zarr_target_subsetter(data, case)
         expected = data.sel(valid_time=slice(case.start_date, case.end_date))
@@ -2669,7 +2654,7 @@ class TestZarrTargetSubsetterOutput:
     def test_values_match_the_unchunked_subset(self):
         from extremeweatherbench import inputs
 
-        data = _unchunked_target()
+        data = make_unchunked_target_dataset()
         case = _PassThroughCase(data)
         with dask.config.set({"array.chunk-size": "256kiB"}):
             result = inputs.zarr_target_subsetter(data, case)

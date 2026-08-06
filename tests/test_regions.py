@@ -11,6 +11,10 @@ import shapely
 import xarray as xr
 
 from extremeweatherbench import regions, utils
+from tests.conftest import (
+    make_chunked_global_grid_dataset,
+    make_coarse_global_grid_dataset,
+)
 
 
 class TestRegionClasses:
@@ -2055,34 +2059,6 @@ def shapefile_region(tmp_path):
     return regions.ShapefileRegion(path)
 
 
-def _global_grid_dataset():
-    """Coarse global grid for region masking."""
-    return xr.Dataset(
-        {"t": (["latitude", "longitude"], np.zeros((73, 144)))},
-        coords={
-            "latitude": np.linspace(-90, 90, 73),
-            "longitude": np.linspace(-180, 177.5, 144),
-        },
-    )
-
-
-def _chunked_global_grid(n_time=8, n_lat=181, n_lon=360):
-    """Chunked global grid for region subsetting."""
-    return xr.Dataset(
-        {
-            "t": (
-                ["valid_time", "latitude", "longitude"],
-                np.zeros((n_time, n_lat, n_lon), dtype="float32"),
-            )
-        },
-        coords={
-            "valid_time": pd.date_range("2021-06-01", periods=n_time, freq="6h"),
-            "latitude": np.linspace(-90, 90, n_lat),
-            "longitude": np.linspace(-180, 180, n_lon, endpoint=False),
-        },
-    ).chunk({"valid_time": 2})
-
-
 def _fancy_index_subset(ds, region):
     """The where(drop=True) plus sel formulation this phase replaces."""
     lon_min, lat_min, lon_max, lat_max = region.get_adjusted_bounds(ds)
@@ -2115,14 +2091,14 @@ class TestBboxSubset:
         )
 
     def test_subset_values_match_fancy_indexing(self):
-        ds = _chunked_global_grid()
+        ds = make_chunked_global_grid_dataset()
         region = self._box()
         xr.testing.assert_identical(
             region.mask(ds).compute(), _fancy_index_subset(ds, region).compute()
         )
 
     def test_subset_is_narrowed_to_the_region(self):
-        ds = _chunked_global_grid()
+        ds = make_chunked_global_grid_dataset()
         masked = self._box().mask(ds)
 
         assert masked.longitude.values.min() >= -130.0
@@ -2133,7 +2109,7 @@ class TestBboxSubset:
 
     @pytest.mark.parametrize("descending", [False, True])
     def test_descending_latitude_gives_the_same_rows(self, descending):
-        ds = _chunked_global_grid()
+        ds = make_chunked_global_grid_dataset()
         if descending:
             ds = ds.isel(latitude=slice(None, None, -1))
         region = self._box()
@@ -2145,7 +2121,7 @@ class TestBboxSubset:
     def test_an_antimeridian_region_keeps_both_ends(self):
         from extremeweatherbench import regions
 
-        ds = _chunked_global_grid()
+        ds = make_chunked_global_grid_dataset()
         region = regions.BoundingBoxRegion(
             latitude_min=20.0,
             latitude_max=50.0,
@@ -2163,7 +2139,7 @@ class TestBboxSubset:
     def test_a_region_outside_the_grid_gives_an_empty_subset(self):
         from extremeweatherbench import regions
 
-        ds = _chunked_global_grid()
+        ds = make_chunked_global_grid_dataset()
         region = regions.BoundingBoxRegion(
             latitude_min=20.0,
             latitude_max=50.0,
@@ -2185,7 +2161,7 @@ class TestShapefileReading:
         assert len(first) == len(second)
 
     def test_mask_result_is_unchanged_by_caching(self, shapefile_region):
-        ds = _global_grid_dataset()
+        ds = make_coarse_global_grid_dataset()
         first = shapefile_region.mask(ds)
         second = shapefile_region.mask(ds)
         xr.testing.assert_identical(first, second)

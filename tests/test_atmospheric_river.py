@@ -7,7 +7,10 @@ import xarray as xr
 
 from extremeweatherbench import calc
 from extremeweatherbench.events import atmospheric_river
-from tests.conftest import assert_lazy
+from tests.conftest import (
+    assert_lazy,
+    make_ar_input_dataset,
+)
 
 # Set random seed for reproducible tests
 rng = np.random.default_rng(seed=42)
@@ -1012,59 +1015,6 @@ class TestBuildMaskAndLandIntersection:
         assert set(ar_mask.values.flatten()).issubset({0, 1})
 
 
-def _ar_inputs(
-    time_dim="valid_time",
-    n_time=3,
-    n_lat=40,
-    n_lon=40,
-    extra_dim=None,
-    n_extra=1,
-    blobs=(),
-    chunk=True,
-):
-    """IVT and Laplacian fields with rectangular blobs above both thresholds.
-
-    Each blob is (time_index, extra_index, lat_slice, lon_slice). Values are
-    set so the AR criteria are met exactly inside the blob and nowhere else,
-    which makes the resulting feature sizes predictable.
-    """
-    lat = np.linspace(20.0, 59.0, n_lat)
-    lon = np.linspace(-160.0, -121.0, n_lon)
-
-    dims = [time_dim, "latitude", "longitude"]
-    shape = [n_time, n_lat, n_lon]
-    coords = {
-        time_dim: (
-            pd.date_range("2023-01-01", periods=n_time, freq="6h")
-            if time_dim == "valid_time"
-            else pd.to_timedelta(np.arange(n_time) * 6, unit="h")
-        ),
-        "latitude": lat,
-        "longitude": lon,
-    }
-    if extra_dim is not None:
-        dims.insert(0, extra_dim)
-        shape.insert(0, n_extra)
-        coords[extra_dim] = pd.date_range("2023-01-01", periods=n_extra, freq="D")
-
-    ivt_values = np.zeros(shape)
-    lap_values = np.zeros(shape)
-    for blob in blobs:
-        t_idx, extra_idx, lat_slice, lon_slice = blob
-        index: tuple = (t_idx, lat_slice, lon_slice)
-        if extra_dim is not None:
-            index = (extra_idx,) + index
-        ivt_values[index] = 800.0
-        lap_values[index] = 5.0
-
-    ivt = xr.DataArray(ivt_values, dims=dims, coords=coords)
-    lap = xr.DataArray(lap_values, dims=dims, coords=coords)
-    if chunk:
-        chunking = {extra_dim: 1} if extra_dim is not None else {time_dim: -1}
-        ivt, lap = ivt.chunk(chunking), lap.chunk(chunking)
-    return ivt, lap
-
-
 class TestAtmosphericRiverLabelConnectivity:
     """Features connect along exactly one time-like axis.
 
@@ -1077,7 +1027,7 @@ class TestAtmosphericRiverLabelConnectivity:
 
     def test_features_connect_across_valid_time_in_an_analysis(self):
         """Two 36-cell blobs at consecutive valid times form one 72-cell feature."""
-        ivt, lap = _ar_inputs(
+        ivt, lap = make_ar_input_dataset(
             time_dim="valid_time",
             n_time=2,
             blobs=[
@@ -1101,7 +1051,7 @@ class TestAtmosphericRiverLabelConnectivity:
         Merging them across init_time would produce 72 cells and wrongly pass
         a 50-cell size filter.
         """
-        ivt, lap = _ar_inputs(
+        ivt, lap = make_ar_input_dataset(
             time_dim="lead_time",
             n_time=1,
             extra_dim="init_time",
@@ -1122,7 +1072,7 @@ class TestAtmosphericRiverLabelConnectivity:
         )
 
     def test_features_connect_across_lead_time_within_one_initialization(self):
-        ivt, lap = _ar_inputs(
+        ivt, lap = make_ar_input_dataset(
             time_dim="lead_time",
             n_time=2,
             extra_dim="init_time",
@@ -1146,7 +1096,7 @@ class TestAtmosphericRiverMaskLaziness:
     """The AR mask must stay in the dask graph instead of materializing."""
 
     def test_mask_from_dask_inputs_is_still_lazy(self):
-        ivt, lap = _ar_inputs(blobs=[(0, 0, slice(10, 30), slice(10, 30))])
+        ivt, lap = make_ar_input_dataset(blobs=[(0, 0, slice(10, 30), slice(10, 30))])
 
         result = atmospheric_river.atmospheric_river_mask(
             ivt=ivt, ivt_laplacian=lap, min_size_gridpoints=50
@@ -1163,7 +1113,7 @@ class TestAtmosphericRiverMaskOutput:
     """Pins how the threshold, size and latitude filters shape the mask."""
 
     def test_blob_above_all_criteria_is_retained(self):
-        ivt, lap = _ar_inputs(blobs=[(0, 0, slice(5, 25), slice(5, 25))])
+        ivt, lap = make_ar_input_dataset(blobs=[(0, 0, slice(5, 25), slice(5, 25))])
         result = atmospheric_river.atmospheric_river_mask(
             ivt=ivt, ivt_laplacian=lap, dilation_radius=0, min_size_gridpoints=50
         ).compute()
@@ -1173,7 +1123,7 @@ class TestAtmosphericRiverMaskOutput:
     def test_a_blob_exactly_at_the_size_threshold_is_kept(self):
         # A 7x7 blob is 49 gridpoints; the filter keeps features of at least
         # min_size_gridpoints, so 49 is the smallest surviving size.
-        ivt, lap = _ar_inputs(blobs=[(0, 0, slice(5, 12), slice(5, 12))])
+        ivt, lap = make_ar_input_dataset(blobs=[(0, 0, slice(5, 12), slice(5, 12))])
 
         result = atmospheric_river.atmospheric_river_mask(
             ivt=ivt, ivt_laplacian=lap, dilation_radius=0, min_size_gridpoints=49
@@ -1182,7 +1132,7 @@ class TestAtmosphericRiverMaskOutput:
         assert int(result.sum()) == 49
 
     def test_a_blob_one_gridpoint_under_the_threshold_is_dropped(self):
-        ivt, lap = _ar_inputs(blobs=[(0, 0, slice(5, 12), slice(5, 12))])
+        ivt, lap = make_ar_input_dataset(blobs=[(0, 0, slice(5, 12), slice(5, 12))])
 
         result = atmospheric_river.atmospheric_river_mask(
             ivt=ivt, ivt_laplacian=lap, dilation_radius=0, min_size_gridpoints=50
@@ -1191,7 +1141,7 @@ class TestAtmosphericRiverMaskOutput:
         assert int(result.sum()) == 0
 
     def test_blob_below_the_size_threshold_is_dropped(self):
-        ivt, lap = _ar_inputs(blobs=[(0, 0, slice(5, 8), slice(5, 8))])
+        ivt, lap = make_ar_input_dataset(blobs=[(0, 0, slice(5, 8), slice(5, 8))])
         result = atmospheric_river.atmospheric_river_mask(
             ivt=ivt, ivt_laplacian=lap, dilation_radius=0, min_size_gridpoints=50
         ).compute()
@@ -1222,13 +1172,13 @@ class TestAtmosphericRiverMaskOutput:
     def test_chunked_and_unchunked_inputs_agree(self):
         blobs = [(0, 0, slice(5, 25), slice(5, 25)), (2, 0, slice(8, 20), slice(8, 20))]
         chunked = atmospheric_river.atmospheric_river_mask(
-            ivt=_ar_inputs(blobs=blobs)[0],
-            ivt_laplacian=_ar_inputs(blobs=blobs)[1],
+            ivt=make_ar_input_dataset(blobs=blobs)[0],
+            ivt_laplacian=make_ar_input_dataset(blobs=blobs)[1],
             min_size_gridpoints=50,
         )
         unchunked = atmospheric_river.atmospheric_river_mask(
-            ivt=_ar_inputs(blobs=blobs, chunk=False)[0],
-            ivt_laplacian=_ar_inputs(blobs=blobs, chunk=False)[1],
+            ivt=make_ar_input_dataset(blobs=blobs, chunk=False)[0],
+            ivt_laplacian=make_ar_input_dataset(blobs=blobs, chunk=False)[1],
             min_size_gridpoints=50,
         )
         np.testing.assert_array_equal(np.asarray(chunked), np.asarray(unchunked))
