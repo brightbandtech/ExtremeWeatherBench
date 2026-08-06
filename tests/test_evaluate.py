@@ -1185,6 +1185,16 @@ class TestComputeCaseOperator:
         mock_build_datasets.assert_called_once_with(sample_case_operator)
 
 
+def test_dask_array_query_optimization_defaults_to_opt_in():
+    """Test that registration defaults to off (opt-in), not opt-out.
+
+    Registering `dask-array` mid-process raises a hard TypeError if it's
+    combined with an already-existing chunked array (e.g. a climatology
+    DataArray built while constructing metrics), so this must stay opt-in.
+    """
+    assert evaluate.USE_DASK_ARRAY_QUERY_OPTIMIZATION is False
+
+
 class TestMaybeRegisterOptimizedDaskArrays:
     """Test the _maybe_register_optimized_dask_arrays helper."""
 

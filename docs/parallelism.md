@@ -40,18 +40,24 @@ outputs = ewb.run_evaluation(parallel_config=parallel_config)
 
 The _safest_ approach is to run EWB in serial, with `n_jobs` set to 1. `Dask` will still be invoked during each `CaseOperator` when the case executes and computes the directed acyclic graph, only one at a time. That said, for evaluations with more cases this approach would likely be too time-consuming. 
 
-## Query-Optimized Dask Arrays (On by Default)
+## Query-Optimized Dask Arrays (Opt-In)
 
-[`dask-array`](https://github.com/mrocklin/dask-array) ships as a default EWB dependency. EWB automatically registers it as xarray's chunk manager before each `CaseOperator` opens its target/forecast data, so its graphs get query-optimized (reordered/fused) instead of using the standard `dask.array` chunk manager. Nothing needs to be configured to get this; it happens transparently the first time a case operator runs in a given process.
-
-Because parallel runs execute each `CaseOperator` in its own worker process (e.g. a `loky` subprocess, or a `dask` distributed worker), registration happens independently in every worker the first time it computes a case, rather than once globally.
-
-This is opt-out, not opt-in. To disable it and use the standard `dask.array` chunk manager instead, set:
+[`dask-array`](https://github.com/mrocklin/dask-array) ships as a default EWB dependency, but registering it as xarray's chunk manager is **opt-in**, not automatic. To enable it:
 
 ```python
 from extremeweatherbench import evaluate
 
-evaluate.USE_DASK_ARRAY_QUERY_OPTIMIZATION = False
+evaluate.USE_DASK_ARRAY_QUERY_OPTIMIZATION = True
 ```
 
-**Known limitation:** registering a chunk manager only affects arrays created afterward. If you build your own `XarrayForecast` from a dataset you already opened and chunked yourself before handing it to EWB, that dataset keeps using whichever chunk manager was active when you opened it.
+When enabled, EWB registers `dask-array` before each `CaseOperator` opens its target/forecast data, so its graphs get query-optimized (reordered/fused) instead of using the standard `dask.array` chunk manager. Because parallel runs execute each `CaseOperator` in its own worker process (e.g. a `loky` subprocess, or a `dask` distributed worker), registration happens independently in every worker the first time it computes a case, rather than once globally.
+
+### Why this isn't on by default
+
+Chunk managers can't be mixed: xarray raises `TypeError: Mixing chunked array types is not supported` the moment an array created *before* registration is combined with one created *after* it, in the same process. This is not a rare edge case — it includes:
+
+- Threshold/weights `DataArray`s built while constructing metrics, e.g. `defaults.get_climatology()` inside `defaults.get_brightband_evaluation_objects()` (used in the example above). That climatology array is opened in the main process before any `CaseOperator` runs, so it predates registration and will crash if combined with post-registration forecast/target data.
+- Any dataset you build yourself and pass in via `XarrayForecast(ds=...)` before constructing `ExtremeWeatherBench`.
+- Region masks, land/ocean geometries, or any other chunked array your own code constructs ahead of time.
+
+Only enable `USE_DASK_ARRAY_QUERY_OPTIMIZATION` if you've verified nothing in your pipeline constructs a chunked array before `compute_case_operator` runs, or if the arrays involved are small enough to `.load()`/`.compute()` into plain NumPy first so there's nothing dask-backed left to mix.
