@@ -873,3 +873,32 @@ def make_unchunked_target_dataset(n_time=40, n_lat=64, n_lon=64):
             "longitude": np.linspace(-130.0, -100.0, n_lon),
         },
     )
+
+
+def make_cape_pressure_levels() -> np.ndarray:
+    """Pressure levels, in hPa, for the synthetic CAPE profiles."""
+    return np.array(
+        [
+            1000.0,
+            975,
+            950,
+            925,
+            900,
+            850,
+            800,
+            750,
+            700,
+            650,
+            600,
+            550,
+            500,
+            450,
+            400,
+            350,
+            300,
+            250,
+            200,
+            150,
+            100,
+        ]
+    )

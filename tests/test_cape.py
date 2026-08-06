@@ -16,6 +16,7 @@ from extremeweatherbench._cape import (
     compute_ml_cape_cin_batched,
     compute_ml_cape_cin_from_profile,
 )
+from tests.conftest import make_cape_pressure_levels
 
 
 @pytest.fixture(scope="module")
@@ -845,33 +846,6 @@ class TestLCLTemperatureInterpolation:
         )
 
 
-_CAPE_LEVELS = np.array(
-    [
-        1000.0,
-        975,
-        950,
-        925,
-        900,
-        850,
-        800,
-        750,
-        700,
-        650,
-        600,
-        550,
-        500,
-        450,
-        400,
-        350,
-        300,
-        250,
-        200,
-        150,
-        100,
-    ]
-)
-
-
 def _reference_moist_adiabat(p_target, p_lcl, t_lcl, steps):
     """Forward-Euler moist adiabat from the LCL, at arbitrary resolution.
 
@@ -914,7 +888,8 @@ class TestMoistAdiabatAscent:
     T_LCL = 295.0
 
     def _targets(self):
-        return _CAPE_LEVELS[_CAPE_LEVELS < self.P_LCL]
+        levels = make_cape_pressure_levels()
+        return levels[levels < self.P_LCL]
 
     def test_ascent_is_closer_to_a_high_resolution_reference(self):
         from extremeweatherbench import _cape
@@ -973,10 +948,11 @@ class TestCapePhysicalSoundness:
 
     def _profile(self):
         surface_t = 305.0
-        temperature = surface_t - np.linspace(0.0, 75.0, _CAPE_LEVELS.size)
-        dewpoint = temperature - np.linspace(3.0, 30.0, _CAPE_LEVELS.size)
-        geopotential = np.linspace(100.0, 160000.0, _CAPE_LEVELS.size)
-        return _CAPE_LEVELS.copy(), temperature, dewpoint, geopotential
+        levels = make_cape_pressure_levels()
+        temperature = surface_t - np.linspace(0.0, 75.0, levels.size)
+        dewpoint = temperature - np.linspace(3.0, 30.0, levels.size)
+        geopotential = np.linspace(100.0, 160000.0, levels.size)
+        return levels, temperature, dewpoint, geopotential
 
     def test_convective_profile_still_has_cape_and_no_cin(self):
         from extremeweatherbench._cape import compute_ml_cape_cin_from_profile
