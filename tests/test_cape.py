@@ -16,7 +16,7 @@ from extremeweatherbench._cape import (
     compute_ml_cape_cin_batched,
     compute_ml_cape_cin_from_profile,
 )
-from tests.conftest import make_cape_pressure_levels
+from tests.fixtures.profiles import make_cape_pressure_levels
 
 
 @pytest.fixture(scope="module")

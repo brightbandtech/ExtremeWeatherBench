@@ -10,10 +10,8 @@ import sparse
 import xarray as xr
 
 from extremeweatherbench import calc, metrics, utils
-from tests.conftest import (
-    assert_lazy,
-    make_pattern_stack_dataarray,
-)
+from tests.fixtures.forecasts import make_pattern_stack_dataarray
+from tests.fixtures.laziness import assert_lazy
 
 
 class TestConcreteMetric(metrics.BaseMetric):

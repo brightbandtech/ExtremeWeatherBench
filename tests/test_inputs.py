@@ -11,9 +11,7 @@ import sparse
 import xarray as xr
 
 from extremeweatherbench import inputs, utils
-from tests.conftest import (
-    make_unchunked_target_dataset,
-)
+from tests.fixtures.observations import make_unchunked_target_dataset
 
 
 class TestInputBase:

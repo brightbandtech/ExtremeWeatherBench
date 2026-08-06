@@ -11,7 +11,7 @@ import shapely
 import xarray as xr
 
 from extremeweatherbench import regions, utils
-from tests.conftest import (
+from tests.fixtures.grids import (
     make_chunked_global_grid_dataset,
     make_coarse_global_grid_dataset,
 )

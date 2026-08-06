@@ -18,8 +18,8 @@ import xarray as xr
 
 from extremeweatherbench import calc, derived
 from extremeweatherbench.events import tropical_cyclone
-from tests.conftest import (
-    make_global_grid_coords,
+from tests.fixtures.grids import make_global_grid_coords
+from tests.fixtures.tracks import (
     make_ibtracs_frame_for_dataset,
     make_single_init_tc_dataset,
     make_tc_track_frame,

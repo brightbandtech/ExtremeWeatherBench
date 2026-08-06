@@ -6,8 +6,8 @@ import pytest
 import xarray as xr
 
 from extremeweatherbench import derived
-from tests.conftest import (
-    make_pressure_level_dataset,
+from tests.fixtures.profiles import make_pressure_level_dataset
+from tests.fixtures.tracks import (
     make_tc_track_target_dataset,
     make_tc_tracker_forecast_dataset,
 )
