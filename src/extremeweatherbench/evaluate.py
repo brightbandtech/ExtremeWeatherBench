@@ -38,9 +38,10 @@ logger = logging.getLogger(__name__)
 # while constructing metrics) would use the standard `dask.array` chunk
 # manager, and xarray raises a hard TypeError ("Mixing chunked array types
 # is not supported") the moment such an array is combined with one created
-# after registration. EWB densifies its own such case (the climatology
+# after registration. EWB handles its own such case (the climatology
 # DataArray in `metrics.DurationMeanError`, e.g. via
-# `defaults.get_climatology()`) before combining it with anything, via
+# `defaults.get_climatology()`) by re-chunking it to whichever manager is
+# currently active before combining it with anything, via
 # `utils.interp_climatology_to_target()`. If you construct your own
 # chunked arrays (custom metric weights/thresholds, a pre-opened
 # `XarrayForecast(ds=...)`, etc.) before a case operator runs, set this to

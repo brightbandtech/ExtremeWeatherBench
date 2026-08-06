@@ -674,21 +674,14 @@ def interp_climatology_to_target(
     # `.interp`/`.interp_like` build new indexer arrays internally using
     # whatever chunk manager xarray currently has registered, then combine
     # them with `climatology`'s own array. If `climatology` was opened with
-    # a different chunk manager (e.g. a multi-year global store opened once
-    # up front, before a later per-case chunk-manager registration), xarray
-    # raises a hard TypeError. Climatology stores are typically global and
-    # too large to load in full, but a case's time window is tiny, so crop
-    # to it (with a small buffer for the interpolation) and load that
-    # narrow slice into memory first; a plain NumPy array has no chunk
-    # manager to conflict with.
-    if "valid_time" in climatology.dims and climatology.chunks is not None:
-        buffer = pd.Timedelta(days=2)
-        climatology = climatology.sel(
-            valid_time=slice(
-                target.valid_time.min().values - buffer,
-                target.valid_time.max().values + buffer,
-            )
-        ).load()
+    # a different chunk manager (e.g. a global store opened once up front,
+    # before a later per-case chunk-manager registration), xarray raises a
+    # hard TypeError. Re-chunking rewraps the array using the currently
+    # registered manager -- cheap (it's a graph-level operation, not a data
+    # one, even for a multi-GB global store) and fully lazy, unlike loading,
+    # which would force an eager, synchronous fetch on every call.
+    if climatology.chunks is not None:
+        climatology = climatology.chunk()
 
     # If the target is sparse or has less than 3 dimensions, interpolate the
     # climatology using stacked dim

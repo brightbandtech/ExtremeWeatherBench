@@ -1112,18 +1112,22 @@ class TestInterpClimatologyToTarget:
         # Should have exact values since points match
         np.testing.assert_array_almost_equal(result.values, climatology.values)
 
-    def test_crops_and_loads_chunked_climatology_before_interp(self):
-        """A chunked climatology with a `valid_time` dim is cropped to the
-        target's time window and loaded before interpolation.
+    def test_rechunks_climatology_to_current_manager_before_interp(self):
+        """A chunked climatology is rewrapped to the currently-registered
+        chunk manager before interpolation, lazily.
 
         Regression test for a real crash: if `climatology` was chunked with
         a different xarray chunk manager than whatever is currently
         registered (e.g. `dask-array`'s), `.interp_like()` builds new
         indexer arrays with the currently-registered manager and raises
         `TypeError: Mixing chunked array types is not supported` when
-        combining them with climatology's own array. Densifying a small,
-        time-cropped slice first avoids this without loading the (possibly
-        huge, global) full climatology into memory.
+        combining them with climatology's own array. Re-chunking to the
+        active manager avoids this while staying fully lazy -- it must not
+        force an eager `.compute()`/`.load()`, since that would turn what
+        used to be one fused, possibly-parallelized fetch into a separate,
+        blocking network round trip on every call (see PR #379 history: an
+        earlier fix that eagerly loaded a cropped slice measurably slowed
+        down real evaluation runs).
         """
         dask_array_xarray = pytest.importorskip("dask_array.xarray")
         from xarray.namedarray.parallelcompat import list_chunkmanagers
@@ -1158,10 +1162,12 @@ class TestInterpClimatologyToTarget:
                 },
             )
 
-            # Should not raise, despite the chunk manager mismatch.
+            # Should not raise, despite the chunk manager mismatch, and
+            # should stay lazy (chunked), not eagerly computed.
             result = utils.interp_climatology_to_target(target, climatology)
 
-            assert isinstance(result.data, np.ndarray)
+            assert result.chunks is not None
+            assert type(result.data).__module__ == "dask_array._collection"
             np.testing.assert_array_equal(result.latitude.values, [5.0, 15.0])
             np.testing.assert_array_equal(result.longitude.values, [105.0, 115.0])
         finally:
