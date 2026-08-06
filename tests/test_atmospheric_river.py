@@ -7,10 +7,8 @@ import xarray as xr
 
 from extremeweatherbench import calc
 from extremeweatherbench.events import atmospheric_river
-from tests.conftest import (
-    assert_lazy,
-    make_ar_input_dataset,
-)
+from tests.fixtures.events import make_ar_input_dataset
+from tests.fixtures.laziness import assert_lazy
 
 # Set random seed for reproducible tests
 rng = np.random.default_rng(seed=42)

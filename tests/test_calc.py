@@ -8,12 +8,9 @@ from numpy import testing
 from scipy import ndimage
 
 from extremeweatherbench import calc, metrics, utils
-from tests.conftest import (
-    assert_lazy,
-    make_gulf_coast_track,
-    make_pressure_column_dataarray,
-    make_track_dataarray,
-)
+from tests.fixtures.laziness import assert_lazy
+from tests.fixtures.profiles import make_pressure_column_dataarray
+from tests.fixtures.tracks import make_gulf_coast_track, make_track_dataarray
 
 
 class TestBasicCalculations:

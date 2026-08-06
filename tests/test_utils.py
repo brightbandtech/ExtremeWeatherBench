@@ -10,14 +10,14 @@ import sparse
 import xarray as xr
 
 from extremeweatherbench import utils
-from tests.conftest import (
-    assert_lazy,
+from tests.fixtures.forecasts import make_init_lead_forecast_dataset
+from tests.fixtures.grids import (
     make_daily_series_dataarray,
-    make_init_lead_forecast_dataset,
-    make_landfall_dataarray,
     make_sparse_grid_dataarray,
     make_spatial_dataarray,
 )
+from tests.fixtures.laziness import assert_lazy
+from tests.fixtures.tracks import make_landfall_dataarray
 
 
 @pytest.mark.parametrize(
