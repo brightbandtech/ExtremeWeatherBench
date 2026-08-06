@@ -483,3 +483,393 @@ def sample_sparse_target_dataset():
             "target": make_sample_sparse_target_dataarray(),
         },
     )
+
+
+# Dataset builders shared across the test modules.
+def make_ar_input_dataset(
+    time_dim="valid_time",
+    n_time=3,
+    n_lat=40,
+    n_lon=40,
+    extra_dim=None,
+    n_extra=1,
+    blobs=(),
+    chunk=True,
+):
+    """IVT and Laplacian fields with rectangular blobs above both thresholds.
+
+    Each blob is (time_index, extra_index, lat_slice, lon_slice). Values are
+    set so the AR criteria are met exactly inside the blob and nowhere else,
+    which makes the resulting feature sizes predictable.
+    """
+    lat = np.linspace(20.0, 59.0, n_lat)
+    lon = np.linspace(-160.0, -121.0, n_lon)
+
+    dims = [time_dim, "latitude", "longitude"]
+    shape = [n_time, n_lat, n_lon]
+    coords = {
+        time_dim: (
+            pd.date_range("2023-01-01", periods=n_time, freq="6h")
+            if time_dim == "valid_time"
+            else pd.to_timedelta(np.arange(n_time) * 6, unit="h")
+        ),
+        "latitude": lat,
+        "longitude": lon,
+    }
+    if extra_dim is not None:
+        dims.insert(0, extra_dim)
+        shape.insert(0, n_extra)
+        coords[extra_dim] = pd.date_range("2023-01-01", periods=n_extra, freq="D")
+
+    ivt_values = np.zeros(shape)
+    lap_values = np.zeros(shape)
+    for blob in blobs:
+        t_idx, extra_idx, lat_slice, lon_slice = blob
+        index: tuple = (t_idx, lat_slice, lon_slice)
+        if extra_dim is not None:
+            index = (extra_idx,) + index
+        ivt_values[index] = 800.0
+        lap_values[index] = 5.0
+
+    ivt = xr.DataArray(ivt_values, dims=dims, coords=coords)
+    lap = xr.DataArray(lap_values, dims=dims, coords=coords)
+    if chunk:
+        chunking = {extra_dim: 1} if extra_dim is not None else {time_dim: -1}
+        ivt, lap = ivt.chunk(chunking), lap.chunk(chunking)
+    return ivt, lap
+
+
+def make_chunked_global_grid_dataset(n_time=8, n_lat=181, n_lon=360):
+    """Chunked global grid for region subsetting."""
+    return xr.Dataset(
+        {
+            "t": (
+                ["valid_time", "latitude", "longitude"],
+                np.zeros((n_time, n_lat, n_lon), dtype="float32"),
+            )
+        },
+        coords={
+            "valid_time": pd.date_range("2021-06-01", periods=n_time, freq="6h"),
+            "latitude": np.linspace(-90, 90, n_lat),
+            "longitude": np.linspace(-180, 180, n_lon, endpoint=False),
+        },
+    ).chunk({"valid_time": 2})
+
+
+def make_coarse_global_grid_dataset():
+    """Coarse global grid for region masking."""
+    return xr.Dataset(
+        {"t": (["latitude", "longitude"], np.zeros((73, 144)))},
+        coords={
+            "latitude": np.linspace(-90, 90, 73),
+            "longitude": np.linspace(-180, 177.5, 144),
+        },
+    )
+
+
+def make_daily_series_dataarray(n_days, timesteps_per_day=4, chunk=True, drop_last=0):
+    """Hourly-ish series over whole days, optionally with a truncated last day."""
+    n_steps = n_days * timesteps_per_day - drop_last
+    freq = f"{24 // timesteps_per_day}h"
+    valid_time = pd.date_range("2021-06-01", periods=n_steps, freq=freq)
+    values = np.arange(float(n_steps))
+    da = xr.DataArray(values, dims=["valid_time"], coords={"valid_time": valid_time})
+    if chunk:
+        da = da.chunk({"valid_time": timesteps_per_day})
+    return da
+
+
+def make_global_grid_coords(n_lat=181, n_lon=360):
+    """Global-ish grid, so a local storm covers a small part of it."""
+    return (
+        np.linspace(-90.0, 90.0, n_lat),
+        np.linspace(0.0, 359.0, n_lon),
+    )
+
+
+def make_gulf_coast_track(n_points):
+    """Track running north out of the Gulf of Mexico onto Louisiana."""
+    lons = np.linspace(-91.5, -91.0, n_points)
+    lats = np.linspace(24.0, 32.0, n_points)
+    return lons, lats
+
+
+def make_ibtracs_frame_for_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """IBTrACS stub matching the storm centre in ``make_single_init_tc_dataset``."""
+    valid_times = ds.valid_time.values
+    return xr.Dataset(
+        {
+            "latitude": (["valid_time"], np.full(len(valid_times), 20.0)),
+            "longitude": (["valid_time"], np.full(len(valid_times), -70.0)),
+        },
+        coords={"valid_time": valid_times},
+    )
+
+
+def make_init_lead_forecast_dataset(n_init, n_lead, chunk=True, lead_unit=None):
+    """Forecast-shaped dataset with init_time and lead_time dimensions."""
+    lead = np.arange(0, n_lead * 6, 6)
+    if lead_unit is not None:
+        lead = pd.to_timedelta(lead, unit=lead_unit)
+    ds = xr.Dataset(
+        {
+            "t": (
+                ["init_time", "lead_time", "latitude"],
+                np.arange(float(n_init * n_lead * 4)).reshape(n_init, n_lead, 4),
+            )
+        },
+        coords={
+            "init_time": pd.date_range("2020-01-01", periods=n_init, freq="D"),
+            "lead_time": lead,
+            "latitude": np.linspace(0, 3, 4),
+        },
+    )
+    return ds.chunk({"init_time": 1}) if chunk else ds
+
+
+def make_landfall_dataarray(n_init=64, chunk=True, all_nan=False):
+    """Landfall-shaped DataArray indexed by init_time."""
+    values = np.full(n_init, np.nan) if all_nan else np.arange(float(n_init))
+    da = xr.DataArray(
+        values,
+        dims=["init_time"],
+        coords={"init_time": pd.date_range("2021-08-20", periods=n_init, freq="6h")},
+    )
+    return da.chunk({"init_time": 8}) if chunk else da
+
+
+def make_pattern_stack_dataarray(
+    n_lead=3, n_valid=4, n_lat=9, n_lon=11, chunk=False, seed=0
+):
+    """Stack of 2-D non-negative fields, the shape SpatialDisplacement sees."""
+    rng = np.random.default_rng(seed)
+    values = rng.random((n_lead, n_valid, n_lat, n_lon))
+    values[values < 0.4] = 0.0
+    da = xr.DataArray(
+        values,
+        dims=["lead_time", "valid_time", "latitude", "longitude"],
+        coords={
+            "lead_time": np.arange(0, n_lead * 6, 6),
+            "valid_time": pd.date_range("2021-02-01", periods=n_valid, freq="6h"),
+            "latitude": np.linspace(30.0, 46.0, n_lat),
+            "longitude": np.linspace(-130.0, -110.0, n_lon),
+        },
+    )
+    return da.chunk({"lead_time": 1, "valid_time": 2}) if chunk else da
+
+
+def make_pressure_column_dataarray(
+    n_time=4, n_lat=3, n_lon=3, levels=(1000.0, 850.0, 700.0, 500.0)
+):
+    """Array with a level dimension, as the vertical integrals expect."""
+    rng = np.random.default_rng(7)
+    shape = (n_time, len(levels), n_lat, n_lon)
+    return xr.DataArray(
+        rng.uniform(0.001, 0.02, shape),
+        dims=["valid_time", "level", "latitude", "longitude"],
+        coords={
+            "valid_time": pd.date_range("2023-01-01", periods=n_time, freq="6h"),
+            "level": np.array(levels),
+            "latitude": np.linspace(30.0, 40.0, n_lat),
+            "longitude": np.linspace(-120.0, -110.0, n_lon),
+        },
+    )
+
+
+def make_pressure_level_dataset(chunk=True):
+    """Pressure-level dataset shaped like the AR derived-variable input."""
+    levels = np.array([1000, 925, 850, 700, 600, 500, 400, 300, 250, 200, 150, 100])
+    rng = np.random.default_rng(0)
+    ds = xr.Dataset(
+        {
+            name: (
+                ["valid_time", "level", "latitude", "longitude"],
+                rng.random((6, levels.size, 12, 16), dtype="float32"),
+            )
+            for name in ("specific_humidity", "eastward_wind", "northward_wind")
+        },
+        coords={
+            "valid_time": pd.date_range("2021-01-01", periods=6, freq="6h"),
+            "level": levels,
+            "latitude": np.linspace(20.0, 60.0, 12),
+            "longitude": np.linspace(-160.0, -120.0, 16),
+        },
+    )
+    return ds.chunk({"valid_time": 2, "level": -1}) if chunk else ds
+
+
+def make_single_init_tc_dataset(n_lead: int = 12, n_wind_strong: int = 10):
+    """Build a minimal synthetic TC dataset with one clear init_time.
+
+    Grid: 1° resolution, 21×21 points (lat 10–30°, lon -80 to -60°).
+    Storm: SLP=98 000 Pa at centre (lat=20, lon=-70) every (lead, valid) pair
+    on the diagonal (same init_time T0).
+    Wind: 20 m/s at one gridpoint east of centre for the first
+    ``n_wind_strong`` diagonal pairs; 2 m/s everywhere else.
+    Contour validation is OFF so only the wind filter is exercised.
+
+    With a 1° grid ``_degrees_to_gridpoints(2.0, ...)`` = 2 gridpoints, so
+    the ±2-pt neighbourhood around the centre includes the +1-pt east cell.
+
+    Expected: n_wind_strong detections have neighbourhood wind ≥ 10 m/s.
+    """
+    lat = np.arange(10.0, 31.0, 1.0)  # 21 pts, 1 ° spacing
+    lon = np.arange(-80.0, -59.0, 1.0)  # 21 pts, 1 ° spacing
+    n_lat, n_lon = len(lat), len(lon)
+    c_lat, c_lon = 10, 10  # centre indices → lat=20°, lon=-70°
+
+    T0 = pd.Timestamp("2023-09-10")
+    lead_h = np.arange(n_lead) * 6  # hours
+    lead_td = (lead_h * np.timedelta64(1, "h")).astype("timedelta64[ns]")
+    valid_times = pd.date_range(T0, periods=n_lead, freq="6h")
+
+    # init_time[lt, vt] = valid_time[vt] - lead_time[lt]
+    init_2d = np.array(
+        [
+            [valid_times[vt].to_datetime64() - lead_td[lt] for vt in range(n_lead)]
+            for lt in range(n_lead)
+        ]
+    )
+
+    # SLP: 98 000 Pa at centre for every (lt, vt) pair; 102 000 elsewhere
+    slp = np.full((n_lead, n_lead, n_lat, n_lon), 102000.0)
+    for k in range(n_lead):
+        slp[k, k, c_lat, c_lon] = 98000.0
+
+    # Wind: 20 m/s east of centre for the first n_wind_strong diagonal pairs
+    wind = np.full((n_lead, n_lead, n_lat, n_lon), 2.0)
+    for k in range(n_wind_strong):
+        wind[k, k, c_lat, c_lon + 1] = 20.0
+
+    # Geopotential thickness: zeros (contour validation disabled)
+    dz = np.zeros((n_lead, n_lead, n_lat, n_lon))
+
+    ds = xr.Dataset(
+        {
+            "air_pressure_at_mean_sea_level": (
+                ["lead_time", "valid_time", "latitude", "longitude"],
+                slp,
+            ),
+            "surface_wind_speed": (
+                ["lead_time", "valid_time", "latitude", "longitude"],
+                wind,
+            ),
+            "geopotential_thickness": (
+                ["lead_time", "valid_time", "latitude", "longitude"],
+                dz,
+            ),
+        },
+        coords={
+            "lead_time": lead_td,
+            "valid_time": valid_times,
+            "latitude": lat,
+            "longitude": lon,
+            "init_time": (["lead_time", "valid_time"], init_2d),
+        },
+    )
+    return ds
+
+
+def make_sparse_grid_dataarray():
+    """DataArray backed by a sparse.COO array."""
+    data = sparse.COO(
+        coords=np.array([[0, 1, 2], [1, 2, 0]]),
+        data=np.array([1.0, 2.0, 3.0]),
+        shape=(4, 4),
+    )
+    return xr.DataArray(
+        data,
+        dims=["latitude", "longitude"],
+        coords={
+            "latitude": np.linspace(0.0, 3.0, 4),
+            "longitude": np.linspace(10.0, 13.0, 4),
+        },
+    )
+
+
+def make_spatial_dataarray(n_time=6, n_lat=8, n_lon=8, chunk=True):
+    """Small (valid_time, latitude, longitude) array for reduction tests."""
+    rng = np.random.default_rng(3)
+    da = xr.DataArray(
+        rng.uniform(280.0, 310.0, (n_time, n_lat, n_lon)),
+        dims=["valid_time", "latitude", "longitude"],
+        coords={
+            "valid_time": pd.date_range("2023-01-01", periods=n_time, freq="6h"),
+            "latitude": np.linspace(30.0, 30.0 + n_lat - 1, n_lat),
+            "longitude": np.linspace(-120.0, -120.0 + n_lon - 1, n_lon),
+        },
+    )
+    return da.chunk({"valid_time": 1}) if chunk else da
+
+
+def make_tc_track_frame(n_rows=4, latitude=15.0, longitude=140.0):
+    return pd.DataFrame(
+        {
+            "valid_time": pd.date_range("2021-08-01", periods=n_rows, freq="6h"),
+            "latitude": np.full(n_rows, latitude),
+            "longitude": np.full(n_rows, longitude),
+        }
+    )
+
+
+def make_tc_track_target_dataset(n_time=4):
+    """Observed-track dataset used to filter forecast candidates."""
+    return xr.Dataset(
+        {"intensity": ("valid_time", np.arange(float(n_time)))},
+        coords={
+            "valid_time": pd.date_range("2021-09-01", periods=n_time, freq="6h"),
+            "latitude": ("valid_time", np.linspace(15.0, 25.0, n_time)),
+            "longitude": ("valid_time", np.linspace(-75.0, -65.0, n_time)),
+        },
+    )
+
+
+def make_tc_tracker_forecast_dataset(n_time=4, seed=0):
+    """Minimal forecast fields the TC tracker asks for."""
+    rng = np.random.default_rng(seed)
+    dims = ["valid_time", "latitude", "longitude"]
+    shape = (n_time, 8, 10)
+    return xr.Dataset(
+        {
+            "air_pressure_at_mean_sea_level": (dims, rng.random(shape) + 1000.0),
+            "surface_wind_speed": (dims, rng.random(shape) * 30.0),
+        },
+        coords={
+            "valid_time": pd.date_range("2021-09-01", periods=n_time, freq="6h"),
+            "latitude": np.linspace(10.0, 30.0, 8),
+            "longitude": np.linspace(-80.0, -60.0, 10),
+        },
+    )
+
+
+def make_track_dataarray(lons, lats, chunk=False):
+    """Track-shaped DataArray with latitude/longitude along valid_time."""
+    valid_time = pd.date_range("2021-08-28", periods=len(lons), freq="6h")
+    da = xr.DataArray(
+        np.arange(float(len(lons))),
+        dims=["valid_time"],
+        coords={
+            "valid_time": valid_time,
+            "latitude": ("valid_time", np.asarray(lats, dtype=float)),
+            "longitude": ("valid_time", np.asarray(lons, dtype=float)),
+        },
+    )
+    return da.chunk({"valid_time": 4}) if chunk else da
+
+
+def make_unchunked_target_dataset(n_time=40, n_lat=64, n_lon=64):
+    """Numpy-backed target dataset, as an unchunked zarr source produces."""
+    rng = np.random.default_rng(5)
+    return xr.Dataset(
+        {
+            "surface_air_temperature": (
+                ["valid_time", "latitude", "longitude"],
+                rng.uniform(280.0, 310.0, (n_time, n_lat, n_lon)),
+            )
+        },
+        coords={
+            "valid_time": pd.date_range("2021-06-20", periods=n_time, freq="6h"),
+            "latitude": np.linspace(30.0, 60.0, n_lat),
+            "longitude": np.linspace(-130.0, -100.0, n_lon),
+        },
+    )

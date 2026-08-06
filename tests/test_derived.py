@@ -6,6 +6,11 @@ import pytest
 import xarray as xr
 
 from extremeweatherbench import derived
+from tests.conftest import (
+    make_pressure_level_dataset,
+    make_tc_track_target_dataset,
+    make_tc_tracker_forecast_dataset,
+)
 
 time_location_variables = ["valid_time", "latitude", "longitude"]
 time_level_location_variables = ["valid_time", "level", "latitude", "longitude"]
@@ -1030,58 +1035,6 @@ class TestOutputVariables:
         xr.testing.assert_allclose(result["magnitude"], expected_mag)
 
 
-def _level_dataset(chunk=True):
-    """Pressure-level dataset shaped like the AR derived-variable input."""
-    levels = np.array([1000, 925, 850, 700, 600, 500, 400, 300, 250, 200, 150, 100])
-    rng = np.random.default_rng(0)
-    ds = xr.Dataset(
-        {
-            name: (
-                ["valid_time", "level", "latitude", "longitude"],
-                rng.random((6, levels.size, 12, 16), dtype="float32"),
-            )
-            for name in ("specific_humidity", "eastward_wind", "northward_wind")
-        },
-        coords={
-            "valid_time": pd.date_range("2021-01-01", periods=6, freq="6h"),
-            "level": levels,
-            "latitude": np.linspace(20.0, 60.0, 12),
-            "longitude": np.linspace(-160.0, -120.0, 16),
-        },
-    )
-    return ds.chunk({"valid_time": 2, "level": -1}) if chunk else ds
-
-
-def _tc_forecast_dataset(n_time=4, seed=0):
-    """Minimal forecast fields the TC tracker asks for."""
-    rng = np.random.default_rng(seed)
-    dims = ["valid_time", "latitude", "longitude"]
-    shape = (n_time, 8, 10)
-    return xr.Dataset(
-        {
-            "air_pressure_at_mean_sea_level": (dims, rng.random(shape) + 1000.0),
-            "surface_wind_speed": (dims, rng.random(shape) * 30.0),
-        },
-        coords={
-            "valid_time": pd.date_range("2021-09-01", periods=n_time, freq="6h"),
-            "latitude": np.linspace(10.0, 30.0, 8),
-            "longitude": np.linspace(-80.0, -60.0, 10),
-        },
-    )
-
-
-def _tc_track_target(n_time=4):
-    """Observed-track dataset used to filter forecast candidates."""
-    return xr.Dataset(
-        {"intensity": ("valid_time", np.arange(float(n_time)))},
-        coords={
-            "valid_time": pd.date_range("2021-09-01", periods=n_time, freq="6h"),
-            "latitude": ("valid_time", np.linspace(15.0, 25.0, n_time)),
-            "longitude": ("valid_time", np.linspace(-75.0, -65.0, n_time)),
-        },
-    )
-
-
 @pytest.fixture
 def counted_tracker(monkeypatch):
     """Replace the TC tracker with a counting stub returning a marker."""
@@ -1106,8 +1059,8 @@ class TestTrackCaching:
 
         calls, _ = counted_tracker
         variable = derived.TropicalCycloneTrackVariables()
-        data = _tc_forecast_dataset()
-        target = _tc_track_target()
+        data = make_tc_tracker_forecast_dataset()
+        target = make_tc_track_target_dataset()
 
         variable.get_or_compute_tracks(data, _target_dataset=target)
         variable.get_or_compute_tracks(data, _target_dataset=target)
@@ -1122,8 +1075,8 @@ class TestTrackCaching:
 
         _, marker = counted_tracker
         variable = derived.TropicalCycloneTrackVariables()
-        data = _tc_forecast_dataset()
-        target = _tc_track_target()
+        data = make_tc_tracker_forecast_dataset()
+        target = make_tc_track_target_dataset()
 
         first = variable.get_or_compute_tracks(data, _target_dataset=target)
         second = variable.get_or_compute_tracks(data, _target_dataset=target)
@@ -1135,13 +1088,13 @@ class TestTrackCaching:
 
         calls, _ = counted_tracker
         variable = derived.TropicalCycloneTrackVariables()
-        target = _tc_track_target()
+        target = make_tc_track_target_dataset()
 
         variable.get_or_compute_tracks(
-            _tc_forecast_dataset(seed=0), _target_dataset=target
+            make_tc_tracker_forecast_dataset(seed=0), _target_dataset=target
         )
         variable.get_or_compute_tracks(
-            _tc_forecast_dataset(seed=1), _target_dataset=target
+            make_tc_tracker_forecast_dataset(seed=1), _target_dataset=target
         )
 
         assert calls["count"] == 2, (
@@ -1153,10 +1106,14 @@ class TestTrackCaching:
 
         calls, _ = counted_tracker
         variable = derived.TropicalCycloneTrackVariables()
-        data = _tc_forecast_dataset()
+        data = make_tc_tracker_forecast_dataset()
 
-        variable.get_or_compute_tracks(data, _target_dataset=_tc_track_target())
-        variable.get_or_compute_tracks(data, _target_dataset=_tc_track_target())
+        variable.get_or_compute_tracks(
+            data, _target_dataset=make_tc_track_target_dataset()
+        )
+        variable.get_or_compute_tracks(
+            data, _target_dataset=make_tc_track_target_dataset()
+        )
 
         assert calls["count"] == 2, (
             "a different target dataset must not reuse the cached tracks"
@@ -1166,8 +1123,8 @@ class TestTrackCaching:
         from extremeweatherbench import derived
 
         calls, _ = counted_tracker
-        data = _tc_forecast_dataset()
-        target = _tc_track_target()
+        data = make_tc_tracker_forecast_dataset()
+        target = make_tc_track_target_dataset()
 
         derived.TropicalCycloneTrackVariables().get_or_compute_tracks(
             data, _target_dataset=target
@@ -1185,7 +1142,7 @@ class TestTrackCaching:
 
         variable = derived.TropicalCycloneTrackVariables()
         with pytest.raises(ValueError, match="No track data provided"):
-            variable.get_or_compute_tracks(_tc_forecast_dataset())
+            variable.get_or_compute_tracks(make_tc_tracker_forecast_dataset())
 
     def test_a_target_without_track_coords_still_raises(self, counted_tracker):
         from extremeweatherbench import derived
@@ -1193,7 +1150,9 @@ class TestTrackCaching:
         variable = derived.TropicalCycloneTrackVariables()
         bare = xr.Dataset({"intensity": ("t", np.zeros(3))}, coords={"t": np.arange(3)})
         with pytest.raises(ValueError, match="missing required"):
-            variable.get_or_compute_tracks(_tc_forecast_dataset(), _target_dataset=bare)
+            variable.get_or_compute_tracks(
+                make_tc_tracker_forecast_dataset(), _target_dataset=bare
+            )
 
 
 class TestLevelSubsetting:
@@ -1202,7 +1161,7 @@ class TestLevelSubsetting:
     def test_selected_levels_are_unchanged(self):
         from extremeweatherbench import derived
 
-        ds = _level_dataset(chunk=False)
+        ds = make_pressure_level_dataset(chunk=False)
         top = 300
         result = derived._subset_to_top_pressure_level(ds, top)
         expected = ds.sel(level=ds.level[ds.level >= top])
@@ -1213,7 +1172,7 @@ class TestLevelSubsetting:
     def test_ascending_levels_select_the_same_set(self):
         from extremeweatherbench import derived
 
-        ds = _level_dataset(chunk=False).isel(level=slice(None, None, -1))
+        ds = make_pressure_level_dataset(chunk=False).isel(level=slice(None, None, -1))
         top = 300
         result = derived._subset_to_top_pressure_level(ds, top)
         expected = ds.sel(level=ds.level[ds.level >= top])
@@ -1223,7 +1182,7 @@ class TestLevelSubsetting:
     def test_non_monotonic_levels_fall_back_to_the_mask(self):
         from extremeweatherbench import derived
 
-        ds = _level_dataset(chunk=False)
+        ds = make_pressure_level_dataset(chunk=False)
         shuffled = ds.isel(level=[0, 5, 1, 9, 2, 11, 3, 4, 6, 7, 8, 10])
         top = 300
         result = derived._subset_to_top_pressure_level(shuffled, top)
@@ -1234,6 +1193,6 @@ class TestLevelSubsetting:
     def test_every_level_kept_when_top_is_below_the_grid(self):
         from extremeweatherbench import derived
 
-        ds = _level_dataset(chunk=False)
+        ds = make_pressure_level_dataset(chunk=False)
         result = derived._subset_to_top_pressure_level(ds, 50)
         np.testing.assert_array_equal(result.level.values, ds.level.values)

@@ -10,7 +10,10 @@ import sparse
 import xarray as xr
 
 from extremeweatherbench import calc, metrics, utils
-from tests.conftest import assert_lazy
+from tests.conftest import (
+    assert_lazy,
+    make_pattern_stack_dataarray,
+)
 
 
 class TestConcreteMetric(metrics.BaseMetric):
@@ -4895,24 +4898,6 @@ class TestEarlySignal:
         assert not bool(result.any().values)
 
 
-def _pattern_stack(n_lead=3, n_valid=4, n_lat=9, n_lon=11, chunk=False, seed=0):
-    """Stack of 2-D non-negative fields, the shape SpatialDisplacement sees."""
-    rng = np.random.default_rng(seed)
-    values = rng.random((n_lead, n_valid, n_lat, n_lon))
-    values[values < 0.4] = 0.0
-    da = xr.DataArray(
-        values,
-        dims=["lead_time", "valid_time", "latitude", "longitude"],
-        coords={
-            "lead_time": np.arange(0, n_lead * 6, 6),
-            "valid_time": pd.date_range("2021-02-01", periods=n_valid, freq="6h"),
-            "latitude": np.linspace(30.0, 46.0, n_lat),
-            "longitude": np.linspace(-130.0, -110.0, n_lon),
-        },
-    )
-    return da.chunk({"lead_time": 1, "valid_time": 2}) if chunk else da
-
-
 def _center_of_mass_reference(da):
     """Per-slice ndimage.center_of_mass, the formulation being replaced."""
     from scipy import ndimage as ndi
@@ -4962,7 +4947,7 @@ class TestCenterOfMassLaziness:
     """The center of mass stays lazy over dask-backed input."""
 
     def test_result_is_lazy_for_dask_input(self):
-        da = _pattern_stack(chunk=True)
+        da = make_pattern_stack_dataarray(chunk=True)
         lat_idx, lon_idx = metrics._center_of_mass_indices(da)
         assert_lazy(lat_idx, "the center of mass should compose lazily")
         assert_lazy(lon_idx, "the center of mass should compose lazily")
@@ -4973,7 +4958,7 @@ class TestCenterOfMassOutput:
 
     @pytest.mark.parametrize("seed", [0, 1, 2])
     def test_indices_match_ndimage(self, seed):
-        da = _pattern_stack(seed=seed)
+        da = make_pattern_stack_dataarray(seed=seed)
         lat_idx, lon_idx = metrics._center_of_mass_indices(da)
         expected_lat, expected_lon = _center_of_mass_reference(da)
 
@@ -4981,21 +4966,21 @@ class TestCenterOfMassOutput:
         np.testing.assert_allclose(lon_idx.values, expected_lon, rtol=1e-12)
 
     def test_an_all_zero_field_is_nan(self):
-        da = _pattern_stack(n_lead=1, n_valid=2)
+        da = make_pattern_stack_dataarray(n_lead=1, n_valid=2)
         da = xr.zeros_like(da)
         lat_idx, lon_idx = metrics._center_of_mass_indices(da)
         assert np.isnan(lat_idx.values).all()
         assert np.isnan(lon_idx.values).all()
 
     def test_a_single_lit_cell_sits_on_that_cell(self):
-        da = xr.zeros_like(_pattern_stack(n_lead=1, n_valid=1))
+        da = xr.zeros_like(make_pattern_stack_dataarray(n_lead=1, n_valid=1))
         da[0, 0, 3, 7] = 1.0
         lat_idx, lon_idx = metrics._center_of_mass_indices(da)
         assert lat_idx.values.item() == 3.0
         assert lon_idx.values.item() == 7.0
 
     def test_a_nan_in_the_field_propagates_like_ndimage(self):
-        da = _pattern_stack(n_lead=1, n_valid=1)
+        da = make_pattern_stack_dataarray(n_lead=1, n_valid=1)
         da[0, 0, 2, 2] = np.nan
         lat_idx, lon_idx = metrics._center_of_mass_indices(da)
         expected_lat, expected_lon = _center_of_mass_reference(da)
@@ -5004,8 +4989,8 @@ class TestCenterOfMassOutput:
         np.testing.assert_array_equal(np.isnan(lon_idx.values), np.isnan(expected_lon))
 
     def test_dask_and_numpy_paths_agree(self):
-        eager = _pattern_stack(chunk=False)
-        lazy = _pattern_stack(chunk=True)
+        eager = make_pattern_stack_dataarray(chunk=False)
+        lazy = make_pattern_stack_dataarray(chunk=True)
         lat_eager, lon_eager = metrics._center_of_mass_indices(eager)
         lat_lazy, lon_lazy = metrics._center_of_mass_indices(lazy)
 
@@ -5017,8 +5002,8 @@ class TestSpatialDisplacementOutput:
     """Pins the SpatialDisplacement metric values."""
 
     def test_displacement_matches_the_per_slice_formulation(self):
-        forecast = _pattern_stack(seed=3)
-        target = _pattern_stack(seed=4)
+        forecast = make_pattern_stack_dataarray(seed=3)
+        target = make_pattern_stack_dataarray(seed=4)
         metric = metrics.SpatialDisplacement(preserve_dims=["lead_time"])
 
         got = metric._compute_metric(forecast=forecast, target=target)
@@ -5027,8 +5012,8 @@ class TestSpatialDisplacementOutput:
         np.testing.assert_allclose(got.values, expected, rtol=1e-10)
 
     def test_result_keeps_the_preserved_dimension(self):
-        forecast = _pattern_stack(seed=5)
-        target = _pattern_stack(seed=6)
+        forecast = make_pattern_stack_dataarray(seed=5)
+        target = make_pattern_stack_dataarray(seed=6)
         metric = metrics.SpatialDisplacement(preserve_dims=["lead_time"])
         got = metric._compute_metric(forecast=forecast, target=target)
         assert got.dims == ("lead_time",)

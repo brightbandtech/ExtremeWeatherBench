@@ -8,7 +8,12 @@ from numpy import testing
 from scipy import ndimage
 
 from extremeweatherbench import calc, metrics, utils
-from tests.conftest import assert_lazy
+from tests.conftest import (
+    assert_lazy,
+    make_gulf_coast_track,
+    make_pressure_column_dataarray,
+    make_track_dataarray,
+)
 
 
 class TestBasicCalculations:
@@ -2591,44 +2596,6 @@ class TestLandfallMetricAlignment:
         assert not np.isnan(result.values).all()
 
 
-def _column_dataarray(n_time=4, n_lat=3, n_lon=3, levels=(1000.0, 850.0, 700.0, 500.0)):
-    """Array with a level dimension, as the vertical integrals expect."""
-    rng = np.random.default_rng(7)
-    shape = (n_time, len(levels), n_lat, n_lon)
-    return xr.DataArray(
-        rng.uniform(0.001, 0.02, shape),
-        dims=["valid_time", "level", "latitude", "longitude"],
-        coords={
-            "valid_time": pd.date_range("2023-01-01", periods=n_time, freq="6h"),
-            "level": np.array(levels),
-            "latitude": np.linspace(30.0, 40.0, n_lat),
-            "longitude": np.linspace(-120.0, -110.0, n_lon),
-        },
-    )
-
-
-def _track_dataarray(lons, lats, chunk=False):
-    """Track-shaped DataArray with latitude/longitude along valid_time."""
-    valid_time = pd.date_range("2021-08-28", periods=len(lons), freq="6h")
-    da = xr.DataArray(
-        np.arange(float(len(lons))),
-        dims=["valid_time"],
-        coords={
-            "valid_time": valid_time,
-            "latitude": ("valid_time", np.asarray(lats, dtype=float)),
-            "longitude": ("valid_time", np.asarray(lons, dtype=float)),
-        },
-    )
-    return da.chunk({"valid_time": 4}) if chunk else da
-
-
-def _gulf_coast_track(n_points):
-    """Track running north out of the Gulf of Mexico onto Louisiana."""
-    lons = np.linspace(-91.5, -91.0, n_points)
-    lats = np.linspace(24.0, 32.0, n_points)
-    return lons, lats
-
-
 class TestFindLandIntersectionOutput:
     """Only the true-positive quadrant is needed, so only it should be built."""
 
@@ -2695,7 +2662,7 @@ class TestVerticalIntegralLevelChunking:
     """
 
     def test_level_is_whole_in_every_chunk_the_kernel_sees(self):
-        da = _column_dataarray().chunk({"valid_time": 1, "level": 2})
+        da = make_pressure_column_dataarray().chunk({"valid_time": 1, "level": 2})
         seen = []
 
         original = calc.nantrapezoid_nd
@@ -2718,7 +2685,7 @@ class TestVerticalIntegralLevelChunking:
 
     def test_without_the_rechunk_apply_ufunc_refuses_to_build(self):
         """The same call without the rechunk is an error, not a slow path."""
-        da = _column_dataarray().chunk({"level": 2})
+        da = make_pressure_column_dataarray().chunk({"level": 2})
         with pytest.raises(ValueError, match="core dimension"):
             xr.apply_ufunc(
                 calc.nantrapezoid_nd,
@@ -2732,7 +2699,7 @@ class TestVerticalIntegralLevelChunking:
 
     def test_a_partial_column_integrates_to_a_different_value(self):
         """Shows the rechunk is load-bearing rather than cosmetic."""
-        da = _column_dataarray()
+        da = make_pressure_column_dataarray()
         levels_pa = (da["level"] * 100).values
         column = da.isel(valid_time=0, latitude=0, longitude=0).values
 
@@ -2747,11 +2714,11 @@ class TestVerticalIntegralLevelChunking:
         )
 
     def test_rechunk_is_applied_even_when_level_arrives_split(self):
-        da = _column_dataarray().chunk({"level": 1})
+        da = make_pressure_column_dataarray().chunk({"level": 1})
         result = calc.nantrapezoid_pressure_levels(da)
         assert_lazy(result)
         expected = calc.nantrapezoid_pressure_levels(
-            _column_dataarray().chunk({"level": -1})
+            make_pressure_column_dataarray().chunk({"level": -1})
         )
         np.testing.assert_allclose(result.compute().values, expected.compute().values)
 
@@ -2774,7 +2741,7 @@ class TestLandfallDetectionOutput:
     def test_mask_matches_the_scalar_predicate(self, n_points):
         land = utils.load_land_geometry()
         ocean = utils.load_ocean_geometry()
-        track = _track_dataarray(*_gulf_coast_track(n_points))
+        track = make_track_dataarray(*make_gulf_coast_track(n_points))
 
         got = calc._detect_landfalls_wrapper(track, land, ocean)
         expected = self._reference_mask(track, land, ocean)
@@ -2787,7 +2754,7 @@ class TestLandfallDetectionOutput:
         ocean = utils.load_ocean_geometry()
         lons = np.linspace(-40.0, -38.0, 12)
         lats = np.full(12, 25.0)
-        track = _track_dataarray(lons, lats)
+        track = make_track_dataarray(lons, lats)
 
         got = calc._detect_landfalls_wrapper(track, land, ocean)
         assert not got.values.any()
@@ -2799,7 +2766,7 @@ class TestLandfallDetectionOutput:
         # in the open ocean.
         lons = np.linspace(-98.0, -96.0, 10)
         lats = np.full(10, 38.5)
-        track = _track_dataarray(lons, lats)
+        track = make_track_dataarray(lons, lats)
 
         got = calc._detect_landfalls_wrapper(track, land, ocean)
         assert not got.values.any()
@@ -2807,12 +2774,12 @@ class TestLandfallDetectionOutput:
     def test_nan_positions_are_not_landfalls(self):
         land = utils.load_land_geometry()
         ocean = utils.load_ocean_geometry()
-        lons, lats = _gulf_coast_track(12)
+        lons, lats = make_gulf_coast_track(12)
         lons = lons.copy()
         lats = lats.copy()
         lons[3] = np.nan
         lats[7] = np.nan
-        track = _track_dataarray(lons, lats)
+        track = make_track_dataarray(lons, lats)
 
         got = calc._detect_landfalls_wrapper(track, land, ocean)
         # A pair with a NaN endpoint cannot be evaluated, so neither the pair
@@ -2823,9 +2790,9 @@ class TestLandfallDetectionOutput:
     def test_longitudes_given_in_0_360_are_wrapped(self):
         land = utils.load_land_geometry()
         ocean = utils.load_ocean_geometry()
-        lons, lats = _gulf_coast_track(24)
-        signed = _track_dataarray(lons, lats)
-        unsigned = _track_dataarray(lons % 360, lats)
+        lons, lats = make_gulf_coast_track(24)
+        signed = make_track_dataarray(lons, lats)
+        unsigned = make_track_dataarray(lons % 360, lats)
 
         np.testing.assert_array_equal(
             calc._detect_landfalls_wrapper(signed, land, ocean).values,

@@ -18,6 +18,12 @@ import xarray as xr
 
 from extremeweatherbench import calc, derived
 from extremeweatherbench.events import tropical_cyclone
+from tests.conftest import (
+    make_global_grid_coords,
+    make_ibtracs_frame_for_dataset,
+    make_single_init_tc_dataset,
+    make_tc_track_frame,
+)
 
 
 @pytest.fixture
@@ -625,90 +631,6 @@ class TestTCIntegration:
 # ---------------------------------------------------------------------------
 
 
-def _make_single_init_tc_dataset(n_lead: int = 12, n_wind_strong: int = 10):
-    """Build a minimal synthetic TC dataset with one clear init_time.
-
-    Grid: 1° resolution, 21×21 points (lat 10–30°, lon -80 to -60°).
-    Storm: SLP=98 000 Pa at centre (lat=20, lon=-70) every (lead, valid) pair
-    on the diagonal (same init_time T0).
-    Wind: 20 m/s at one gridpoint east of centre for the first
-    ``n_wind_strong`` diagonal pairs; 2 m/s everywhere else.
-    Contour validation is OFF so only the wind filter is exercised.
-
-    With a 1° grid ``_degrees_to_gridpoints(2.0, ...)`` = 2 gridpoints, so
-    the ±2-pt neighbourhood around the centre includes the +1-pt east cell.
-
-    Expected: n_wind_strong detections have neighbourhood wind ≥ 10 m/s.
-    """
-    lat = np.arange(10.0, 31.0, 1.0)  # 21 pts, 1 ° spacing
-    lon = np.arange(-80.0, -59.0, 1.0)  # 21 pts, 1 ° spacing
-    n_lat, n_lon = len(lat), len(lon)
-    c_lat, c_lon = 10, 10  # centre indices → lat=20°, lon=-70°
-
-    T0 = pd.Timestamp("2023-09-10")
-    lead_h = np.arange(n_lead) * 6  # hours
-    lead_td = (lead_h * np.timedelta64(1, "h")).astype("timedelta64[ns]")
-    valid_times = pd.date_range(T0, periods=n_lead, freq="6h")
-
-    # init_time[lt, vt] = valid_time[vt] - lead_time[lt]
-    init_2d = np.array(
-        [
-            [valid_times[vt].to_datetime64() - lead_td[lt] for vt in range(n_lead)]
-            for lt in range(n_lead)
-        ]
-    )
-
-    # SLP: 98 000 Pa at centre for every (lt, vt) pair; 102 000 elsewhere
-    slp = np.full((n_lead, n_lead, n_lat, n_lon), 102000.0)
-    for k in range(n_lead):
-        slp[k, k, c_lat, c_lon] = 98000.0
-
-    # Wind: 20 m/s east of centre for the first n_wind_strong diagonal pairs
-    wind = np.full((n_lead, n_lead, n_lat, n_lon), 2.0)
-    for k in range(n_wind_strong):
-        wind[k, k, c_lat, c_lon + 1] = 20.0
-
-    # Geopotential thickness: zeros (contour validation disabled)
-    dz = np.zeros((n_lead, n_lead, n_lat, n_lon))
-
-    ds = xr.Dataset(
-        {
-            "air_pressure_at_mean_sea_level": (
-                ["lead_time", "valid_time", "latitude", "longitude"],
-                slp,
-            ),
-            "surface_wind_speed": (
-                ["lead_time", "valid_time", "latitude", "longitude"],
-                wind,
-            ),
-            "geopotential_thickness": (
-                ["lead_time", "valid_time", "latitude", "longitude"],
-                dz,
-            ),
-        },
-        coords={
-            "lead_time": lead_td,
-            "valid_time": valid_times,
-            "latitude": lat,
-            "longitude": lon,
-            "init_time": (["lead_time", "valid_time"], init_2d),
-        },
-    )
-    return ds
-
-
-def _make_ibt_for_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """IBTrACS stub matching the storm centre in ``_make_single_init_tc_dataset``."""
-    valid_times = ds.valid_time.values
-    return xr.Dataset(
-        {
-            "latitude": (["valid_time"], np.full(len(valid_times), 20.0)),
-            "longitude": (["valid_time"], np.full(len(valid_times), -70.0)),
-        },
-        coords={"valid_time": valid_times},
-    )
-
-
 # ---------------------------------------------------------------------------
 # Tests for _degrees_to_gridpoints
 # ---------------------------------------------------------------------------
@@ -858,8 +780,8 @@ class TestNeighbourhoodWindSampling:
 
     def test_output_wind_exceeds_centre_wind(self):
         """Detected surface_wind_speed > wind at SLP minimum (2 m/s)."""
-        ds = _make_single_init_tc_dataset(n_lead=12, n_wind_strong=12)
-        ibt = _make_ibt_for_dataset(ds)
+        ds = make_single_init_tc_dataset(n_lead=12, n_wind_strong=12)
+        ibt = make_ibtracs_frame_for_dataset(ds)
         result = tropical_cyclone.generate_tc_tracks_by_init_time(
             sea_level_pressure=ds["air_pressure_at_mean_sea_level"],
             wind_speed=ds["surface_wind_speed"],
@@ -878,8 +800,8 @@ class TestNeighbourhoodWindSampling:
 
     def test_output_wind_close_to_neighbourhood_max(self):
         """Neighbourhood max (20 m/s) is returned, not centre value (2 m/s)."""
-        ds = _make_single_init_tc_dataset(n_lead=5, n_wind_strong=5)
-        ibt = _make_ibt_for_dataset(ds)
+        ds = make_single_init_tc_dataset(n_lead=5, n_wind_strong=5)
+        ibt = make_ibtracs_frame_for_dataset(ds)
         result = tropical_cyclone.generate_tc_tracks_by_init_time(
             sea_level_pressure=ds["air_pressure_at_mean_sea_level"],
             wind_speed=ds["surface_wind_speed"],
@@ -916,11 +838,11 @@ class TestMinTrackTimestepsWindFilter:
 
     @pytest.fixture(scope="class")
     def tc_ds(self):
-        return _make_single_init_tc_dataset(self.N_LEAD, self.N_WIND_STRONG)
+        return make_single_init_tc_dataset(self.N_LEAD, self.N_WIND_STRONG)
 
     @pytest.fixture(scope="class")
     def ibt(self, tc_ds):
-        return _make_ibt_for_dataset(tc_ds)
+        return make_ibtracs_frame_for_dataset(tc_ds)
 
     def _run(self, tc_ds, ibt, min_ts):
         return tropical_cyclone.generate_tc_tracks_by_init_time(
@@ -1270,24 +1192,6 @@ class TestFillTrackGapsFromFields:
         assert len(result) == 1
 
 
-def _tc_grid(n_lat=181, n_lon=360):
-    """Global-ish grid, so a local storm covers a small part of it."""
-    return (
-        np.linspace(-90.0, 90.0, n_lat),
-        np.linspace(0.0, 359.0, n_lon),
-    )
-
-
-def _tc_track_frame(n_rows=4, latitude=15.0, longitude=140.0):
-    return pd.DataFrame(
-        {
-            "valid_time": pd.date_range("2021-08-01", periods=n_rows, freq="6h"),
-            "latitude": np.full(n_rows, latitude),
-            "longitude": np.full(n_rows, longitude),
-        }
-    )
-
-
 class TestSpatialMaskOutput:
     """The storm-proximity mask must not sweep the whole globe per track row.
 
@@ -1299,8 +1203,8 @@ class TestSpatialMaskOutput:
     def test_distance_is_not_evaluated_over_the_whole_grid(self):
         from extremeweatherbench.events import tropical_cyclone as tc
 
-        lat_coords, lon_coords = _tc_grid()
-        frame = _tc_track_frame(n_rows=4)
+        lat_coords, lon_coords = make_global_grid_coords()
+        frame = make_tc_track_frame(n_rows=4)
         full_grid_points = lat_coords.size * lon_coords.size
 
         evaluated = []
@@ -1328,7 +1232,7 @@ class TestSpatialMaskOutput:
         """Pins the mask, which the latitude banding must not change."""
         from extremeweatherbench.events import tropical_cyclone as tc
 
-        lat_coords, lon_coords = _tc_grid(n_lat=91, n_lon=180)
+        lat_coords, lon_coords = make_global_grid_coords(n_lat=91, n_lon=180)
         frame = pd.DataFrame(
             {
                 "valid_time": pd.date_range("2021-08-01", periods=3, freq="6h"),
@@ -1355,8 +1259,8 @@ class TestSpatialMaskOutput:
     def test_empty_track_frame_gives_an_empty_mask(self):
         from extremeweatherbench.events import tropical_cyclone as tc
 
-        lat_coords, lon_coords = _tc_grid(n_lat=20, n_lon=40)
-        frame = _tc_track_frame(n_rows=0)
+        lat_coords, lon_coords = make_global_grid_coords(n_lat=20, n_lon=40)
+        frame = make_tc_track_frame(n_rows=0)
         mask = tc._create_spatial_mask(lat_coords, lon_coords, frame, 5.0)
         assert mask.shape == (20, 40)
         assert not mask.any()
@@ -1366,6 +1270,6 @@ class TestSpatialMaskOutput:
 
         lat_coords = np.linspace(0.0, 20.0, 21)
         lon_coords = np.linspace(100.0, 160.0, 61)
-        frame = _tc_track_frame(n_rows=1, latitude=80.0, longitude=130.0)
+        frame = make_tc_track_frame(n_rows=1, latitude=80.0, longitude=130.0)
         mask = tc._create_spatial_mask(lat_coords, lon_coords, frame, 5.0)
         assert not mask.any()

@@ -10,7 +10,14 @@ import sparse
 import xarray as xr
 
 from extremeweatherbench import utils
-from tests.conftest import assert_lazy
+from tests.conftest import (
+    assert_lazy,
+    make_daily_series_dataarray,
+    make_init_lead_forecast_dataset,
+    make_landfall_dataarray,
+    make_sparse_grid_dataarray,
+    make_spatial_dataarray,
+)
 
 
 @pytest.mark.parametrize(
@@ -2047,89 +2054,11 @@ class TestIsValidLandfall:
         assert utils.is_valid_landfall(da) is True
 
 
-def _forecast_dataset(n_init, n_lead, chunk=True, lead_unit=None):
-    """Forecast-shaped dataset with init_time and lead_time dimensions."""
-    lead = np.arange(0, n_lead * 6, 6)
-    if lead_unit is not None:
-        lead = pd.to_timedelta(lead, unit=lead_unit)
-    ds = xr.Dataset(
-        {
-            "t": (
-                ["init_time", "lead_time", "latitude"],
-                np.arange(float(n_init * n_lead * 4)).reshape(n_init, n_lead, 4),
-            )
-        },
-        coords={
-            "init_time": pd.date_range("2020-01-01", periods=n_init, freq="D"),
-            "lead_time": lead,
-            "latitude": np.linspace(0, 3, 4),
-        },
-    )
-    return ds.chunk({"init_time": 1}) if chunk else ds
-
-
-def _spatial_dataarray(n_time=6, n_lat=8, n_lon=8, chunk=True):
-    """Small (valid_time, latitude, longitude) array for reduction tests."""
-    rng = np.random.default_rng(3)
-    da = xr.DataArray(
-        rng.uniform(280.0, 310.0, (n_time, n_lat, n_lon)),
-        dims=["valid_time", "latitude", "longitude"],
-        coords={
-            "valid_time": pd.date_range("2023-01-01", periods=n_time, freq="6h"),
-            "latitude": np.linspace(30.0, 30.0 + n_lat - 1, n_lat),
-            "longitude": np.linspace(-120.0, -120.0 + n_lon - 1, n_lon),
-        },
-    )
-    return da.chunk({"valid_time": 1}) if chunk else da
-
-
-def _daily_series(n_days, timesteps_per_day=4, chunk=True, drop_last=0):
-    """Hourly-ish series over whole days, optionally with a truncated last day."""
-    n_steps = n_days * timesteps_per_day - drop_last
-    freq = f"{24 // timesteps_per_day}h"
-    valid_time = pd.date_range("2021-06-01", periods=n_steps, freq=freq)
-    values = np.arange(float(n_steps))
-    da = xr.DataArray(values, dims=["valid_time"], coords={"valid_time": valid_time})
-    if chunk:
-        da = da.chunk({"valid_time": timesteps_per_day})
-    return da
-
-
 def _daily_min_via_map(da, time_resolution_hours):
     """The groupby().map() formulation this phase replaces."""
     return da.groupby("valid_time.dayofyear").map(
         utils.min_if_all_timesteps_present,
         time_resolution_hours=time_resolution_hours,
-    )
-
-
-def _landfall_dataarray(n_init=64, chunk=True, all_nan=False):
-    """Landfall-shaped DataArray indexed by init_time."""
-    values = np.full(n_init, np.nan) if all_nan else np.arange(float(n_init))
-    da = xr.DataArray(
-        values,
-        dims=["init_time"],
-        coords={"init_time": pd.date_range("2021-08-20", periods=n_init, freq="6h")},
-    )
-    return da.chunk({"init_time": 8}) if chunk else da
-
-
-def _sparse_dataarray():
-    """DataArray backed by a sparse.COO array."""
-    import sparse
-
-    data = sparse.COO(
-        coords=np.array([[0, 1, 2], [1, 2, 0]]),
-        data=np.array([1.0, 2.0, 3.0]),
-        shape=(4, 4),
-    )
-    return xr.DataArray(
-        data,
-        dims=["latitude", "longitude"],
-        coords={
-            "latitude": np.linspace(0.0, 3.0, 4),
-            "longitude": np.linspace(10.0, 13.0, 4),
-        },
     )
 
 
@@ -2237,14 +2166,16 @@ class TestTimeConversionOutput:
         assert bool(mask[1, 1])
 
     def test_chunked_input_gives_the_same_values_as_unchunked(self):
-        chunked = utils.convert_init_time_to_valid_time(_forecast_dataset(4, 3))
+        chunked = utils.convert_init_time_to_valid_time(
+            make_init_lead_forecast_dataset(4, 3)
+        )
         unchunked = utils.convert_init_time_to_valid_time(
-            _forecast_dataset(4, 3, chunk=False)
+            make_init_lead_forecast_dataset(4, 3, chunk=False)
         )
         xr.testing.assert_allclose(chunked.compute(), unchunked)
 
     def test_round_trip_back_to_init_time_recovers_the_original_values(self):
-        ds = _forecast_dataset(4, 3, chunk=False)
+        ds = make_init_lead_forecast_dataset(4, 3, chunk=False)
         forward = utils.convert_init_time_to_valid_time(ds)
         back = utils.convert_valid_time_to_init_time(forward["t"])
 
@@ -2263,21 +2194,21 @@ class TestReduceDataArrayLaziness:
     """
 
     def test_string_method_reduction_stays_lazy(self):
-        da = _spatial_dataarray()
+        da = make_spatial_dataarray()
         result = utils.reduce_dataarray(
             da, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
         assert_lazy(result)
 
     def test_callable_reduction_stays_lazy(self):
-        da = _spatial_dataarray()
+        da = make_spatial_dataarray()
         result = utils.reduce_dataarray(
             da, method=np.nanmean, reduce_dims=["latitude", "longitude"]
         )
         assert_lazy(result)
 
     def test_compute_true_is_still_available_for_data_dependent_indexing(self):
-        da = _spatial_dataarray()
+        da = make_spatial_dataarray()
         result = utils.reduce_dataarray(
             da,
             method="mean",
@@ -2292,7 +2223,7 @@ class TestReduceDataArrayOutput:
     """Pins the reduced values, which laziness must not change."""
 
     def test_lazy_and_eager_reductions_agree(self):
-        da = _spatial_dataarray()
+        da = make_spatial_dataarray()
         lazy = utils.reduce_dataarray(
             da, method="mean", reduce_dims=["latitude", "longitude"], skipna=True
         )
@@ -2306,7 +2237,7 @@ class TestReduceDataArrayOutput:
         xr.testing.assert_allclose(lazy.compute(), eager)
 
     def test_mean_matches_a_hand_computed_column(self):
-        da = _spatial_dataarray(n_time=2, n_lat=2, n_lon=2, chunk=False)
+        da = make_spatial_dataarray(n_time=2, n_lat=2, n_lon=2, chunk=False)
         da.values = np.array([[[1.0, 2.0], [3.0, 4.0]], [[10.0, 20.0], [30.0, 40.0]]])
         result = utils.reduce_dataarray(
             da.chunk({"valid_time": 1}),
@@ -2321,7 +2252,7 @@ class TestDailyMinOverCompleteDays:
     """Pins the per-day minimum, taken over complete days only."""
 
     def test_result_is_still_lazy(self):
-        da = _daily_series(n_days=8)
+        da = make_daily_series_dataarray(n_days=8)
         result = utils.daily_min_over_complete_days(da, 6.0)
         assert_lazy(result, "the daily minimum should not materialize on construction")
 
@@ -2329,25 +2260,25 @@ class TestDailyMinOverCompleteDays:
         # flox 0.10.8 raises "Cannot call len() on object with unknown chunk
         # size" for any dask-backed grouped reduction against dask 2025.12, so
         # the daily minimum must reach its answer without one.
-        da = _daily_series(n_days=8)
+        da = make_daily_series_dataarray(n_days=8)
         result = utils.daily_min_over_complete_days(da, 6.0).compute()
         np.testing.assert_allclose(result.values, np.arange(8) * 4.0)
 
     def test_complete_days_match_the_groupby_map_result(self):
-        da = _daily_series(n_days=5, chunk=False)
+        da = make_daily_series_dataarray(n_days=5, chunk=False)
         got = utils.daily_min_over_complete_days(da, 6.0)
         expected = _daily_min_via_map(da, 6.0)
         np.testing.assert_allclose(got.values, expected.values)
 
     def test_an_incomplete_day_is_nan(self):
-        da = _daily_series(n_days=5, chunk=False, drop_last=1)
+        da = make_daily_series_dataarray(n_days=5, chunk=False, drop_last=1)
         got = utils.daily_min_over_complete_days(da, 6.0)
 
         assert np.isnan(got.values[-1]), "the truncated last day should be NaN"
         np.testing.assert_allclose(got.values[:-1], [0.0, 4.0, 8.0, 12.0])
 
     def test_lead_time_is_preserved_for_forecast_shaped_input(self):
-        base = _daily_series(n_days=4, chunk=False)
+        base = make_daily_series_dataarray(n_days=4, chunk=False)
         da = base.expand_dims(lead_time=[0, 6, 12]).copy()
         got = utils.daily_min_over_complete_days(da, 6.0)
 
@@ -2357,7 +2288,7 @@ class TestDailyMinOverCompleteDays:
     def test_days_stay_matched_to_their_labels_across_a_year_boundary(self):
         # dayofyear restarts below the days already seen, so the day labels no
         # longer arrive in time order.
-        da = _daily_series(n_days=400, chunk=False)
+        da = make_daily_series_dataarray(n_days=400, chunk=False)
         got = utils.daily_min_over_complete_days(da, 6.0)
         expected = _daily_min_via_map(da, 6.0)
 
@@ -2365,7 +2296,7 @@ class TestDailyMinOverCompleteDays:
         np.testing.assert_allclose(got.values, expected.values)
 
     def test_all_days_incomplete_gives_nan_on_the_day_axis(self):
-        da = _daily_series(n_days=1, chunk=False, drop_last=1)
+        da = make_daily_series_dataarray(n_days=1, chunk=False, drop_last=1)
         got = utils.daily_min_over_complete_days(da, 6.0)
         assert got.dims == ("dayofyear",)
         assert np.isnan(got.values).all()
@@ -2377,7 +2308,7 @@ class TestDensifyDoesNotMutateTheCaller:
     def test_the_original_dataarray_stays_sparse(self):
         import sparse
 
-        da = _sparse_dataarray()
+        da = make_sparse_grid_dataarray()
         utils.maybe_densify_dataarray(da)
 
         assert isinstance(da.data, sparse.COO), (
@@ -2388,7 +2319,7 @@ class TestDensifyDoesNotMutateTheCaller:
     def test_a_dataset_holding_the_array_stays_sparse(self):
         import sparse
 
-        ds = xr.Dataset({"t": _sparse_dataarray()})
+        ds = xr.Dataset({"t": make_sparse_grid_dataarray()})
         utils.maybe_densify_dataarray(ds["t"])
 
         assert isinstance(ds["t"].data, sparse.COO), (
@@ -2397,14 +2328,14 @@ class TestDensifyDoesNotMutateTheCaller:
         )
 
     def test_the_returned_array_is_dense_with_the_same_values(self):
-        da = _sparse_dataarray()
+        da = make_sparse_grid_dataarray()
         densified = utils.maybe_densify_dataarray(da)
 
         assert not hasattr(densified.data, "todense")
         np.testing.assert_allclose(densified.values, da.data.todense())
 
     def test_coordinates_and_dims_survive(self):
-        da = _sparse_dataarray()
+        da = make_sparse_grid_dataarray()
         densified = utils.maybe_densify_dataarray(da)
 
         assert densified.dims == da.dims
@@ -2428,7 +2359,7 @@ class TestIsValidLandfallEdgeCases:
         ],
     )
     def test_verdict_is_unchanged(self, chunk, kwargs, expected):
-        da = _landfall_dataarray(n_init=16, chunk=chunk, **kwargs)
+        da = make_landfall_dataarray(n_init=16, chunk=chunk, **kwargs)
         assert utils.is_valid_landfall(da) is expected
 
     def test_none_and_scalar_are_still_invalid(self):
@@ -2440,7 +2371,7 @@ class TestIsValidLandfallEdgeCases:
         assert utils.is_valid_landfall(da) is False
 
     def test_a_single_real_value_among_nans_is_valid(self):
-        da = _landfall_dataarray(n_init=16, chunk=True, all_nan=True)
+        da = make_landfall_dataarray(n_init=16, chunk=True, all_nan=True)
         da = da.copy()
         da[5] = 3.0
         assert utils.is_valid_landfall(da) is True
