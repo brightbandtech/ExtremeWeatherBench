@@ -2,7 +2,9 @@
 
 import datetime
 import pathlib
+import sys
 import tempfile
+import types
 from unittest import mock
 
 import numpy as np
@@ -1181,6 +1183,100 @@ class TestComputeCaseOperator:
         assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
         mock_build_datasets.assert_called_once_with(sample_case_operator)
+
+
+class TestMaybeRegisterOptimizedDaskArrays:
+    """Test the _maybe_register_optimized_dask_arrays helper."""
+
+    @pytest.fixture(autouse=True)
+    def reset_registration_state(self, monkeypatch):
+        """Ensure each test starts from a clean, unregistered state."""
+        monkeypatch.setattr(evaluate, "_dask_array_registration_attempted", False)
+        monkeypatch.setattr(evaluate, "USE_DASK_ARRAY_QUERY_OPTIMIZATION", True)
+
+    def _install_fake_dask_array(self, monkeypatch):
+        """Inject a fake dask_array.xarray module with a mock register()."""
+        fake_register = mock.Mock()
+        fake_xarray_module = types.ModuleType("dask_array.xarray")
+        fake_xarray_module.register = fake_register
+        fake_dask_array_module = types.ModuleType("dask_array")
+        fake_dask_array_module.xarray = fake_xarray_module
+        monkeypatch.setitem(sys.modules, "dask_array", fake_dask_array_module)
+        monkeypatch.setitem(sys.modules, "dask_array.xarray", fake_xarray_module)
+        return fake_register
+
+    def test_registers_when_dask_array_installed(self, monkeypatch):
+        """Test that register() is called when dask-array is importable."""
+        fake_register = self._install_fake_dask_array(monkeypatch)
+
+        evaluate._maybe_register_optimized_dask_arrays()
+
+        fake_register.assert_called_once_with()
+        assert evaluate._dask_array_registration_attempted is True
+
+    def test_noop_when_dask_array_not_installed(self, monkeypatch):
+        """Test that a missing dask-array package is handled gracefully."""
+        monkeypatch.delitem(sys.modules, "dask_array", raising=False)
+        monkeypatch.delitem(sys.modules, "dask_array.xarray", raising=False)
+
+        # Should not raise even though dask-array isn't installed
+        evaluate._maybe_register_optimized_dask_arrays()
+
+        assert evaluate._dask_array_registration_attempted is True
+
+    def test_registers_only_once_per_process(self, monkeypatch):
+        """Test that repeated calls only attempt registration once."""
+        fake_register = self._install_fake_dask_array(monkeypatch)
+
+        evaluate._maybe_register_optimized_dask_arrays()
+        evaluate._maybe_register_optimized_dask_arrays()
+        evaluate._maybe_register_optimized_dask_arrays()
+
+        fake_register.assert_called_once_with()
+
+    def test_respects_disable_flag(self, monkeypatch):
+        """Test that USE_DASK_ARRAY_QUERY_OPTIMIZATION=False skips registration."""
+        fake_register = self._install_fake_dask_array(monkeypatch)
+        monkeypatch.setattr(evaluate, "USE_DASK_ARRAY_QUERY_OPTIMIZATION", False)
+
+        evaluate._maybe_register_optimized_dask_arrays()
+
+        fake_register.assert_not_called()
+        assert evaluate._dask_array_registration_attempted is False
+
+
+class TestComputeCaseOperatorDaskArrayRegistration:
+    """Test that compute_case_operator triggers dask-array registration."""
+
+    @mock.patch("extremeweatherbench.evaluate._maybe_register_optimized_dask_arrays")
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
+    @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
+    @mock.patch("extremeweatherbench.evaluate._evaluate_metric_and_return_df")
+    def test_compute_case_operator_attempts_registration(
+        self,
+        mock_evaluate_metric,
+        mock_derive_variables,
+        mock_build_datasets,
+        mock_register,
+        sample_case_operator,
+        sample_forecast_dataset,
+        sample_target_dataset,
+    ):
+        """Test compute_case_operator calls the registration helper first."""
+        mock_build_datasets.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+        mock_derive_variables.side_effect = lambda ds, variables, **kwargs: ds
+        mock_evaluate_metric.return_value = pd.DataFrame({"value": [1.0]})
+        sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+
+        evaluate.compute_case_operator(sample_case_operator)
+
+        mock_register.assert_called_once_with()
 
 
 class TestPipelineFunctions:

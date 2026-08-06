@@ -27,6 +27,16 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Whether to opportunistically register the optional `dask-array` package
+# (https://github.com/mrocklin/dask-array) as xarray's chunk manager before a
+# case operator opens any data. Has no effect if `dask-array` isn't
+# installed. Set to False to keep the standard `dask.array` chunk manager.
+USE_DASK_ARRAY_QUERY_OPTIMIZATION = True
+
+# Tracks whether registration has already been attempted in this process, so
+# repeated calls (e.g. once per case operator) don't retry needlessly.
+_dask_array_registration_attempted = False
+
 # Columns for the evaluation output dataframe
 OUTPUT_COLUMNS = [
     "value",
@@ -227,6 +237,42 @@ def _parallel_serial_config_check(
     return parallel_config
 
 
+def _maybe_register_optimized_dask_arrays() -> None:
+    """Register `dask-array` as xarray's chunk manager, if installed.
+
+    `dask-array` (https://github.com/mrocklin/dask-array) reimplements
+    `dask.array` with query optimization and can be registered as a drop-in
+    xarray chunk manager. Registration must happen before any chunked array
+    is created to take effect, so this is called at the start of
+    `compute_case_operator`, i.e. before a case operator's target/forecast
+    pipelines open any data.
+
+    This is a no-op if `USE_DASK_ARRAY_QUERY_OPTIMIZATION` is False, if the
+    optional `dask-array` package isn't installed, or if registration has
+    already been attempted once in this process. Each parallel worker
+    process (e.g. a `loky` subprocess) runs this independently the first
+    time it computes a case operator.
+    """
+    global _dask_array_registration_attempted
+    if not USE_DASK_ARRAY_QUERY_OPTIMIZATION or _dask_array_registration_attempted:
+        return
+    _dask_array_registration_attempted = True
+
+    try:
+        from dask_array.xarray import register
+    except ImportError:
+        logger.debug(
+            "Optional 'dask-array' package not installed; xarray will use "
+            "the standard dask.array chunk manager."
+        )
+        return
+
+    register()
+    logger.info(
+        "Registered dask-array as xarray's chunk manager for query optimization."
+    )
+
+
 def _run_evaluation(
     case_operators: list["cases.CaseOperator"],
     cache_dir: Optional[pathlib.Path] = None,
@@ -345,6 +391,8 @@ def compute_case_operator(
         TypeError: If any metric is not properly instantiated (i.e. isn't an
             instance or child class of BaseMetric).
     """
+    _maybe_register_optimized_dask_arrays()
+
     # Validate that all metrics are instantiated (not classes or callables)
     metric_list = list(case_operator.metric_list)
     for i, metric in enumerate(metric_list):

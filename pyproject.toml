@@ -66,6 +66,9 @@ data-prep = [
     "dask[complete]>=2025.1.0",
     "distributed>=2025.1.0",
 ]
+dask-array = [
+    "dask-array>=0.7.1",
+]
 
 [dependency-groups]
 dev = [
@@ -95,7 +98,7 @@ docs = [
     "pymdown-extensions>=10.19.1",
 ]
 
-complete = ["extremeweatherbench[data-prep]"]
+complete = ["extremeweatherbench[data-prep,dask-array]"]
 
 [build-system]
 requires = ["hatchling >= 1.26"]
