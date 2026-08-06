@@ -4897,7 +4897,12 @@ class TestEarlySignal:
 
 
 def _center_of_mass_reference(da):
-    """Per-slice ndimage.center_of_mass, the formulation being replaced."""
+    """Centre of mass of each 2-D field, from scipy.ndimage.
+
+    Loops over the leading dimensions and hands each slice to a library
+    routine, so the answer comes from an established implementation rather
+    than from the same weighted-mean arithmetic under test.
+    """
     from scipy import ndimage as ndi
 
     values = da.transpose("lead_time", "valid_time", "latitude", "longitude").values
