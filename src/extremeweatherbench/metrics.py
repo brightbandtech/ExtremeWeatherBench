@@ -397,7 +397,7 @@ class ThresholdMetric(CompositeMetric):
         Returns:
             Transformed contingency manager.
         """
-        binary_forecast, binary_target = self._binarize_pair(
+        binary_forecast, binary_target = utils.binarize_pair(
             forecast, target, forecast_threshold, target_threshold, op_func
         )
 
@@ -408,36 +408,6 @@ class ThresholdMetric(CompositeMetric):
         transformed = binary_contingency_manager.transform(preserve_dims=preserve_dims)
 
         return transformed
-
-    @staticmethod
-    def _binarize_pair(
-        forecast: xr.DataArray,
-        target: xr.DataArray,
-        forecast_threshold: float,
-        target_threshold: float,
-        op_func: Union[Callable, str] = operator.ge,
-    ) -> tuple[xr.DataArray, xr.DataArray]:
-        """Turn a forecast/target pair into 0/1 fields at their thresholds.
-
-        Args:
-            forecast: The forecast DataArray.
-            target: The target DataArray.
-            forecast_threshold: Threshold for binarizing forecast.
-            target_threshold: Threshold for binarizing target.
-            op_func: Comparison operator, or its string form.
-
-        Returns:
-            The binarized forecast and target, as floats.
-        """
-        op_func = utils.maybe_get_operator(op_func)
-        return (
-            utils.maybe_densify_dataarray(op_func(forecast, forecast_threshold)).astype(
-                float
-            ),
-            utils.maybe_densify_dataarray(op_func(target, target_threshold)).astype(
-                float
-            ),
-        )
 
     def _resolve_manager(
         self,
@@ -692,7 +662,7 @@ class ReceiverOperatingCharacteristic(ThresholdMetric):
 
         # roc_curve_data needs the binary fields themselves rather than a
         # contingency manager, but the binarization is the shared one.
-        binary_forecast, binary_target = self._binarize_pair(
+        binary_forecast, binary_target = utils.binarize_pair(
             forecast,
             target,
             kwargs.get("forecast_threshold", self.forecast_threshold),

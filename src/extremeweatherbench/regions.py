@@ -37,13 +37,17 @@ def _contiguous_runs(keep: np.ndarray) -> list[slice]:
     ]
 
 
-def _bbox_subset(
+def bbox_subset(
     dataset: xr.Dataset,
     latitude_bounds: tuple[float, float],
     longitude_bounds: tuple[float, float],
-    crosses_antimeridian: bool,
+    crosses_antimeridian: bool = False,
 ) -> xr.Dataset:
     """Cut a dataset down to a latitude/longitude box.
+
+    This is the subsetting step every :class:`Region` performs before applying
+    its own mask, exposed separately so it can be used on its own to trim a
+    dataset to an area of interest.
 
     Both bounds are inclusive, and the coordinates may run in either
     direction. Where the kept coordinates form one consecutive run, which is
@@ -65,6 +69,9 @@ def _bbox_subset(
 
     Returns:
         The dataset restricted to the box.
+
+    Examples:
+        >>> subset = bbox_subset(dataset, (30.0, 50.0), (-120.0, -90.0))
     """
     latitudes = dataset.indexes["latitude"].to_numpy()
     longitudes = dataset.indexes["longitude"].to_numpy()
@@ -172,7 +179,7 @@ class Region(abc.ABC):
             region_longitude_min > region_longitude_max
         )
 
-        return _bbox_subset(
+        return bbox_subset(
             dataset,
             latitude_bounds=(region_latitude_min, region_latitude_max),
             longitude_bounds=(region_longitude_min, region_longitude_max),
@@ -417,7 +424,7 @@ class ShapefileRegion(Region):
 
         # regionmask handles prime/antimeridian crossing itself, so the box cut
         # here only has to narrow the grid before the polygon test.
-        dataset = _bbox_subset(
+        dataset = bbox_subset(
             dataset,
             latitude_bounds=(latitude_min, latitude_max),
             longitude_bounds=(longitude_min, longitude_max),

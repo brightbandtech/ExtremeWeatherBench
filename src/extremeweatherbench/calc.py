@@ -1409,7 +1409,7 @@ def _is_true_landfall(
         return False
 
 
-def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataArray:
+def _binary_dilation_ufunc(data: np.ndarray, dilation_radius: int) -> np.ndarray:
     """Apply binary dilation along the last two (lat, lon) axes.
 
     Dilating a binary field with a square all-ones structuring element is the
@@ -1431,7 +1431,7 @@ def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataA
     ).astype(np.int8)
 
 
-def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.DataArray:
+def _compute_blurred_laplacian_ufunc(data: np.ndarray, sigma: float) -> np.ndarray:
     """Compute blurred Laplacian using scipy filters.
 
     Args:
