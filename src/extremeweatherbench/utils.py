@@ -294,7 +294,7 @@ def min_if_all_timesteps_present_forecast(
 
 
 def daily_min_over_complete_days(
-    da: xr.DataArray, time_resolution_hours: float
+    da: xr.DataArray, time_resolution_hours: Optional[float]
 ) -> xr.DataArray:
     """Daily minimum, left as NaN for any day missing some of its timesteps.
 
@@ -311,11 +311,28 @@ def daily_min_over_complete_days(
 
     Args:
         da: DataArray with a valid_time dimension.
-        time_resolution_hours: Spacing between timesteps, in hours.
+        time_resolution_hours: Spacing between timesteps, in hours, as returned
+            by determine_temporal_resolution.
 
     Returns:
         The per-day minimum indexed by dayofyear, NaN on incomplete days.
+
+    Raises:
+        ValueError: If the spacing is None, meaning it could not be determined.
     """
+    if time_resolution_hours is None:
+        # determine_temporal_resolution returns None when valid_time holds
+        # fewer than two timesteps, so there is no spacing to infer. Which days
+        # are complete is then undecidable, and every alternative here is worse:
+        # an all-NaN result reduces to a NaN maximum, which selects no timestamp
+        # and carries an empty valid_time into the caller's comparisons instead
+        # of reporting the real problem.
+        raise ValueError(
+            "Cannot take a daily minimum without a timestep spacing; "
+            f"valid_time holds {da.sizes.get('valid_time', 0)} timestep(s), "
+            "so determine_temporal_resolution could not infer one."
+        )
+
     timesteps_per_day = int(24 / time_resolution_hours)
     dayofyear = da["valid_time"].dt.dayofyear.values
     # np.unique sorts, which is the day order groupby would have produced.

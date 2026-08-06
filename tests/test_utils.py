@@ -2251,6 +2251,37 @@ class TestReduceDataArrayOutput:
 class TestDailyMinOverCompleteDays:
     """Pins the per-day minimum, taken over complete days only."""
 
+    @pytest.mark.parametrize("n_timesteps", [0, 1])
+    def test_a_series_too_short_to_have_a_spacing_has_no_resolution(self, n_timesteps):
+        # This is what makes the None below reachable rather than theoretical.
+        da = xr.DataArray(
+            np.arange(float(n_timesteps)),
+            dims=["valid_time"],
+            coords={
+                "valid_time": pd.date_range(
+                    "2021-06-01", periods=n_timesteps, freq="6h"
+                )
+            },
+        )
+        assert utils.determine_temporal_resolution(da) is None
+
+    def test_an_undetermined_resolution_is_rejected(self):
+        da = xr.DataArray(
+            [1.0],
+            dims=["valid_time"],
+            coords={"valid_time": pd.date_range("2021-06-01", periods=1, freq="6h")},
+        )
+        resolution = utils.determine_temporal_resolution(da)
+        with pytest.raises(ValueError, match="without a timestep spacing"):
+            utils.daily_min_over_complete_days(da, resolution)
+
+    def test_the_rejection_names_the_number_of_timesteps(self):
+        da = make_daily_series_dataarray(n_days=1, chunk=False).isel(
+            valid_time=slice(0, 1)
+        )
+        with pytest.raises(ValueError, match="holds 1 timestep"):
+            utils.daily_min_over_complete_days(da, None)
+
     def test_result_is_still_lazy(self):
         da = make_daily_series_dataarray(n_days=8)
         result = utils.daily_min_over_complete_days(da, 6.0)
