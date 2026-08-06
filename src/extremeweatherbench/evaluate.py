@@ -27,10 +27,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Whether to opportunistically register the optional `dask-array` package
+# Whether to register the `dask-array` package
 # (https://github.com/mrocklin/dask-array) as xarray's chunk manager before a
-# case operator opens any data. Has no effect if `dask-array` isn't
-# installed. Set to False to keep the standard `dask.array` chunk manager.
+# case operator opens any data. `dask-array` ships as a default EWB
+# dependency, so this is on by default; set to False to opt out and keep
+# the standard `dask.array` chunk manager instead.
 USE_DASK_ARRAY_QUERY_OPTIMIZATION = True
 
 # Tracks whether registration has already been attempted in this process, so
@@ -238,20 +239,22 @@ def _parallel_serial_config_check(
 
 
 def _maybe_register_optimized_dask_arrays() -> None:
-    """Register `dask-array` as xarray's chunk manager, if installed.
+    """Register `dask-array` as xarray's chunk manager by default.
 
     `dask-array` (https://github.com/mrocklin/dask-array) reimplements
     `dask.array` with query optimization and can be registered as a drop-in
-    xarray chunk manager. Registration must happen before any chunked array
-    is created to take effect, so this is called at the start of
-    `compute_case_operator`, i.e. before a case operator's target/forecast
-    pipelines open any data.
+    xarray chunk manager. It ships as a default EWB dependency, so this
+    registers it automatically unless a user opts out. Registration must
+    happen before any chunked array is created to take effect, so this is
+    called at the start of `compute_case_operator`, i.e. before a case
+    operator's target/forecast pipelines open any data.
 
-    This is a no-op if `USE_DASK_ARRAY_QUERY_OPTIMIZATION` is False, if the
-    optional `dask-array` package isn't installed, or if registration has
-    already been attempted once in this process. Each parallel worker
-    process (e.g. a `loky` subprocess) runs this independently the first
-    time it computes a case operator.
+    This is a no-op if `USE_DASK_ARRAY_QUERY_OPTIMIZATION` is False, if
+    `dask-array` isn't importable for some reason (e.g. a constrained
+    environment installed without it), or if registration has already been
+    attempted once in this process. Each parallel worker process (e.g. a
+    `loky` subprocess) runs this independently the first time it computes a
+    case operator.
     """
     global _dask_array_registration_attempted
     if not USE_DASK_ARRAY_QUERY_OPTIMIZATION or _dask_array_registration_attempted:
@@ -262,8 +265,8 @@ def _maybe_register_optimized_dask_arrays() -> None:
         from dask_array.xarray import register
     except ImportError:
         logger.debug(
-            "Optional 'dask-array' package not installed; xarray will use "
-            "the standard dask.array chunk manager."
+            "'dask-array' is not importable; xarray will use the standard "
+            "dask.array chunk manager."
         )
         return
 

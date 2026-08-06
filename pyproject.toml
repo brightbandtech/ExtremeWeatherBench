@@ -52,6 +52,7 @@ dependencies = [
     "dask[complete]>=2025.1.0",
     "distributed>=2025.1.0",
     "lazy-loader>=0.4",
+    "dask-array>=0.7.1",
 ]
 
 [project.optional-dependencies]
@@ -65,9 +66,6 @@ data-prep = [
     "virtualizarr==2.1.2",
     "dask[complete]>=2025.1.0",
     "distributed>=2025.1.0",
-]
-dask-array = [
-    "dask-array>=0.7.1",
 ]
 
 [dependency-groups]
@@ -98,7 +96,7 @@ docs = [
     "pymdown-extensions>=10.19.1",
 ]
 
-complete = ["extremeweatherbench[data-prep,dask-array]"]
+complete = ["extremeweatherbench[data-prep]"]
 
 [build-system]
 requires = ["hatchling >= 1.26"]

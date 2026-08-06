@@ -40,13 +40,13 @@ outputs = ewb.run_evaluation(parallel_config=parallel_config)
 
 The _safest_ approach is to run EWB in serial, with `n_jobs` set to 1. `Dask` will still be invoked during each `CaseOperator` when the case executes and computes the directed acyclic graph, only one at a time. That said, for evaluations with more cases this approach would likely be too time-consuming. 
 
-## Optional: Query-Optimized Dask Arrays
+## Query-Optimized Dask Arrays (On by Default)
 
-If the optional [`dask-array`](https://github.com/mrocklin/dask-array) package is installed (`pip install "extremeweatherbench[dask-array]"` or `pip install dask-array`), EWB automatically registers it as xarray's chunk manager before each `CaseOperator` opens its target/forecast data, so its graphs get query-optimized (reordered/fused) instead of using the standard `dask.array` chunk manager. Nothing else needs to change; this happens transparently the first time a case operator runs in a given process.
+[`dask-array`](https://github.com/mrocklin/dask-array) ships as a default EWB dependency. EWB automatically registers it as xarray's chunk manager before each `CaseOperator` opens its target/forecast data, so its graphs get query-optimized (reordered/fused) instead of using the standard `dask.array` chunk manager. Nothing needs to be configured to get this; it happens transparently the first time a case operator runs in a given process.
 
 Because parallel runs execute each `CaseOperator` in its own worker process (e.g. a `loky` subprocess, or a `dask` distributed worker), registration happens independently in every worker the first time it computes a case, rather than once globally.
 
-To opt out and keep the standard `dask.array` chunk manager even with `dask-array` installed, set:
+This is opt-out, not opt-in. To disable it and use the standard `dask.array` chunk manager instead, set:
 
 ```python
 from extremeweatherbench import evaluate

@@ -1,12 +1,18 @@
 version = 1
 requires-python = ">=3.11, <3.14"
 resolution-markers = [
-    "python_full_version >= '3.13' and platform_machine == 'ARM64' and sys_platform == 'win32'",
-    "python_full_version == '3.12.*' and platform_machine == 'ARM64' and sys_platform == 'win32'",
-    "(python_full_version >= '3.13' and platform_machine != 'ARM64') or (python_full_version >= '3.13' and sys_platform != 'win32')",
-    "(python_full_version == '3.12.*' and platform_machine != 'ARM64') or (python_full_version == '3.12.*' and sys_platform != 'win32')",
-    "python_full_version < '3.12' and platform_machine == 'ARM64' and sys_platform == 'win32'",
-    "(python_full_version < '3.12' and platform_machine != 'ARM64') or (python_full_version < '3.12' and sys_platform != 'win32')",
+    "python_full_version >= '3.13' and platform_machine == 'ARM64' and platform_system == 'Windows' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and platform_machine == 'ARM64' and platform_system != 'Windows' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and platform_machine == 'ARM64' and platform_system == 'Windows' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and platform_machine == 'ARM64' and platform_system != 'Windows' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and platform_machine == 'ARM64' and platform_system == 'Windows' and sys_platform != 'win32'",
+    "(python_full_version >= '3.13' and platform_machine != 'ARM64' and platform_system == 'Windows') or (python_full_version >= '3.13' and platform_machine != 'ARM64' and sys_platform == 'win32') or (python_full_version >= '3.13' and platform_system != 'Windows' and sys_platform != 'win32')",
+    "python_full_version == '3.12.*' and platform_machine == 'ARM64' and platform_system == 'Windows' and sys_platform != 'win32'",
+    "(python_full_version == '3.12.*' and platform_machine != 'ARM64' and platform_system == 'Windows') or (python_full_version == '3.12.*' and platform_machine != 'ARM64' and sys_platform == 'win32') or (python_full_version == '3.12.*' and platform_system != 'Windows' and sys_platform != 'win32')",
+    "python_full_version < '3.12' and platform_machine == 'ARM64' and platform_system == 'Windows' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and platform_machine == 'ARM64' and platform_system != 'Windows' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and platform_machine == 'ARM64' and platform_system == 'Windows' and sys_platform != 'win32'",
+    "(python_full_version < '3.12' and platform_machine != 'ARM64' and platform_system == 'Windows') or (python_full_version < '3.12' and platform_machine != 'ARM64' and sys_platform == 'win32') or (python_full_version < '3.12' and platform_system != 'Windows' and sys_platform != 'win32')",
 ]
 
 [[package]]
@@ -577,7 +583,7 @@ name = "click"
 version = "8.1.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "platform_system == 'Windows'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b9/2e/0090cbf739cee7d23781ad4b89a9894a41538e4fcf4c31dcdd705b78eb8b/click-8.1.8.tar.gz", hash = "sha256:ed53c9d8990d83c2a27deae68e4ee337473f6330c040a31d4225c9574d16096a", size = 226593 }
 wheels = [
@@ -837,7 +843,7 @@ name = "cryptography"
 version = "46.0.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cffi", marker = "(platform_machine != 'ARM64' and platform_python_implementation != 'PyPy') or (platform_python_implementation != 'PyPy' and sys_platform != 'win32')" },
+    { name = "cffi", marker = "(platform_machine != 'ARM64' and platform_python_implementation != 'PyPy' and platform_system == 'Windows') or (platform_machine != 'ARM64' and platform_python_implementation != 'PyPy' and sys_platform == 'win32') or (platform_python_implementation != 'PyPy' and platform_system != 'Windows' and sys_platform != 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a4/ba/04b1bd4218cbc58dc90ce967106d51582371b898690f3ae0402876cc4f34/cryptography-46.0.6.tar.gz", hash = "sha256:27550628a518c5c6c903d84f637fbecf287f6cb9ced3804838a1295dc1fd0759", size = 750542 }
 wheels = [
@@ -915,6 +921,26 @@ complete = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "pyarrow" },
+]
+
+[[package]]
+name = "dask-array"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dask" },
+    { name = "jinja2" },
+    { name = "numpy" },
+    { name = "rich" },
+    { name = "toolz" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/18/d8/4befdcb3840edbd7900ca3234a2b7699d0d001181e746b9f45f090638a1c/dask_array-0.7.1.tar.gz", hash = "sha256:d4b3c1eb97e4b3630f2385922977534ff2193e627b511ae04f08f60798c88959", size = 689243 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/37/78/03746fbfabef5ae8695de6d5af9a5823ecde59006c52ac15a45788bdc911/dask_array-0.7.1-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:118fb5d92fa82e808dabf00ad01fb3196fabd3bd90de6546282787a989aca5c4", size = 1148786 },
+    { url = "https://files.pythonhosted.org/packages/ac/41/8e660bd98950fc38c82ddbb1c47f08d05ce79bd59a1406db96bf9dcecfbf/dask_array-0.7.1-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:17ad5502e9e656c4326486846a181940854162c21dfbd2771399ab6c6280e7b6", size = 1179230 },
+    { url = "https://files.pythonhosted.org/packages/01/ff/94041375ca7f283e021b63dfe50c2d2580b425dc31a13db5c147a6fb5483/dask_array-0.7.1-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:127a66b47689b9ae870c61831f2d993b0a2fc28b3980164f8e2a0fb47fffde72", size = 1188296 },
+    { url = "https://files.pythonhosted.org/packages/4f/de/04d2280fe297374f1da236c69790a2471555a4ac6b9dc364c032f6d8d79a/dask_array-0.7.1-cp310-abi3-win_amd64.whl", hash = "sha256:dc3d79caeb443d5cf1935409003225e63d5caafdb41aa5f61a28b85a867a7d68", size = 1037802 },
+    { url = "https://files.pythonhosted.org/packages/00/ee/92e8170d26a5594b3d4fc388955b9c2e401cf7ebbd8e8582b0e0bbabed89/dask_array-0.7.1-py3-none-any.whl", hash = "sha256:6b6be01d3783bca71941458e5a213485bd61d0a95f229dfbc53c3fa262496034", size = 442848 },
 ]
 
 [[package]]
@@ -1116,6 +1142,7 @@ dependencies = [
     { name = "click" },
     { name = "dacite" },
     { name = "dask", extra = ["complete"] },
+    { name = "dask-array" },
     { name = "distributed" },
     { name = "eccodes" },
     { name = "flox" },
@@ -1125,6 +1152,7 @@ dependencies = [
     { name = "icechunk" },
     { name = "joblib" },
     { name = "kerchunk", extra = ["dev"] },
+    { name = "lazy-loader" },
     { name = "numba" },
     { name = "numpy" },
     { name = "pandas" },
@@ -1193,6 +1221,7 @@ requires-dist = [
     { name = "dacite", specifier = ">=1.8.1" },
     { name = "dask", extras = ["complete"], specifier = ">=2025.1.0" },
     { name = "dask", extras = ["complete"], marker = "extra == 'data-prep'", specifier = ">=2025.1.0" },
+    { name = "dask-array", specifier = ">=0.7.1" },
     { name = "distributed", specifier = ">=2025.1.0" },
     { name = "distributed", marker = "extra == 'data-prep'", specifier = ">=2025.1.0" },
     { name = "eccodes", specifier = "==2.42.0" },
@@ -1204,6 +1233,7 @@ requires-dist = [
     { name = "icechunk", specifier = ">=1.1.14" },
     { name = "joblib", specifier = ">=1.4.2" },
     { name = "kerchunk", extras = ["dev"], git = "https://github.com/fsspec/kerchunk" },
+    { name = "lazy-loader", specifier = ">=0.4" },
     { name = "matplotlib", marker = "extra == 'data-prep'", specifier = ">=3.10.0" },
     { name = "numba", specifier = ">=0.63.1" },
     { name = "numpy", specifier = ">=2.2.0" },
@@ -1963,7 +1993,7 @@ name = "ipykernel"
 version = "7.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "appnope", marker = "sys_platform == 'darwin'" },
+    { name = "appnope", marker = "(platform_machine != 'ARM64' and platform_system == 'Darwin') or (platform_system == 'Darwin' and sys_platform != 'win32')" },
     { name = "comm" },
     { name = "debugpy" },
     { name = "ipython" },
@@ -2402,9 +2432,9 @@ dependencies = [
     { name = "jaraco-classes" },
     { name = "jaraco-context" },
     { name = "jaraco-functools" },
-    { name = "jeepney", marker = "sys_platform == 'linux'" },
+    { name = "jeepney", marker = "(platform_machine != 'ARM64' and sys_platform == 'linux') or (platform_system != 'Windows' and sys_platform == 'linux')" },
     { name = "pywin32-ctypes", marker = "sys_platform == 'win32'" },
-    { name = "secretstorage", marker = "sys_platform == 'linux'" },
+    { name = "secretstorage", marker = "(platform_machine != 'ARM64' and sys_platform == 'linux') or (platform_system != 'Windows' and sys_platform == 'linux')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/43/4b/674af6ef2f97d56f0ab5153bf0bfa28ccb6c3ed4d1babf4305449668807b/keyring-25.7.0.tar.gz", hash = "sha256:fe01bd85eb3f8fb3dd0405defdeac9a5b4f6f0439edbb3149577f244a2e8245b", size = 63516 }
 wheels = [
@@ -2858,7 +2888,7 @@ version = "1.6.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "platform_system == 'Windows'" },
     { name = "ghp-import" },
     { name = "jinja2" },
     { name = "markdown" },
@@ -4413,8 +4443,10 @@ name = "rasterio"
 version = "1.4.4"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12' and platform_machine == 'ARM64' and sys_platform == 'win32'",
-    "(python_full_version < '3.12' and platform_machine != 'ARM64') or (python_full_version < '3.12' and sys_platform != 'win32')",
+    "python_full_version < '3.12' and platform_machine == 'ARM64' and platform_system == 'Windows' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and platform_machine == 'ARM64' and platform_system != 'Windows' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and platform_machine == 'ARM64' and platform_system == 'Windows' and sys_platform != 'win32'",
+    "(python_full_version < '3.12' and platform_machine != 'ARM64' and platform_system == 'Windows') or (python_full_version < '3.12' and platform_machine != 'ARM64' and sys_platform == 'win32') or (python_full_version < '3.12' and platform_system != 'Windows' and sys_platform != 'win32')",
 ]
 dependencies = [
     { name = "affine", marker = "python_full_version < '3.12'" },
@@ -4459,10 +4491,14 @@ name = "rasterio"
 version = "1.5.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.13' and platform_machine == 'ARM64' and sys_platform == 'win32'",
-    "python_full_version == '3.12.*' and platform_machine == 'ARM64' and sys_platform == 'win32'",
-    "(python_full_version >= '3.13' and platform_machine != 'ARM64') or (python_full_version >= '3.13' and sys_platform != 'win32')",
-    "(python_full_version == '3.12.*' and platform_machine != 'ARM64') or (python_full_version == '3.12.*' and sys_platform != 'win32')",
+    "python_full_version >= '3.13' and platform_machine == 'ARM64' and platform_system == 'Windows' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and platform_machine == 'ARM64' and platform_system != 'Windows' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and platform_machine == 'ARM64' and platform_system == 'Windows' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and platform_machine == 'ARM64' and platform_system != 'Windows' and sys_platform == 'win32'",
+    "python_full_version >= '3.13' and platform_machine == 'ARM64' and platform_system == 'Windows' and sys_platform != 'win32'",
+    "(python_full_version >= '3.13' and platform_machine != 'ARM64' and platform_system == 'Windows') or (python_full_version >= '3.13' and platform_machine != 'ARM64' and sys_platform == 'win32') or (python_full_version >= '3.13' and platform_system != 'Windows' and sys_platform != 'win32')",
+    "python_full_version == '3.12.*' and platform_machine == 'ARM64' and platform_system == 'Windows' and sys_platform != 'win32'",
+    "(python_full_version == '3.12.*' and platform_machine != 'ARM64' and platform_system == 'Windows') or (python_full_version == '3.12.*' and platform_machine != 'ARM64' and sys_platform == 'win32') or (python_full_version == '3.12.*' and platform_system != 'Windows' and sys_platform != 'win32')",
 ]
 dependencies = [
     { name = "affine", marker = "python_full_version >= '3.12'" },
@@ -4932,8 +4968,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography", marker = "platform_machine != 'ARM64' or sys_platform != 'win32'" },
-    { name = "jeepney", marker = "platform_machine != 'ARM64' or sys_platform != 'win32'" },
+    { name = "cryptography", marker = "(platform_machine != 'ARM64' and platform_system == 'Windows') or (platform_machine != 'ARM64' and sys_platform == 'win32') or (platform_system != 'Windows' and sys_platform != 'win32')" },
+    { name = "jeepney", marker = "(platform_machine != 'ARM64' and platform_system == 'Windows') or (platform_machine != 'ARM64' and sys_platform == 'win32') or (platform_system != 'Windows' and sys_platform != 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884 }
 wheels = [
@@ -5198,7 +5234,7 @@ name = "tqdm"
 version = "4.67.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "platform_system == 'Windows'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a8/4b/29b4ef32e036bb34e4ab51796dd745cdba7ed47ad142a9f4a1eb8e0c744d/tqdm-4.67.1.tar.gz", hash = "sha256:f8aef9c52c08c13a65f30ea34f4e5aac3fd1a34959879d7e59e63027286627f2", size = 169737 }
 wheels = [
