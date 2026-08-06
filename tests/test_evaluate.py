@@ -1185,14 +1185,15 @@ class TestComputeCaseOperator:
         mock_build_datasets.assert_called_once_with(sample_case_operator)
 
 
-def test_dask_array_query_optimization_defaults_to_opt_in():
-    """Test that registration defaults to off (opt-in), not opt-out.
+def test_dask_array_query_optimization_defaults_to_opt_out():
+    """Test that registration defaults to on (opt-out), not opt-in.
 
-    Registering `dask-array` mid-process raises a hard TypeError if it's
-    combined with an already-existing chunked array (e.g. a climatology
-    DataArray built while constructing metrics), so this must stay opt-in.
+    `dask-array` ships as a default dependency and is registered
+    automatically. EWB's own known chunk-manager-mixing hazard (the
+    climatology DataArray in `metrics.DurationMeanError`) is handled in
+    `utils.interp_climatology_to_target`, so this can stay on by default.
     """
-    assert evaluate.USE_DASK_ARRAY_QUERY_OPTIMIZATION is False
+    assert evaluate.USE_DASK_ARRAY_QUERY_OPTIMIZATION is True
 
 
 class TestMaybeRegisterOptimizedDaskArrays:
@@ -1225,11 +1226,21 @@ class TestMaybeRegisterOptimizedDaskArrays:
         assert evaluate._dask_array_registration_attempted is True
 
     def test_noop_when_dask_array_not_installed(self, monkeypatch):
-        """Test that a missing dask-array package is handled gracefully."""
-        monkeypatch.delitem(sys.modules, "dask_array", raising=False)
+        """Test that a missing dask-array package is handled gracefully.
+
+        `dask_array` is a real core dependency in this environment, so
+        merely deleting it from `sys.modules` would just force a fresh
+        (successful) import of the real package instead of simulating an
+        absent one -- and would register it for real, permanently mutating
+        xarray's process-wide chunk manager registry for every other test.
+        Setting the `sys.modules` entry to `None` is the standard sentinel
+        that forces Python's import system to raise `ImportError` without
+        attempting a real import.
+        """
+        monkeypatch.setitem(sys.modules, "dask_array", None)
         monkeypatch.delitem(sys.modules, "dask_array.xarray", raising=False)
 
-        # Should not raise even though dask-array isn't installed
+        # Should not raise even though dask-array isn't importable
         evaluate._maybe_register_optimized_dask_arrays()
 
         assert evaluate._dask_array_registration_attempted is True

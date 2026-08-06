@@ -1112,6 +1112,62 @@ class TestInterpClimatologyToTarget:
         # Should have exact values since points match
         np.testing.assert_array_almost_equal(result.values, climatology.values)
 
+    def test_crops_and_loads_chunked_climatology_before_interp(self):
+        """A chunked climatology with a `valid_time` dim is cropped to the
+        target's time window and loaded before interpolation.
+
+        Regression test for a real crash: if `climatology` was chunked with
+        a different xarray chunk manager than whatever is currently
+        registered (e.g. `dask-array`'s), `.interp_like()` builds new
+        indexer arrays with the currently-registered manager and raises
+        `TypeError: Mixing chunked array types is not supported` when
+        combining them with climatology's own array. Densifying a small,
+        time-cropped slice first avoids this without loading the (possibly
+        huge, global) full climatology into memory.
+        """
+        dask_array_xarray = pytest.importorskip("dask_array.xarray")
+        from xarray.namedarray.parallelcompat import list_chunkmanagers
+
+        managers = list_chunkmanagers()
+        original_dask_manager = managers.get("dask")
+        try:
+            rng = np.random.default_rng(0)
+            # Built with the standard `dask.array` chunk manager.
+            climatology = xr.DataArray(
+                rng.random((10, 3, 3)),
+                dims=["valid_time", "latitude", "longitude"],
+                coords={
+                    "valid_time": pd.date_range("2023-01-01", periods=10, freq="1D"),
+                    "latitude": [0.0, 10.0, 20.0],
+                    "longitude": [100.0, 110.0, 120.0],
+                },
+            ).chunk({"valid_time": 5})
+            assert type(climatology.data).__module__.startswith("dask.array")
+
+            # Flip the currently-registered "dask" chunk manager, simulating
+            # dask-array being registered later in the same process.
+            dask_array_xarray.register()
+
+            target = xr.DataArray(
+                rng.random((4, 2, 2)),
+                dims=["valid_time", "latitude", "longitude"],
+                coords={
+                    "valid_time": pd.date_range("2023-01-03", periods=4, freq="1D"),
+                    "latitude": [5.0, 15.0],
+                    "longitude": [105.0, 115.0],
+                },
+            )
+
+            # Should not raise, despite the chunk manager mismatch.
+            result = utils.interp_climatology_to_target(target, climatology)
+
+            assert isinstance(result.data, np.ndarray)
+            np.testing.assert_array_equal(result.latitude.values, [5.0, 15.0])
+            np.testing.assert_array_equal(result.longitude.values, [105.0, 115.0])
+        finally:
+            if original_dask_manager is not None:
+                managers["dask"] = original_dask_manager
+
 
 class TestReduceXarrayMethod:
     """Test the reduce_dataarray function."""

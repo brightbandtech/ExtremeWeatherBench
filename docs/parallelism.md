@@ -40,24 +40,24 @@ outputs = ewb.run_evaluation(parallel_config=parallel_config)
 
 The _safest_ approach is to run EWB in serial, with `n_jobs` set to 1. `Dask` will still be invoked during each `CaseOperator` when the case executes and computes the directed acyclic graph, only one at a time. That said, for evaluations with more cases this approach would likely be too time-consuming. 
 
-## Query-Optimized Dask Arrays (Opt-In)
+## Query-Optimized Dask Arrays (On by Default)
 
-[`dask-array`](https://github.com/mrocklin/dask-array) ships as a default EWB dependency, but registering it as xarray's chunk manager is **opt-in**, not automatic. To enable it:
+[`dask-array`](https://github.com/mrocklin/dask-array) ships as a default EWB dependency. EWB automatically registers it as xarray's chunk manager before each `CaseOperator` opens its target/forecast data, so its graphs get query-optimized (reordered/fused) instead of using the standard `dask.array` chunk manager. Nothing needs to be configured to get this; it happens transparently the first time a case operator runs in a given process.
+
+Because parallel runs execute each `CaseOperator` in its own worker process (e.g. a `loky` subprocess, or a `dask` distributed worker), registration happens independently in every worker the first time it computes a case, rather than once globally.
+
+This is opt-out, not opt-in. To disable it and use the standard `dask.array` chunk manager instead, set:
 
 ```python
 from extremeweatherbench import evaluate
 
-evaluate.USE_DASK_ARRAY_QUERY_OPTIMIZATION = True
+evaluate.USE_DASK_ARRAY_QUERY_OPTIMIZATION = False
 ```
 
-When enabled, EWB registers `dask-array` before each `CaseOperator` opens its target/forecast data, so its graphs get query-optimized (reordered/fused) instead of using the standard `dask.array` chunk manager. Because parallel runs execute each `CaseOperator` in its own worker process (e.g. a `loky` subprocess, or a `dask` distributed worker), registration happens independently in every worker the first time it computes a case, rather than once globally.
+### The chunk-manager mixing hazard
 
-### Why this isn't on by default
+Registering a chunk manager only affects arrays created afterward: xarray raises `TypeError: Mixing chunked array types is not supported` the moment an array created *before* registration is combined with one created *after* it, in the same process.
 
-Chunk managers can't be mixed: xarray raises `TypeError: Mixing chunked array types is not supported` the moment an array created *before* registration is combined with one created *after* it, in the same process. This is not a rare edge case — it includes:
+EWB has one known built-in instance of this: `defaults.get_climatology()`, used by `defaults.get_brightband_evaluation_objects()` (the example above) to build `DurationMeanError(threshold_criteria=...)`, opens a chunked, global-extent `DataArray` in the main process before any `CaseOperator` runs — i.e. before registration ever fires. `utils.interp_climatology_to_target()` handles this case: it crops the climatology to the case's time window (a couple of days' buffer either side) and loads that small slice into memory before interpolating, so there's nothing chunked left to conflict with. The full global climatology (tens of GB) is never loaded.
 
-- Threshold/weights `DataArray`s built while constructing metrics, e.g. `defaults.get_climatology()` inside `defaults.get_brightband_evaluation_objects()` (used in the example above). That climatology array is opened in the main process before any `CaseOperator` runs, so it predates registration and will crash if combined with post-registration forecast/target data.
-- Any dataset you build yourself and pass in via `XarrayForecast(ds=...)` before constructing `ExtremeWeatherBench`.
-- Region masks, land/ocean geometries, or any other chunked array your own code constructs ahead of time.
-
-Only enable `USE_DASK_ARRAY_QUERY_OPTIMIZATION` if you've verified nothing in your pipeline constructs a chunked array before `compute_case_operator` runs, or if the arrays involved are small enough to `.load()`/`.compute()` into plain NumPy first so there's nothing dask-backed left to mix.
+**Known limitation:** this only covers EWB's own built-in usage. If you construct your own chunked array ahead of time and pass it into EWB — custom metric weights or thresholds, a dataset you already opened and chunked yourself before handing it to `XarrayForecast(ds=...)`, etc. — that array keeps using whichever chunk manager was active when you created it, and will crash if EWB combines it with a case operator's post-registration data. Either construct such arrays inside your own pipeline after `compute_case_operator` would have run (hard to guarantee in general), `.load()`/`.compute()` them into plain NumPy first, or set `evaluate.USE_DASK_ARRAY_QUERY_OPTIMIZATION = False`.

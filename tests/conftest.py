@@ -7,8 +7,30 @@ import pytest
 import sparse
 import xarray as xr
 from click import testing
+from xarray.namedarray.parallelcompat import list_chunkmanagers
 
 from extremeweatherbench import calc
+
+
+@pytest.fixture(autouse=True)
+def _reset_dask_chunk_manager():
+    """Undo any real `dask-array` chunk-manager registration after a test.
+
+    `dask_array.xarray.register()` mutates xarray's process-wide chunk
+    manager registry in place, with no way to unregister. Since EWB
+    registers it by default (`evaluate.USE_DASK_ARRAY_QUERY_OPTIMIZATION`),
+    any test that exercises `compute_case_operator` for real (rather than
+    mocking the registration helper) would otherwise permanently switch
+    every later test in the session from the standard `dask.array` chunk
+    manager to `dask-array`'s, since registration has no reverse.
+    """
+    managers = list_chunkmanagers()
+    original_dask_manager = managers.get("dask")
+    yield
+    if original_dask_manager is not None:
+        managers["dask"] = original_dask_manager
+    else:
+        managers.pop("dask", None)
 
 
 def make_sample_sparse_target_dataarray() -> xr.DataArray:

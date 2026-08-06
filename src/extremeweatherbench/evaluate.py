@@ -30,16 +30,22 @@ logger = logging.getLogger(__name__)
 # Whether to register the `dask-array` package
 # (https://github.com/mrocklin/dask-array) as xarray's chunk manager before a
 # case operator opens any data. `dask-array` ships as a default EWB
-# dependency, but registration is opt-in (defaults to False): any array
-# created in this process *before* registration happens (e.g. a
-# threshold/weights DataArray built while constructing metrics, such as
-# `defaults.get_climatology()` inside `get_brightband_evaluation_objects()`)
-# will use the standard `dask.array` chunk manager, and xarray raises a
-# hard TypeError ("Mixing chunked array types is not supported") the
-# moment such an array is combined with one created after registration.
-# Only set this to True if you've verified nothing in your pipeline
-# constructs chunked arrays before `compute_case_operator` runs.
-USE_DASK_ARRAY_QUERY_OPTIMIZATION = False
+# dependency, so this is on by default; set to False to opt out and keep
+# the standard `dask.array` chunk manager instead.
+#
+# Registering only affects arrays created *after* it runs: an array
+# created earlier in this process (e.g. a threshold/weights DataArray built
+# while constructing metrics) would use the standard `dask.array` chunk
+# manager, and xarray raises a hard TypeError ("Mixing chunked array types
+# is not supported") the moment such an array is combined with one created
+# after registration. EWB densifies its own such case (the climatology
+# DataArray in `metrics.DurationMeanError`, e.g. via
+# `defaults.get_climatology()`) before combining it with anything, via
+# `utils.interp_climatology_to_target()`. If you construct your own
+# chunked arrays (custom metric weights/thresholds, a pre-opened
+# `XarrayForecast(ds=...)`, etc.) before a case operator runs, set this to
+# False, or `.load()`/`.compute()` those arrays first.
+USE_DASK_ARRAY_QUERY_OPTIMIZATION = True
 
 # Tracks whether registration has already been attempted in this process, so
 # repeated calls (e.g. once per case operator) don't retry needlessly.
@@ -246,21 +252,24 @@ def _parallel_serial_config_check(
 
 
 def _maybe_register_optimized_dask_arrays() -> None:
-    """Register `dask-array` as xarray's chunk manager, if opted in.
+    """Register `dask-array` as xarray's chunk manager by default.
 
     `dask-array` (https://github.com/mrocklin/dask-array) reimplements
     `dask.array` with query optimization and can be registered as a drop-in
-    xarray chunk manager. It ships as a default EWB dependency, but
-    registration is opt-in (see `USE_DASK_ARRAY_QUERY_OPTIMIZATION`)
-    because it can only safely apply to arrays created *after* it runs:
-    xarray raises `TypeError: Mixing chunked array types is not supported`
-    if an array created before registration (e.g. a threshold/weights
-    DataArray built while constructing metrics, such as
-    `defaults.get_climatology()`) is later combined with one created after.
-    Registration is called at the start of `compute_case_operator`, i.e.
-    before a case operator's target/forecast pipelines open any data, since
-    that's the earliest point that's still guaranteed not to predate a
-    case operator's own data.
+    xarray chunk manager. It ships as a default EWB dependency, so this
+    registers it automatically unless a user opts out (see
+    `USE_DASK_ARRAY_QUERY_OPTIMIZATION`). Registration is called at the
+    start of `compute_case_operator`, i.e. before a case operator's
+    target/forecast pipelines open any data, since that's the earliest
+    point that's still guaranteed not to predate a case operator's own
+    data.
+
+    Registering only affects arrays created afterward: xarray raises
+    `TypeError: Mixing chunked array types is not supported` if an array
+    created before registration is later combined with one created after.
+    See `USE_DASK_ARRAY_QUERY_OPTIMIZATION`'s docstring for how EWB's own
+    known instance of this (climatology-based metrics) is handled, and
+    what to do if you construct your own chunked arrays ahead of time.
 
     This is a no-op unless `USE_DASK_ARRAY_QUERY_OPTIMIZATION` is True, if
     `dask-array` isn't importable for some reason (e.g. a constrained
