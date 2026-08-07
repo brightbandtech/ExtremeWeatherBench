@@ -520,6 +520,24 @@ def _reshape_across_lead_time(
         dims=indexer_dims,
     )
     reshaped = obj.isel({source_dim: source_indexer, "lead_time": lead_indexer})
+    if reshaped.chunks:
+        # Pointwise gathers like the isel above produce one output chunk per
+        # source chunk touched, so a source chunked at 1 along source_dim (the
+        # common on-disk layout for forecast archives) leaves the result
+        # chunked at 1 along both output dims. That fragmentation is invisible
+        # here but poisons every later dask operation with per-element task
+        # overhead, so consolidate back to a normal chunking immediately.
+        # Dataset.chunk() also converts eager auxiliary coordinates (e.g. the
+        # gathered init_time/valid_time riding along both dims) into dask
+        # arrays, which then makes them unusable as a groupby key downstream,
+        # so restore whichever coordinates were eager beforehand.
+        eager_coords = {
+            name: coord
+            for name, coord in reshaped.coords.items()
+            if not (hasattr(coord.data, "chunks") and coord.chunks is not None)
+        }
+        reshaped = reshaped.chunk({"lead_time": -1, target_dim: "auto"})
+        reshaped = reshaped.assign_coords(eager_coords)
 
     if not present.all():
         present_da = xr.DataArray(present, dims=indexer_dims)

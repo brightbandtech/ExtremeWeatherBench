@@ -238,6 +238,116 @@ def test_convert_init_time_to_valid_time():
     assert "init_time" not in result.dims or "valid_time" in result.dims
 
 
+def test_convert_init_time_to_valid_time_consolidates_dask_chunks():
+    """Gathering onto valid_time must not fragment the result per-element.
+
+    Regression test: on real forecast archives, init_time is commonly
+    chunked at 1 on disk. The pointwise isel gather that builds valid_time
+    inherits one output chunk per source chunk touched, which without a
+    consolidating rechunk leaves the result chunked at 1 along both output
+    dims. That fragmentation is invisible on this small array but explodes
+    per-task scheduling overhead on real data, and was the root cause of a
+    large end-to-end slowdown despite this function's own benchmark showing
+    a speedup.
+    """
+    import dask.array as da
+
+    n_init, n_lead = 8, 5
+    ds = xr.Dataset(
+        data_vars={
+            "temp": (
+                ["init_time", "lead_time"],
+                da.from_array(
+                    np.arange(n_init * n_lead).reshape(n_init, n_lead),
+                    chunks=(1, -1),
+                ),
+            )
+        },
+        coords={
+            "init_time": pd.date_range("2020-01-01", periods=n_init, freq="6h"),
+            "lead_time": pd.timedelta_range("0h", periods=n_lead, freq="6h"),
+        },
+    )
+
+    result = utils.convert_init_time_to_valid_time(ds)
+
+    # The result should not be fragmented into one chunk per element.
+    temp_chunks = result["temp"].chunks
+    assert temp_chunks is not None
+    assert len(temp_chunks[0]) < n_lead
+    assert len(temp_chunks[1]) < (n_init + n_lead - 1)
+
+
+def test_convert_init_time_to_valid_time_keeps_gathered_coord_eager():
+    """The gathered init_time coordinate must stay usable as a groupby key.
+
+    Regression test: consolidating the data's dask chunks must not convert
+    the auxiliary init_time coordinate (riding along lead_time and
+    valid_time after the gather) into a dask array, since xarray refuses to
+    group by a chunked array without explicit labels.
+    """
+    import dask.array as da
+
+    n_init, n_lead = 8, 5
+    ds = xr.Dataset(
+        data_vars={
+            "temp": (
+                ["init_time", "lead_time"],
+                da.from_array(
+                    np.arange(n_init * n_lead).reshape(n_init, n_lead),
+                    chunks=(1, -1),
+                ),
+            )
+        },
+        coords={
+            "init_time": pd.date_range("2020-01-01", periods=n_init, freq="6h"),
+            "lead_time": pd.timedelta_range("0h", periods=n_lead, freq="6h"),
+        },
+    )
+
+    result = utils.convert_init_time_to_valid_time(ds)
+
+    init_time_coord = result["init_time"]
+    is_dask = hasattr(init_time_coord.data, "chunks") and (
+        init_time_coord.chunks is not None
+    )
+    assert not is_dask
+
+    # This is the exact operation that failed before the fix.
+    grouped = result["temp"].groupby("init_time").sum()
+    assert "init_time" in grouped.dims
+
+
+def test_convert_init_time_to_valid_time_dask_matches_eager():
+    """Consolidating chunks must not change the gathered values."""
+    import dask.array as da
+
+    n_init, n_lead = 6, 4
+    values = np.arange(n_init * n_lead).reshape(n_init, n_lead).astype(float)
+    coords = {
+        "init_time": pd.date_range("2020-01-01", periods=n_init, freq="6h"),
+        "lead_time": pd.timedelta_range("0h", periods=n_lead, freq="6h"),
+    }
+
+    eager_ds = xr.Dataset(
+        data_vars={"temp": (["init_time", "lead_time"], values)}, coords=coords
+    )
+    dask_ds = xr.Dataset(
+        data_vars={
+            "temp": (
+                ["init_time", "lead_time"],
+                da.from_array(values, chunks=(1, -1)),
+            )
+        },
+        coords=coords,
+    )
+
+    eager_result = utils.convert_init_time_to_valid_time(eager_ds)
+    dask_result = utils.convert_init_time_to_valid_time(dask_ds)
+
+    xr.testing.assert_allclose(eager_result["temp"], dask_result["temp"].compute())
+
+
 def test_maybe_get_closest_timestamp_to_center_of_valid_times_single_output():
     """Test passthrough behavior with single output time."""
     # Create valid_time values (center will be middle value)
