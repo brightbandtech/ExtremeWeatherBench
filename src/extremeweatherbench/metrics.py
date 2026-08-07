@@ -1279,8 +1279,11 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
         forecast = utils.reduce_dataarray(
             forecast, method="mean", reduce_dims=reduce_dims, skipna=True
         )
+        # Computed here because the where(drop=True) below turns these
+        # values into both a comparison value and a mask, which needs a
+        # concrete result rather than a lazy one.
         target = utils.reduce_dataarray(
-            target, method="mean", reduce_dims=reduce_dims, skipna=True
+            target, method="mean", reduce_dims=reduce_dims, compute=True, skipna=True
         )
 
         time_resolution_hours = utils.determine_temporal_resolution(target)

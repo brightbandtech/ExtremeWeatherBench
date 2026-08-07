@@ -778,161 +778,114 @@ class TestMaximumLowestMeanAbsoluteError:
         metric = metrics.MaximumLowestMeanAbsoluteError()
         assert isinstance(metric, metrics.BaseMetric)
 
+    # Day mins: 10, 15, 12, 8 -> max of mins is 15 (day 2)
+    _FOUR_DAY_TEMPS = np.array(
+        [
+            15,
+            12,
+            10,
+            14,  # Day 1: min=10
+            20,
+            17,
+            15,
+            18,  # Day 2: min=15
+            18,
+            14,
+            12,
+            16,  # Day 3: min=12
+            14,
+            10,
+            8,
+            12,  # Day 4: min=8
+        ]
+    )
+
+    @staticmethod
+    def _make_target(values, chunk=False):
+        times = pd.date_range("2020-01-01", periods=16, freq="6h")
+        da = xr.DataArray(
+            values, dims=["valid_time"], coords={"valid_time": times}
+        ).expand_dims({"latitude": [0], "longitude": [0]})
+        if chunk:
+            return da.chunk({"valid_time": -1, "latitude": -1, "longitude": -1})
+        return da
+
+    @staticmethod
+    def _make_forecast(values, lead_times=(0, 6, 12), chunk=False):
+        """Forecast with a real lead_time dim broadcast over valid_time.
+
+        This is the shape daily_min_over_complete_days is actually built
+        for: several lead times all verifying against the same valid_time
+        axis, per test_lead_time_is_preserved_for_forecast_shaped_input in
+        test_utils.py. A forecast where valid_time is only a 1-D
+        coordinate riding along lead_time is a different, unsupported
+        shape and is not exercised here.
+        """
+        target = TestMaximumLowestMeanAbsoluteError._make_target(values)
+        da = target.expand_dims(lead_time=list(lead_times)).copy()
+        if chunk:
+            da = da.chunk(
+                {"lead_time": -1, "valid_time": -1, "latitude": -1, "longitude": -1}
+            )
+        return da
+
     def test_compute_metric_structure(self):
-        """Test that _compute_metric returns the expected structure."""
+        """_compute_metric returns one value per lead_time, not a crash."""
         metric = metrics.MaximumLowestMeanAbsoluteError()
+        forecast = self._make_forecast(self._FOUR_DAY_TEMPS + 1)
+        target = self._make_target(self._FOUR_DAY_TEMPS)
 
-        # Create test data spanning multiple days with 6-hourly data
-        times = pd.date_range("2020-01-01", periods=16, freq="6h")  # 4 days
-        temp_data = np.array(
-            [
-                15,
-                12,
-                10,
-                14,  # Day 1
-                20,
-                17,
-                15,
-                18,  # Day 2
-                18,
-                14,
-                12,
-                16,  # Day 3
-                14,
-                10,
-                8,
-                12,  # Day 4
-            ]
-        )
+        result = metric._compute_metric(forecast, target)
 
-        forecast = xr.DataArray(
-            data=temp_data + 1, dims=["valid_time"], coords={"valid_time": times}
-        ).expand_dims(["latitude", "longitude"])
-
-        target = xr.DataArray(
-            data=temp_data, dims=["valid_time"], coords={"valid_time": times}
-        ).expand_dims(["latitude", "longitude"])
-
-        # Test should not crash - actual computation might be complex
-        try:
-            result = metric._compute_metric(forecast, target)
-            # If it succeeds, check structure
-            assert isinstance(result, (xr.Dataset, xr.DataArray))
-        except Exception:
-            # If computation fails due to data structure issues, at least test
-            # instantiation works
-            assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
+        assert isinstance(result, xr.DataArray)
+        assert result.dims == ("lead_time",)
+        np.testing.assert_allclose(result.values, 1.0)
 
     def test_compute_metric_with_lead_time(self):
-        """Test MaximumLowestMeanAbsoluteError with proper forecast structure
-        including lead_time dimension to cover lines 213-250.
-        """
+        """MaximumLowestMeanAbsoluteError preserves the lead_time dim."""
         metric = metrics.MaximumLowestMeanAbsoluteError()
+        forecast = self._make_forecast(self._FOUR_DAY_TEMPS + 2)
+        target = self._make_target(self._FOUR_DAY_TEMPS)
 
-        # Create 4 complete days of 6-hourly data
-        times = pd.date_range("2020-01-01", periods=16, freq="6h")
-        lead_times = np.arange(0, 16) * 6  # hours
-        # Day mins: 10, 15, 12, 8 -> max of mins is 15 (day 2)
-        temp_data = np.array(
-            [
-                15,
-                12,
-                10,
-                14,  # Day 1: min=10
-                20,
-                17,
-                15,
-                18,  # Day 2: min=15
-                18,
-                14,
-                12,
-                16,  # Day 3: min=12
-                14,
-                10,
-                8,
-                12,  # Day 4: min=8
-            ]
-        )
+        result = metric._compute_metric(forecast, target, tolerance_range=24)
 
-        forecast = xr.DataArray(
-            temp_data + 2,
-            dims=["lead_time"],
-            coords={"lead_time": lead_times, "valid_time": ("lead_time", times)},
-        ).expand_dims({"latitude": [0], "longitude": [0]})
-
-        target = xr.DataArray(
-            temp_data,
-            dims=["valid_time"],
-            coords={"valid_time": times},
-        ).expand_dims({"latitude": [0], "longitude": [0]})
-
-        try:
-            result = metric._compute_metric(
-                forecast, target, preserve_dims="lead_time", tolerance_range=24
-            )
-            # Verify result is returned
-            assert result is not None
-        except Exception:
-            # If it still fails due to complex data requirements,
-            # just verify the metric can be instantiated
-            assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
+        assert result.dims == ("lead_time",)
+        np.testing.assert_allclose(result.values, 2.0)
 
     def test_compute_metric_via_public_method(self):
-        """Test MaximumLowestMeanAbsoluteError through compute_metric to cover
-        kwargs filtering (line 47).
-        """
+        """compute_metric filters extra kwargs before reaching the metric."""
         metric = metrics.MaximumLowestMeanAbsoluteError()
+        forecast = self._make_forecast(self._FOUR_DAY_TEMPS + 1)
+        target = self._make_target(self._FOUR_DAY_TEMPS)
 
-        # Create simple test data
-        times = pd.date_range("2020-01-01", periods=16, freq="6h")
-        temp_data = np.array(
-            [
-                15,
-                12,
-                10,
-                14,  # Day 1
-                20,
-                17,
-                15,
-                18,  # Day 2
-                18,
-                14,
-                12,
-                16,  # Day 3
-                14,
-                10,
-                8,
-                12,  # Day 4
-            ]
+        result = metric.compute_metric(
+            forecast, target, tolerance_range=48, extra_param=123
         )
 
-        lead_times = np.arange(0, 16) * 6
-        forecast = xr.DataArray(
-            temp_data + 1,
-            dims=["lead_time"],
-            coords={"lead_time": lead_times, "valid_time": ("lead_time", times)},
-        ).expand_dims({"latitude": [0], "longitude": [0]})
+        assert result.dims == ("lead_time",)
+        np.testing.assert_allclose(result.values, 1.0)
 
-        target = xr.DataArray(
-            temp_data,
-            dims=["valid_time"],
-            coords={"valid_time": times},
-        ).expand_dims({"latitude": [0], "longitude": [0]})
+    def test_compute_metric_matches_between_eager_and_dask_backed_input(self):
+        """Chunked inputs must not crash and must match the eager result.
 
-        try:
-            # Test with extra kwargs that should be filtered
-            result = metric.compute_metric(
-                forecast,
-                target,
-                tolerance_range=48,
-                preserve_dims="lead_time",
-                extra_param=123,
-            )
-            assert result is not None
-        except Exception:
-            # If it fails due to data structure, at least we tested
-            # the kwargs filtering path
-            assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
+        Regression test for a KeyError xarray raises from
+        target.where(target == value, drop=True) when target is a lazy,
+        dask-backed DataArray. reduce_dataarray defaults to a lazy
+        result, and this metric turns the reduced target into both a
+        comparison value and a where(drop=True) mask, which is exactly
+        the case reduce_dataarray's own docstring says needs
+        compute=True.
+        """
+        metric = metrics.MaximumLowestMeanAbsoluteError()
+        eager_forecast = self._make_forecast(self._FOUR_DAY_TEMPS + 2)
+        eager_target = self._make_target(self._FOUR_DAY_TEMPS)
+        dask_forecast = self._make_forecast(self._FOUR_DAY_TEMPS + 2, chunk=True)
+        dask_target = self._make_target(self._FOUR_DAY_TEMPS, chunk=True)
+
+        eager_result = metric._compute_metric(eager_forecast, eager_target)
+        dask_result = metric._compute_metric(dask_forecast, dask_target)
+
+        xr.testing.assert_allclose(eager_result.compute(), dask_result.compute())
 
 
 class TestDurationMeanError:
