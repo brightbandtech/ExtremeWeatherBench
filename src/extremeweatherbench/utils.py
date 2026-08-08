@@ -575,9 +575,8 @@ class ParallelTqdm(Parallel):
             self.progress_bar = progress.make_case_bar(
                 self.total_tasks, disable=self.disable_progressbar
             )
-            # Never allow phase updates here: under a thread-based joblib
-            # backend this registry is shared with worker threads, and
-            # concurrent cases would thrash a single postfix.
+            # Disallow phase updates: concurrent cases would otherwise
+            # fight over a single postfix.
             progress.register_bar(self.progress_bar, allow_phase_updates=False)
         # call parent function
         return super().dispatch_one_batch(iterator)

@@ -42,8 +42,16 @@ The _safest_ approach is to run EWB in serial, with `n_jobs` set to 1. `Dask` wi
 
 ## Progress Reporting
 
-EWB shows a single progress bar per run, tracking the count of `CaseOperator`s completed out of the total with a percentage and an ETA for both serial and parallel execution.
+EWB shows one progress bar per run, tracking how many `CaseOperator`s are
+done with a percentage and ETA in both serial and parallel mode.
 
-In serial mode, the bar is also updated with the current phase (e.g. which pipeline or metric is running) and, while a local-scheduler dask compute is in flight, a live count of completed dask tasks. In parallel mode, this sub-case detail is not available: with multiple worker processes computing different cases concurrently, there is no single "current phase" to show without one worker's postfix clobbering another's, so only the case-level bar advances as each case finishes.
+In serial mode, the bar also shows the current phase (e.g. which pipeline
+or metric is running) and a live dask task count while a compute is in
+flight. In parallel mode, multiple cases run at once, so there's no single
+phase to show; only the case-level bar updates.
 
-Passing `progress=False` to `run_evaluation()` (or `--no-progress` on the CLI) disables the bar entirely; the `EWB_DISABLE_PROGRESS` environment variable does the same. If you are running with `parallel_config={"backend": "dask", ...}`, use the [dask dashboard](https://docs.dask.org/en/stable/dashboard.html) for live insight into task-level progress instead, since `dask.distributed` computations are not covered by the postfix.
+To turn off the bar, pass `progress=False` to `run_evaluation()`, use
+`--no-progress` on the CLI, or set the `EWB_DISABLE_PROGRESS` env var. If
+you're using `parallel_config={"backend": "dask", ...}`, use the
+[dask dashboard](https://docs.dask.org/en/stable/dashboard.html) instead
+for task-level progress.

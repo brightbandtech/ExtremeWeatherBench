@@ -119,7 +119,7 @@ class ExtremeWeatherBench:
             parallel_config: Optional dictionary of joblib parallel configuration.
                 If provided, this takes precedence over n_jobs. If not provided and
                 n_jobs is specified, a default config with the loky backend is used.
-            progress: Whether to display the unified case-level progress bar.
+            progress: Whether to display the case-level progress bar. Defaults to True.
             **kwargs: Additional arguments to pass to compute_case_operator.
         Returns:
             A concatenated dataframe of the evaluation results.
@@ -165,7 +165,7 @@ class ExtremeWeatherBench:
             parallel_config: Optional dictionary of joblib parallel configuration.
                 If provided, this takes precedence over n_jobs. If not provided and
                 n_jobs is specified, a default config with the loky backend is used.
-            progress: Whether to display the unified case-level progress bar.
+            progress: Whether to display the case-level progress bar. Defaults to True.
             **kwargs: Additional arguments to pass to compute_case_operator.
         Returns:
             A concatenated dataframe of the evaluation results.
@@ -245,7 +245,7 @@ def _run_evaluation(
         case_operators: List of case operators to run.
         cache_dir: Optional directory for caching (serial mode only).
         parallel_config: Optional dict of joblib parallel configuration.
-        progress: Whether to display the unified case-level progress bar.
+        progress: Whether to display the case-level progress bar. Defaults to True.
         **kwargs: Additional keyword arguments passed to case operators.
 
     Returns:
@@ -292,7 +292,7 @@ def _run_parallel_evaluation(
         case_operators: List of case operators to run.
         parallel_config: Joblib parallel configuration dict.
         cache_dir: Optional directory for caching (unused in parallel mode).
-        progress: Whether to display the unified case-level progress bar.
+        progress: Whether to display the case-level progress bar. Defaults to True.
         **kwargs: Additional arguments, must include 'parallel_config' dict.
 
     Returns:
