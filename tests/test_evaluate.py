@@ -369,6 +369,7 @@ class TestExtremeWeatherBench:
                 [sample_case_operator],
                 cache_dir=None,
                 parallel_config=None,
+                progress=True,
             )
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
@@ -407,6 +408,7 @@ class TestExtremeWeatherBench:
                 [sample_case_operator],
                 cache_dir=None,
                 parallel_config={"backend": "loky", "n_jobs": 2},
+                progress=True,
             )
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
@@ -583,6 +585,7 @@ class TestRunCaseOperators:
             [sample_case_operator],
             cache_dir=None,
             parallel_config={"backend": "threading", "n_jobs": 4},
+            progress=True,
         )
         assert result == mock_results
 

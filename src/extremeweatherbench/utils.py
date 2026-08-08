@@ -20,6 +20,8 @@ import xarray as xr
 import yaml  # type: ignore[import]
 from joblib import Parallel
 
+import extremeweatherbench.progress as progress
+
 logger = logging.getLogger(__name__)
 
 operators = {
@@ -563,18 +565,20 @@ class ParallelTqdm(Parallel):
             # close tqdm progress bar
             if self.progress_bar is not None:
                 self.progress_bar.close()
+                progress.clear_bar()
 
     __call__.__doc__ = Parallel.__call__.__doc__
 
     def dispatch_one_batch(self, iterator):
         # start progress_bar, if not started yet.
         if self.progress_bar is None:
-            self.progress_bar = tqdm.tqdm(
-                desc=self.desc,
-                total=self.total_tasks,
-                disable=self.disable_progressbar,
-                unit="tasks",
+            self.progress_bar = progress.make_case_bar(
+                self.total_tasks, disable=self.disable_progressbar
             )
+            # Never allow phase updates here: under a thread-based joblib
+            # backend this registry is shared with worker threads, and
+            # concurrent cases would thrash a single postfix.
+            progress.register_bar(self.progress_bar, allow_phase_updates=False)
         # call parent function
         return super().dispatch_one_batch(iterator)
 
@@ -873,6 +877,7 @@ def maybe_cache_and_compute(
     # If the cache file does not exist, maybe densify the data and cache it. Sparse data
     # must be densified to be stored in zarrs
     if not (cache_path / f"{name}.zarr").exists():
+        progress.set_phase(f"caching {name}")
         _cache_maybe_densify_helper(data).to_zarr(
             cache_path / f"{name}.zarr", zarr_format=2, mode="w"
         )

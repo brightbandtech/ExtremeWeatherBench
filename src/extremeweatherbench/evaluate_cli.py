@@ -54,6 +54,11 @@ import extremeweatherbench.evaluate as evaluate
     type=click.Path(),
     help="Save CaseOperator objects to a pickle file at this path",
 )
+@click.option(
+    "--no-progress",
+    is_flag=True,
+    help="Disable the unified case-level progress bar",
+)
 @click.pass_context
 def cli_runner(
     ctx: click.Context,
@@ -64,6 +69,7 @@ def cli_runner(
     n_jobs: int,
     parallel_config: Optional[dict],
     save_case_operators: Optional[str],
+    no_progress: bool,
 ):
     """ExtremeWeatherBench command line interface.
 
@@ -92,6 +98,7 @@ def cli_runner(
             precedence over n_jobs if provided.
         save_case_operators: Save CaseOperator objects to a pickle file at this
             path.
+        no_progress: Disable the unified case-level progress bar.
     Examples:
         # Use default evaluation objects
         $ ewb --default
@@ -157,6 +164,7 @@ def cli_runner(
     results = ewb.run_evaluation(
         n_jobs=n_jobs,
         parallel_config=parallel_config,
+        progress=not no_progress,
     )
 
     # Save results

@@ -210,6 +210,7 @@ class TestParallelExecution:
         mock_ewb.run_evaluation.assert_called_once_with(
             n_jobs=3,
             parallel_config=None,
+            progress=True,
         )
 
     @mock.patch(

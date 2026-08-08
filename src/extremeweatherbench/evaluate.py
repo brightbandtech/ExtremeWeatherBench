@@ -11,14 +11,13 @@ import joblib
 import pandas as pd
 import sparse
 import xarray as xr
-from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
-from tqdm.dask import TqdmCallback
 
 import extremeweatherbench.cases as cases
 import extremeweatherbench.derived as derived
 import extremeweatherbench.inputs as inputs
 import extremeweatherbench.metrics as metrics
+import extremeweatherbench.progress as progress_module
 import extremeweatherbench.sources as sources
 import extremeweatherbench.utils as utils
 
@@ -104,6 +103,7 @@ class ExtremeWeatherBench:
         self,
         n_jobs: Optional[int] = None,
         parallel_config: Optional[dict] = None,
+        progress: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
         """Runs the ExtremeWeatherBench evaluation workflow.
@@ -119,6 +119,7 @@ class ExtremeWeatherBench:
             parallel_config: Optional dictionary of joblib parallel configuration.
                 If provided, this takes precedence over n_jobs. If not provided and
                 n_jobs is specified, a default config with the loky backend is used.
+            progress: Whether to display the unified case-level progress bar.
             **kwargs: Additional arguments to pass to compute_case_operator.
         Returns:
             A concatenated dataframe of the evaluation results.
@@ -133,6 +134,7 @@ class ExtremeWeatherBench:
             self.case_operators,
             cache_dir=self.cache_dir,
             parallel_config=parallel_config,
+            progress=progress,
             **kwargs,
         )
 
@@ -147,6 +149,7 @@ class ExtremeWeatherBench:
         self,
         n_jobs: Optional[int] = None,
         parallel_config: Optional[dict] = None,
+        progress: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
         """Runs the ExtremeWeatherBench evaluation workflow.
@@ -162,6 +165,7 @@ class ExtremeWeatherBench:
             parallel_config: Optional dictionary of joblib parallel configuration.
                 If provided, this takes precedence over n_jobs. If not provided and
                 n_jobs is specified, a default config with the loky backend is used.
+            progress: Whether to display the unified case-level progress bar.
             **kwargs: Additional arguments to pass to compute_case_operator.
         Returns:
             A concatenated dataframe of the evaluation results.
@@ -175,6 +179,7 @@ class ExtremeWeatherBench:
             self.case_operators,
             cache_dir=self.cache_dir,
             parallel_config=parallel_config,
+            progress=progress,
             **kwargs,
         )
 
@@ -231,6 +236,7 @@ def _run_evaluation(
     case_operators: list["cases.CaseOperator"],
     cache_dir: Optional[pathlib.Path] = None,
     parallel_config: Optional[dict] = None,
+    progress: bool = True,
     **kwargs,
 ) -> list[pd.DataFrame]:
     """Run the case operators in parallel or serial.
@@ -239,27 +245,36 @@ def _run_evaluation(
         case_operators: List of case operators to run.
         cache_dir: Optional directory for caching (serial mode only).
         parallel_config: Optional dict of joblib parallel configuration.
+        progress: Whether to display the unified case-level progress bar.
         **kwargs: Additional keyword arguments passed to case operators.
 
     Returns:
         List of result DataFrames.
     """
-    if parallel_config is not None:
-        with logging_redirect_tqdm():
+    with logging_redirect_tqdm():
+        if parallel_config is not None:
             logger.info("Running case operators in parallel...")
             run_results = _run_parallel_evaluation(
                 case_operators,
                 cache_dir=cache_dir,
                 parallel_config=parallel_config,
+                progress=progress,
                 **kwargs,
             )
-    else:
-        logger.info("Running case operators in serial...")
-        run_results = []
-        for case_operator in tqdm(case_operators):
-            run_results.append(
-                compute_case_operator(case_operator, cache_dir, **kwargs)
+        else:
+            logger.info("Running case operators in serial...")
+            run_results = []
+            case_bar = progress_module.make_case_bar(
+                len(case_operators), disable=not progress
             )
+            with progress_module.registered_bar(case_bar, allow_phase_updates=True):
+                with progress_module.DaskTaskPostfix():
+                    for case_operator in case_operators:
+                        run_results.append(
+                            compute_case_operator(case_operator, cache_dir, **kwargs)
+                        )
+                        case_bar.update(1)
+            case_bar.close()
 
     return run_results
 
@@ -268,12 +283,16 @@ def _run_parallel_evaluation(
     case_operators: list["cases.CaseOperator"],
     parallel_config: dict,
     cache_dir: Optional[pathlib.Path] = None,
+    progress: bool = True,
     **kwargs,
 ) -> list[pd.DataFrame]:
     """Run the case operators in parallel.
 
     Args:
         case_operators: List of case operators to run.
+        parallel_config: Joblib parallel configuration dict.
+        cache_dir: Optional directory for caching (unused in parallel mode).
+        progress: Whether to display the unified case-level progress bar.
         **kwargs: Additional arguments, must include 'parallel_config' dict.
 
     Returns:
@@ -303,10 +322,14 @@ def _run_parallel_evaluation(
                 "Install with: pip install dask[distributed]"
             )
 
+    parallel_tqdm_kwargs: dict[str, Any] = {"total_tasks": len(case_operators)}
+    if not progress:
+        parallel_tqdm_kwargs["disable_progressbar"] = True
+
     try:
         # TODO(198): return a generator and compute at a higher level
         with joblib.parallel_config(**parallel_config):
-            run_results = utils.ParallelTqdm(total_tasks=len(case_operators))(
+            run_results = utils.ParallelTqdm(**parallel_tqdm_kwargs)(
                 # None is the cache_dir, we can't cache in parallel mode
                 joblib.delayed(compute_case_operator)(
                     case_operator, cache_dir=cache_dir, **kwargs
@@ -613,6 +636,9 @@ def _evaluate_metric_and_return_df(
     target_variable = derived._maybe_convert_variable_to_string(target_variable)
 
     logger.info("Computing metric %s... ", metric.name)
+    progress_module.set_phase(
+        f"case {case_operator.case_metadata.case_id_number} | {metric.name}"
+    )
 
     # Extract the appropriate data for the metric
     # Variables should already be present at this point in the pipeline
@@ -793,13 +819,10 @@ def _build_datasets(
     )
 
     logger.info("Running target pipeline... ")
-    with TqdmCallback(
-        desc=f"Running target pipeline for case "
-        f"{case_operator.case_metadata.case_id_number}"
-    ):
-        target_ds = run_pipeline(
-            case_operator.case_metadata, augmented_target, **kwargs
-        )
+    progress_module.set_phase(
+        f"case {case_operator.case_metadata.case_id_number} | target pipeline"
+    )
+    target_ds = run_pipeline(case_operator.case_metadata, augmented_target, **kwargs)
 
     # Pass target dataset to forecast pipeline only if needed
     # Check if any forecast variable requires target dataset
@@ -815,13 +838,12 @@ def _build_datasets(
         )
 
     logger.info("Running forecast pipeline... ")
-    with TqdmCallback(
-        desc=f"Running forecast pipeline for case "
-        f"{case_operator.case_metadata.case_id_number}"
-    ):
-        forecast_ds = run_pipeline(
-            case_operator.case_metadata, augmented_forecast, **kwargs
-        )
+    progress_module.set_phase(
+        f"case {case_operator.case_metadata.case_id_number} | forecast pipeline"
+    )
+    forecast_ds = run_pipeline(
+        case_operator.case_metadata, augmented_forecast, **kwargs
+    )
 
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]
