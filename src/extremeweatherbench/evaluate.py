@@ -635,7 +635,11 @@ def _evaluate_metric_and_return_df(
     forecast_variable = derived._maybe_convert_variable_to_string(forecast_variable)
     target_variable = derived._maybe_convert_variable_to_string(target_variable)
 
-    logger.info("Computing metric %s... ", metric.name)
+    logger.info(
+        "Computing metric %s for case %s... ",
+        metric.name,
+        case_operator.case_metadata.case_id_number,
+    )
     progress_module.set_phase(
         f"case {case_operator.case_metadata.case_id_number} | {metric.name}"
     )
@@ -818,7 +822,10 @@ def _build_datasets(
         set(case_operator.target.variables) | filtered_target_vars
     )
 
-    logger.info("Running target pipeline... ")
+    logger.info(
+        "Running target pipeline for case %s... ",
+        case_operator.case_metadata.case_id_number,
+    )
     progress_module.set_phase(
         f"case {case_operator.case_metadata.case_id_number} | target pipeline"
     )
@@ -837,7 +844,10 @@ def _build_datasets(
             "Passing target dataset to forecast pipeline (required by derived variable)"
         )
 
-    logger.info("Running forecast pipeline... ")
+    logger.info(
+        "Running forecast pipeline for case %s... ",
+        case_operator.case_metadata.case_id_number,
+    )
     progress_module.set_phase(
         f"case {case_operator.case_metadata.case_id_number} | forecast pipeline"
     )

@@ -1,6 +1,7 @@
 """Tests for evaluate module."""
 
 import datetime
+import logging
 import pathlib
 import tempfile
 from unittest import mock
@@ -2814,6 +2815,34 @@ class TestParallelSerialConfigCheck:
         assert evaluate._parallel_serial_config_check(
             n_jobs=2, parallel_config={"backend": "threading", "n_jobs": 2}
         ) == {"backend": "threading", "n_jobs": 2}
+
+
+def test_metric_log_includes_case_id(
+    caplog, sample_case_operator, sample_forecast_dataset, sample_target_dataset
+):
+    """Metric logs must name the case so parallel output is readable."""
+    caplog.set_level(logging.INFO, logger="extremeweatherbench.evaluate")
+    case_id = sample_case_operator.case_metadata.case_id_number
+    # The default fixture datasets have no overlap with the case time range,
+    # so compute_case_operator returns before the metric loop; supply
+    # datasets that actually align, mirroring test_compute_case_operator_basic.
+    sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
+        sample_forecast_dataset,
+        sample_target_dataset,
+    )
+    with mock.patch(
+        "extremeweatherbench.evaluate._build_datasets"
+    ) as mock_build_datasets:
+        mock_build_datasets.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+        evaluate.compute_case_operator(sample_case_operator)
+    metric_logs = [
+        r.getMessage() for r in caplog.records if "Computing metric" in r.getMessage()
+    ]
+    assert metric_logs
+    assert all(f"case {case_id}" in message for message in metric_logs)
 
 
 if __name__ == "__main__":
