@@ -344,6 +344,93 @@ def _run_parallel_evaluation(
             dask_client.close()
 
 
+def _plan_metric_evaluations(
+    case_operator: "cases.CaseOperator",
+) -> list[tuple["metrics.BaseMetric", list["metrics.BaseMetric"], list[tuple]]]:
+    """Enumerate the metric evaluations a case operator will perform.
+
+    Depends only on metric and input metadata, never on the data, so the
+    result is available before any pipeline runs and can size a progress
+    bar.
+
+    Args:
+        case_operator: The case operator to plan evaluations for.
+
+    Returns:
+        One (metric, expanded_metrics, variable_pairs) tuple per metric,
+        in the same order the evaluation loop will consume them.
+    """
+    explicitly_claimed_forecast_vars = set()
+    explicitly_claimed_target_vars = set()
+    for metric in case_operator.metric_list:
+        if (metric.forecast_variable is not None) and (
+            metric.target_variable is not None
+        ):
+            explicitly_claimed_forecast_vars.update(
+                _maybe_expand_derived_variable_to_output_variables(
+                    metric.forecast_variable
+                )
+            )
+            explicitly_claimed_target_vars.update(
+                _maybe_expand_derived_variable_to_output_variables(
+                    metric.target_variable
+                )
+            )
+
+    plan = []
+    for metric in case_operator.metric_list:
+        metrics_to_evaluate = metric.maybe_expand_composite()
+        if metric.forecast_variable is not None and metric.target_variable is not None:
+            forecast_vars = _maybe_expand_derived_variable_to_output_variables(
+                metric.forecast_variable
+            )
+            target_vars = _maybe_expand_derived_variable_to_output_variables(
+                metric.target_variable
+            )
+            variable_pairs = list(zip(forecast_vars, target_vars))
+        else:
+            forecast_vars_expanded = []
+            for var in case_operator.forecast.variables:
+                forecast_vars_expanded.extend(
+                    _maybe_expand_derived_variable_to_output_variables(var)
+                )
+            target_vars_expanded = []
+            for var in case_operator.target.variables:
+                target_vars_expanded.extend(
+                    _maybe_expand_derived_variable_to_output_variables(var)
+                )
+            forecast_vars_available = [
+                v
+                for v in forecast_vars_expanded
+                if v not in explicitly_claimed_forecast_vars
+            ]
+            target_vars_available = [
+                v
+                for v in target_vars_expanded
+                if v not in explicitly_claimed_target_vars
+            ]
+            variable_pairs = list(
+                zip(forecast_vars_available, target_vars_available)
+            )
+        plan.append((metric, metrics_to_evaluate, variable_pairs))
+    return plan
+
+
+def _count_metric_evaluations(case_operator: "cases.CaseOperator") -> int:
+    """Count the metric evaluations a case operator will perform.
+
+    Args:
+        case_operator: The case operator to count evaluations for.
+
+    Returns:
+        The number of individual metric evaluations.
+    """
+    return sum(
+        len(expanded) * len(pairs)
+        for _, expanded, pairs in _plan_metric_evaluations(case_operator)
+    )
+
+
 def compute_case_operator(
     case_operator: "cases.CaseOperator",
     cache_dir: Optional[pathlib.Path] = None,
@@ -412,75 +499,9 @@ def compute_case_operator(
     )
     results = []
 
-    # Collect all explicitly specified variables across all metrics
-    # These variables are "claimed" and should not be used by metrics
-    # without specific variables
-    explicitly_claimed_forecast_vars = set()
-    explicitly_claimed_target_vars = set()
-
-    for metric in case_operator.metric_list:
-        # Determine which variable pairs to evaluate for this metric
-        if (metric.forecast_variable is not None) and (
-            metric.target_variable is not None
-        ):
-            # Expand and collect claimed variables
-            explicitly_claimed_forecast_vars.update(
-                _maybe_expand_derived_variable_to_output_variables(
-                    metric.forecast_variable
-                )
-            )
-            explicitly_claimed_target_vars.update(
-                _maybe_expand_derived_variable_to_output_variables(
-                    metric.target_variable
-                )
-            )
-
-    for metric in case_operator.metric_list:
-        # Expand composite metrics into individual metrics
-        # (returns [self] for non-composite metrics)
-        metrics_to_evaluate = metric.maybe_expand_composite()
-
-        # Determine which variable pairs to evaluate for this metric
-        if metric.forecast_variable is not None and metric.target_variable is not None:
-            # Expand DerivedVariable to output_variables if applicable
-            forecast_vars = _maybe_expand_derived_variable_to_output_variables(
-                metric.forecast_variable
-            )
-            target_vars = _maybe_expand_derived_variable_to_output_variables(
-                metric.target_variable
-            )
-
-            # Create pairs from expanded variables
-            variable_pairs = list(zip(forecast_vars, target_vars))
-        else:
-            # Use all InputBase variable pairs for this metric
-            # Expand any DerivedVariables in the InputBase variables
-            forecast_vars_expanded = []
-            for var in case_operator.forecast.variables:
-                forecast_vars_expanded.extend(
-                    _maybe_expand_derived_variable_to_output_variables(var)
-                )
-
-            target_vars_expanded = []
-            for var in case_operator.target.variables:
-                target_vars_expanded.extend(
-                    _maybe_expand_derived_variable_to_output_variables(var)
-                )
-
-            # Exclude variables that are explicitly claimed by other metrics
-            forecast_vars_available = [
-                v
-                for v in forecast_vars_expanded
-                if v not in explicitly_claimed_forecast_vars
-            ]
-            target_vars_available = [
-                v
-                for v in target_vars_expanded
-                if v not in explicitly_claimed_target_vars
-            ]
-
-            variable_pairs = list(zip(forecast_vars_available, target_vars_available))
-
+    for metric, metrics_to_evaluate, variable_pairs in _plan_metric_evaluations(
+        case_operator
+    ):
         # Evaluate the metric(s) for each variable pair
         for forecast_var, target_var in variable_pairs:
             # Prepare kwargs for metric evaluation (handles composite setup)

@@ -2845,5 +2845,13 @@ def test_metric_log_includes_case_id(
     assert all(f"case {case_id}" in message for message in metric_logs)
 
 
+def test_plan_metric_evaluations_counts_pairs(sample_case_operator):
+    """The plan enumerates every metric x variable-pair evaluation."""
+    plan = evaluate._plan_metric_evaluations(sample_case_operator)
+    assert plan
+    expected = sum(len(expanded) * len(pairs) for _, expanded, pairs in plan)
+    assert evaluate._count_metric_evaluations(sample_case_operator) == expected
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

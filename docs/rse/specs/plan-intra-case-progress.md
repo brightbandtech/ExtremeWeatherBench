@@ -279,7 +279,7 @@ bar, replacing the overloaded single postfix.
 
 **Tasks:**
 
-- [ ] **Write the failing test** for the hoisted evaluation plan.
+- [x] **Write the failing test** for the hoisted evaluation plan.
   - File: `tests/test_evaluate.py` (append)
 
   ```python
@@ -291,11 +291,11 @@ bar, replacing the overloaded single postfix.
       assert evaluate._count_metric_evaluations(sample_case_operator) == expected
   ```
 
-- [ ] **Run it, watch it fail:**
+- [x] **Run it, watch it fail:**
   `pytest tests/test_evaluate.py::test_plan_metric_evaluations_counts_pairs -v`
   → expect FAIL (`AttributeError: module has no attribute '_plan_metric_evaluations'`)
 
-- [ ] **Implement** the hoisted planner. Insert before `compute_case_operator` at
+- [x] **Implement** the hoisted planner. Insert before `compute_case_operator` at
   `src/extremeweatherbench/evaluate.py:347`. The body is lifted verbatim from the
   existing logic at `evaluate.py:421-482`; nothing in it touches the datasets.
 
@@ -399,14 +399,14 @@ bar, replacing the overloaded single postfix.
       ):
   ```
 
-- [ ] **Run it, watch it pass:**
+- [x] **Run it, watch it pass:**
   `pytest tests/test_evaluate.py::test_plan_metric_evaluations_counts_pairs -v`
   → expect PASS
 
-- [ ] **Run the regression suite** to confirm the hoist changed no behaviour:
+- [x] **Run the regression suite** to confirm the hoist changed no behaviour:
   `pytest tests/test_evaluate.py -v` → expect all PASS
 
-- [ ] **Commit:** `git commit -m "refactor: hoist metric evaluation planning out of the loop"`
+- [x] **Commit:** `git commit -m "refactor: hoist metric evaluation planning out of the loop"`
 
 - [ ] **Write the failing test** for the step bar.
   - File: `tests/test_progress.py` (append)
