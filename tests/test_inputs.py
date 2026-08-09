@@ -1,5 +1,6 @@
 """Tests for inputs module."""
 
+import copy
 from unittest import mock
 
 import numpy as np
@@ -929,6 +930,47 @@ class TestKerchunkForecast:
         )
         assert result == sample_forecast_dataset
 
+    @mock.patch("extremeweatherbench.inputs.open_kerchunk_reference")
+    def test_kerchunk_forecast_default_storage_options_forwards_none(
+        self, mock_open_kerchunk, sample_forecast_dataset
+    ):
+        """Test unconfigured storage_options forwards None to the opener."""
+        mock_open_kerchunk.return_value = sample_forecast_dataset
+
+        forecast = inputs.KerchunkForecast(
+            name="test",
+            source="test.parq",
+            variables=["temperature"],
+            variable_mapping={},
+        )
+
+        forecast._open_data_from_source()
+
+        mock_open_kerchunk.assert_called_once_with(
+            "test.parq",
+            storage_options=None,
+            chunks="auto",
+        )
+
+    @mock.patch("xarray.open_dataset")
+    def test_kerchunk_forecast_default_resolves_to_anonymous_options(
+        self, mock_open_dataset, sample_forecast_dataset
+    ):
+        """Test the None default resolves to anonymous S3 access options."""
+        mock_open_dataset.return_value = sample_forecast_dataset
+
+        forecast = inputs.KerchunkForecast(
+            name="test",
+            source="test.parq",
+            variables=["temperature"],
+            variable_mapping={},
+        )
+
+        forecast._open_data_from_source()
+
+        _, call_kwargs = mock_open_dataset.call_args
+        assert call_kwargs["storage_options"] == inputs.DEFAULT_KERCHUNK_STORAGE_OPTIONS
+
 
 class TestERA5:
     """Test the ERA5 target class."""
@@ -1687,6 +1729,49 @@ class TestStandaloneFunctions:
         """Test opening kerchunk reference with unsupported file format."""
         with pytest.raises(TypeError, match="Unknown kerchunk file type"):
             inputs.open_kerchunk_reference("test.txt")
+
+    @mock.patch("xarray.open_dataset")
+    def test_open_kerchunk_reference_none_uses_anonymous_defaults(
+        self, mock_open_dataset, sample_forecast_dataset
+    ):
+        """Test storage_options=None resolves to the anonymous defaults."""
+        mock_open_dataset.return_value = sample_forecast_dataset
+
+        inputs.open_kerchunk_reference("test.parq", storage_options=None)
+
+        mock_open_dataset.assert_called_once_with(
+            "test.parq",
+            engine="kerchunk",
+            storage_options=inputs.DEFAULT_KERCHUNK_STORAGE_OPTIONS,
+            chunks="auto",
+        )
+
+    @mock.patch("xarray.open_dataset")
+    def test_open_kerchunk_reference_json_does_not_mutate_caller_dict(
+        self, mock_open_dataset, sample_forecast_dataset
+    ):
+        """Test the .json path doesn't mutate the caller-supplied dict."""
+        mock_open_dataset.return_value = sample_forecast_dataset
+
+        storage_options = {"remote_protocol": "s3", "remote_options": {"anon": True}}
+
+        inputs.open_kerchunk_reference("test.json", storage_options=storage_options)
+
+        assert "fo" not in storage_options
+
+    @mock.patch("xarray.open_dataset")
+    def test_open_kerchunk_reference_json_does_not_mutate_module_default(
+        self, mock_open_dataset, sample_forecast_dataset
+    ):
+        """Test two successive .json calls don't leak state into the default."""
+        mock_open_dataset.return_value = sample_forecast_dataset
+
+        original_default = copy.deepcopy(inputs.DEFAULT_KERCHUNK_STORAGE_OPTIONS)
+
+        inputs.open_kerchunk_reference("first.json", storage_options=None)
+        inputs.open_kerchunk_reference("second.json", storage_options=None)
+
+        assert inputs.DEFAULT_KERCHUNK_STORAGE_OPTIONS == original_default
 
     def test_zarr_target_subsetter(self, sample_era5_dataset):
         """Test zarr_target_subsetter function."""
