@@ -20,6 +20,8 @@ import xarray as xr
 import yaml  # type: ignore[import]
 from joblib import Parallel
 
+import extremeweatherbench.progress as progress
+
 logger = logging.getLogger(__name__)
 
 operators = {
@@ -519,7 +521,12 @@ class ParallelTqdm(Parallel):
         show_joblib_header: bool, default: False
             If True, show joblib header before the progressbar.
 
-
+        pre_close: Callable[[], None] | None, default: None
+            Invoked at the top of __call__'s finally block, before the
+            case bar closes. Callers with bars nested below the case
+            bar (e.g. parallel-mode worker slot bars) must close those
+            here, since closing the case bar first leaves them
+            redrawing into space the case bar has already vacated.
 
     Example:
     >>> from joblib import delayed
@@ -536,6 +543,7 @@ class ParallelTqdm(Parallel):
         desc: str | None = None,
         disable_progressbar: bool = False,
         show_joblib_header: bool = False,
+        pre_close: Callable[[], None] | None = None,
         **kwargs,
     ):
         if "verbose" in kwargs:
@@ -547,6 +555,7 @@ class ParallelTqdm(Parallel):
         self.total_tasks = total_tasks
         self.desc = desc
         self.disable_progressbar = disable_progressbar
+        self.pre_close = pre_close
         self.progress_bar: tqdm.tqdm | None = None
 
     def __call__(self, iterable):
@@ -560,21 +569,24 @@ class ParallelTqdm(Parallel):
             # call parent function
             return super().__call__(iterable)
         finally:
+            if self.pre_close is not None:
+                self.pre_close()
             # close tqdm progress bar
             if self.progress_bar is not None:
                 self.progress_bar.close()
+                progress.clear_bar()
 
     __call__.__doc__ = Parallel.__call__.__doc__
 
     def dispatch_one_batch(self, iterator):
         # start progress_bar, if not started yet.
         if self.progress_bar is None:
-            self.progress_bar = tqdm.tqdm(
-                desc=self.desc,
-                total=self.total_tasks,
-                disable=self.disable_progressbar,
-                unit="tasks",
+            self.progress_bar = progress.make_case_bar(
+                self.total_tasks, disable=self.disable_progressbar
             )
+            # Disallow phase updates: concurrent cases would otherwise
+            # fight over a single postfix.
+            progress.register_bar(self.progress_bar, allow_phase_updates=False)
         # call parent function
         return super().dispatch_one_batch(iterator)
 
@@ -873,6 +885,7 @@ def maybe_cache_and_compute(
     # If the cache file does not exist, maybe densify the data and cache it. Sparse data
     # must be densified to be stored in zarrs
     if not (cache_path / f"{name}.zarr").exists():
+        progress.set_phase(f"caching {name}")
         _cache_maybe_densify_helper(data).to_zarr(
             cache_path / f"{name}.zarr", zarr_format=2, mode="w"
         )

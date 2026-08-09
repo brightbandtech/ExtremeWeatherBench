@@ -1,8 +1,12 @@
 """Tests for evaluate module."""
 
+import contextlib
 import datetime
+import logging
 import pathlib
+import queue
 import tempfile
+import warnings
 from unittest import mock
 
 import numpy as np
@@ -369,6 +373,7 @@ class TestExtremeWeatherBench:
                 [sample_case_operator],
                 cache_dir=None,
                 parallel_config=None,
+                progress=True,
             )
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
@@ -407,6 +412,7 @@ class TestExtremeWeatherBench:
                 [sample_case_operator],
                 cache_dir=None,
                 parallel_config={"backend": "loky", "n_jobs": 2},
+                progress=True,
             )
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
@@ -520,7 +526,9 @@ class TestExtremeWeatherBench:
         """Test the run method with multiple case operators."""
         # Create multiple case operators
         case_operator_1 = mock.Mock()
+        case_operator_1.metric_list = []
         case_operator_2 = mock.Mock()
+        case_operator_2.metric_list = []
 
         with mock.patch.object(
             evaluate.ExtremeWeatherBench,
@@ -583,6 +591,7 @@ class TestRunCaseOperators:
             [sample_case_operator],
             cache_dir=None,
             parallel_config={"backend": "threading", "n_jobs": 4},
+            progress=True,
         )
         assert result == mock_results
 
@@ -635,6 +644,46 @@ class TestRunCaseOperators:
         result = evaluate._run_evaluation([], cache_dir=None)
         assert result == []
 
+    def test_run_evaluation_serial_converts_warning_to_log_record(
+        self, monkeypatch, sample_case_operator, caplog
+    ):
+        """A warning during a serial run becomes a log record, then resets."""
+        before = logging._warnings_showwarning
+
+        def warn_and_compute(case_operator, cache_dir=None, **kwargs):
+            warnings.warn("serial run warning", RuntimeWarning)
+            return pd.DataFrame({"value": [1.0]})
+
+        monkeypatch.setattr(evaluate, "compute_case_operator", warn_and_compute)
+
+        with caplog.at_level(logging.WARNING, logger="py.warnings"):
+            evaluate._run_evaluation([sample_case_operator], parallel_config=None)
+
+        assert any("serial run warning" in r.getMessage() for r in caplog.records)
+        assert logging._warnings_showwarning == before
+
+    def test_run_evaluation_enables_captured_warnings_around_the_run(
+        self, monkeypatch, sample_case_operator
+    ):
+        """_run_evaluation enters captured_warnings() for both branches."""
+        entered = []
+
+        @contextlib.contextmanager
+        def fake_captured_warnings():
+            entered.append(True)
+            yield
+
+        monkeypatch.setattr(
+            evaluate.progress_module, "captured_warnings", fake_captured_warnings
+        )
+        monkeypatch.setattr(
+            evaluate, "compute_case_operator", lambda *a, **k: pd.DataFrame()
+        )
+
+        evaluate._run_evaluation([sample_case_operator], parallel_config=None)
+
+        assert entered == [True]
+
 
 class TestRunSerial:
     """Test the serial execution path of _run_evaluation."""
@@ -663,7 +712,9 @@ class TestRunSerial:
     ):
         """Test serial execution with multiple case operators."""
         case_op_1 = mock.Mock()
+        case_op_1.metric_list = []
         case_op_2 = mock.Mock()
+        case_op_2.metric_list = []
         case_operators = [case_op_1, case_op_2]
 
         mock_tqdm.return_value = case_operators
@@ -734,7 +785,7 @@ class TestRunParallel:
         )
 
         # Verify Parallel was called with total_tasks (n_jobs via parallel_config)
-        mock_parallel_class.assert_called_once_with(total_tasks=1)
+        mock_parallel_class.assert_called_once_with(pre_close=mock.ANY, total_tasks=1)
 
         # Verify the parallel instance was called (generator consumed)
         mock_parallel_instance.assert_called_once()
@@ -769,7 +820,9 @@ class TestRunParallel:
             )
 
             # Verify Parallel was called with total_tasks (n_jobs via parallel_config)
-            mock_parallel_class.assert_called_once_with(total_tasks=1)
+            mock_parallel_class.assert_called_once_with(
+                pre_close=mock.ANY, total_tasks=1
+            )
             assert isinstance(result, list)
 
     @mock.patch("joblib.parallel_config")
@@ -803,7 +856,7 @@ class TestRunParallel:
         assert call_kwargs["n_jobs"] == 4
 
         # Verify ParallelTqdm was called WITHOUT n_jobs
-        mock_parallel_class.assert_called_once_with(total_tasks=1)
+        mock_parallel_class.assert_called_once_with(pre_close=mock.ANY, total_tasks=1)
         assert isinstance(result, list)
 
     @mock.patch("extremeweatherbench.utils.ParallelTqdm")
@@ -887,6 +940,232 @@ class TestRunParallel:
 
                 assert result == []
 
+    @mock.patch("extremeweatherbench.evaluate.multiprocessing.Manager")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.supports_nested_bars")
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
+    def test_run_parallel_evaluation_skips_manager_without_nested_bars(
+        self,
+        mock_tqdm,
+        mock_delayed,
+        mock_parallel_class,
+        mock_supports_nested_bars,
+        mock_manager,
+        sample_case_operator,
+    ):
+        """No Manager is created when nested bars aren't supported."""
+        mock_supports_nested_bars.return_value = False
+        mock_tqdm.return_value = [sample_case_operator]
+        mock_delayed.return_value = mock.Mock()
+        mock_parallel_instance = mock.Mock()
+        mock_parallel_class.return_value = mock_parallel_instance
+        mock_parallel_instance.return_value = [pd.DataFrame({"value": [1.0]})]
+
+        evaluate._run_parallel_evaluation(
+            [sample_case_operator],
+            parallel_config={"backend": "loky", "n_jobs": 2},
+            progress=True,
+        )
+
+        mock_manager.assert_not_called()
+
+    @mock.patch("extremeweatherbench.evaluate.multiprocessing.Manager")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.WorkerSlotRenderer")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.supports_nested_bars")
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
+    def test_run_parallel_evaluation_bounds_slots_for_negative_n_jobs(
+        self,
+        mock_tqdm,
+        mock_delayed,
+        mock_parallel_class,
+        mock_supports_nested_bars,
+        mock_renderer_class,
+        mock_manager,
+        sample_case_operator,
+    ):
+        """A negative n_jobs resolves to a bounded slot count, not a crash."""
+        mock_supports_nested_bars.return_value = True
+        mock_tqdm.return_value = [sample_case_operator]
+        mock_delayed.return_value = mock.Mock()
+        mock_parallel_instance = mock.Mock()
+        mock_parallel_class.return_value = mock_parallel_instance
+        mock_parallel_instance.return_value = [pd.DataFrame({"value": [1.0]})]
+        mock_manager.return_value.Queue.return_value = mock.Mock()
+
+        evaluate._run_parallel_evaluation(
+            [sample_case_operator],
+            parallel_config={"backend": "loky", "n_jobs": -1},
+            progress=True,
+        )
+
+        mock_manager.assert_called_once()
+        _, renderer_kwargs = mock_renderer_class.call_args
+        n_slots = renderer_kwargs["n_slots"]
+        assert 0 < n_slots <= 64
+
+    @mock.patch("extremeweatherbench.evaluate.multiprocessing.Manager")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.LogQueueListener")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.WorkerSlotRenderer")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.supports_nested_bars")
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
+    def test_run_parallel_evaluation_skips_log_listener_without_nested_bars(
+        self,
+        mock_tqdm,
+        mock_delayed,
+        mock_parallel_class,
+        mock_supports_nested_bars,
+        mock_renderer_class,
+        mock_listener_class,
+        mock_manager,
+        sample_case_operator,
+    ):
+        """No log queue or listener thread is created without nested bars."""
+        mock_supports_nested_bars.return_value = False
+        mock_tqdm.return_value = [sample_case_operator]
+        mock_delayed.return_value = mock.Mock()
+        mock_parallel_instance = mock.Mock()
+        mock_parallel_class.return_value = mock_parallel_instance
+        mock_parallel_instance.return_value = [pd.DataFrame({"value": [1.0]})]
+
+        evaluate._run_parallel_evaluation(
+            [sample_case_operator],
+            parallel_config={"backend": "loky", "n_jobs": 2},
+            progress=True,
+        )
+
+        mock_manager.assert_not_called()
+        mock_listener_class.assert_not_called()
+
+    @mock.patch("extremeweatherbench.evaluate.multiprocessing.Manager")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.LogQueueListener")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.WorkerSlotRenderer")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.supports_nested_bars")
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
+    def test_run_parallel_evaluation_starts_and_closes_log_listener(
+        self,
+        mock_tqdm,
+        mock_delayed,
+        mock_parallel_class,
+        mock_supports_nested_bars,
+        mock_renderer_class,
+        mock_listener_class,
+        mock_manager,
+        sample_case_operator,
+    ):
+        """A log listener is started on its own queue and closed afterwards."""
+        mock_supports_nested_bars.return_value = True
+        mock_tqdm.return_value = [sample_case_operator]
+        mock_delayed.return_value = mock.Mock()
+        mock_parallel_instance = mock.Mock()
+        mock_parallel_class.return_value = mock_parallel_instance
+        mock_parallel_instance.return_value = [pd.DataFrame({"value": [1.0]})]
+        event_queue = mock.Mock(name="event_queue")
+        log_queue = mock.Mock(name="log_queue")
+        mock_manager.return_value.Queue.side_effect = [event_queue, log_queue]
+        mock_listener_instance = mock_listener_class.return_value
+
+        evaluate._run_parallel_evaluation(
+            [sample_case_operator],
+            parallel_config={"backend": "loky", "n_jobs": 2},
+            progress=True,
+        )
+
+        mock_listener_instance.start.assert_called_once_with(log_queue)
+        mock_listener_instance.close.assert_called_once()
+        # The renderer and listener must use two distinct queues.
+        assert event_queue is not log_queue
+
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
+    def test_run_parallel_evaluation_assigns_unique_dispatch_id_per_operator(
+        self, mock_tqdm, mock_delayed, mock_parallel_class, sample_case_operator
+    ):
+        """Each dispatched operator gets a unique dispatch_id.
+
+        Regression test: build_case_operators can emit multiple
+        CaseOperators that share a case_id (one case, several
+        EvaluationObjects), so the slot key can't be case_id itself.
+        """
+        case_operators = [sample_case_operator, sample_case_operator]
+        mock_tqdm.return_value = case_operators
+        mock_delayed_func = mock.Mock()
+        mock_delayed.return_value = mock_delayed_func
+        mock_parallel_instance = mock.Mock()
+        mock_parallel_class.return_value = mock_parallel_instance
+        mock_parallel_instance.return_value = [pd.DataFrame(), pd.DataFrame()]
+
+        evaluate._run_parallel_evaluation(
+            case_operators, parallel_config={"backend": "threading", "n_jobs": 2}
+        )
+
+        generator_arg = mock_parallel_instance.call_args[0][0]
+        list(generator_arg)
+        dispatch_ids = [
+            call.kwargs["dispatch_id"] for call in mock_delayed_func.call_args_list
+        ]
+        assert dispatch_ids == [0, 1]
+
+    @mock.patch("extremeweatherbench.evaluate.multiprocessing.Manager")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.LogQueueListener")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.WorkerSlotRenderer")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.supports_nested_bars")
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
+    def test_run_parallel_evaluation_wires_pre_close_hook(
+        self,
+        mock_tqdm,
+        mock_delayed,
+        mock_parallel_class,
+        mock_supports_nested_bars,
+        mock_renderer_class,
+        mock_listener_class,
+        mock_manager,
+        sample_case_operator,
+    ):
+        """ParallelTqdm's pre_close must close the log listener then renderer.
+
+        This is what makes slot bars close before the case bar: pre_close
+        runs at the top of ParallelTqdm's finally, before it closes its
+        own bar.
+        """
+        mock_supports_nested_bars.return_value = True
+        mock_tqdm.return_value = [sample_case_operator]
+        mock_delayed.return_value = mock.Mock()
+        mock_parallel_instance = mock.Mock()
+        mock_parallel_class.return_value = mock_parallel_instance
+        mock_parallel_instance.return_value = [pd.DataFrame({"value": [1.0]})]
+
+        order = []
+        mock_renderer_class.return_value.close.side_effect = lambda: order.append(
+            "renderer"
+        )
+        mock_listener_class.return_value.close.side_effect = lambda: order.append(
+            "listener"
+        )
+
+        evaluate._run_parallel_evaluation(
+            [sample_case_operator],
+            parallel_config={"backend": "loky", "n_jobs": 2},
+            progress=True,
+        )
+
+        _, parallel_kwargs = mock_parallel_class.call_args
+        pre_close = parallel_kwargs["pre_close"]
+        assert callable(pre_close)
+
+        order.clear()
+        pre_close()
+        assert order == ["listener", "renderer"]
+
     @pytest.mark.skipif(
         not HAS_DASK_DISTRIBUTED, reason="dask.distributed not installed"
     )
@@ -952,6 +1231,177 @@ class TestRunParallel:
         mock_client_class.assert_not_called()
         mock_existing_client.close.assert_not_called()
         assert isinstance(result, list)
+
+
+class TestComputeCaseOperatorWithProgress:
+    """Test the _compute_case_operator_with_progress worker wrapper."""
+
+    def test_forwards_logs_and_warnings_to_log_queue(
+        self, monkeypatch, sample_case_operator
+    ):
+        """logger.warning and warnings.warn during compute reach log_queue."""
+        log_queue = queue.Queue()
+        event_queue = queue.Queue()
+
+        def fake_compute(case_operator, cache_dir=None, **kwargs):
+            logging.getLogger("extremeweatherbench.derived").warning("worker warn")
+            warnings.warn("worker user warning", RuntimeWarning)
+            return pd.DataFrame({"value": [1.0]})
+
+        monkeypatch.setattr(evaluate, "compute_case_operator", fake_compute)
+
+        evaluate._compute_case_operator_with_progress(
+            sample_case_operator,
+            cache_dir=None,
+            event_queue=event_queue,
+            log_queue=log_queue,
+        )
+
+        records = []
+        while not log_queue.empty():
+            records.append(log_queue.get_nowait())
+        messages = [r.getMessage() for r in records]
+        assert any("worker warn" in m for m in messages)
+        assert any("worker user warning" in m for m in messages)
+
+    def test_restores_handlers_when_compute_raises(
+        self, monkeypatch, sample_case_operator
+    ):
+        """Handler swap is undone even when compute_case_operator raises."""
+        log_queue = queue.Queue()
+        event_queue = queue.Queue()
+        root = logging.getLogger()
+        original_handlers = root.handlers[:]
+
+        def failing_compute(case_operator, cache_dir=None, **kwargs):
+            raise ValueError("boom")
+
+        monkeypatch.setattr(evaluate, "compute_case_operator", failing_compute)
+
+        with pytest.raises(ValueError):
+            evaluate._compute_case_operator_with_progress(
+                sample_case_operator,
+                cache_dir=None,
+                event_queue=event_queue,
+                log_queue=log_queue,
+            )
+
+        assert root.handlers == original_handlers
+
+    def test_skips_log_forwarding_when_no_log_queue(
+        self, monkeypatch, sample_case_operator
+    ):
+        """No handler swap happens when log_queue is None."""
+        event_queue = queue.Queue()
+        root = logging.getLogger()
+        original_handlers = root.handlers[:]
+        seen_handlers = []
+
+        def fake_compute(case_operator, cache_dir=None, **kwargs):
+            seen_handlers.append(root.handlers[:])
+            return pd.DataFrame({"value": [1.0]})
+
+        monkeypatch.setattr(evaluate, "compute_case_operator", fake_compute)
+
+        evaluate._compute_case_operator_with_progress(
+            sample_case_operator,
+            cache_dir=None,
+            event_queue=event_queue,
+            log_queue=None,
+        )
+
+        assert seen_handlers == [original_handlers]
+
+    def test_uses_dispatch_id_as_slot_key(self, monkeypatch, sample_case_operator):
+        """Published events key on dispatch_id, not the shared case_id."""
+        event_queue = queue.Queue()
+
+        def fake_compute(case_operator, cache_dir=None, **kwargs):
+            evaluate.progress_module.set_phase("target pipeline")
+            return pd.DataFrame({"value": [1.0]})
+
+        monkeypatch.setattr(evaluate, "compute_case_operator", fake_compute)
+
+        evaluate._compute_case_operator_with_progress(
+            sample_case_operator,
+            cache_dir=None,
+            event_queue=event_queue,
+            dispatch_id=7,
+        )
+
+        published = []
+        while not event_queue.empty():
+            published.append(event_queue.get_nowait())
+        assert all(e.slot_key == 7 for e in published)
+
+    def test_computes_label_from_target_and_forecast_names(
+        self, monkeypatch, sample_case_operator
+    ):
+        """The label carries case id, target and forecast.
+
+        One case fans out into a dispatch per EvaluationObject, so the
+        case id alone can't tell two concurrent slots apart.
+        """
+        event_queue = queue.Queue()
+
+        def fake_compute(case_operator, cache_dir=None, **kwargs):
+            evaluate.progress_module.set_phase("target pipeline")
+            return pd.DataFrame({"value": [1.0]})
+
+        monkeypatch.setattr(evaluate, "compute_case_operator", fake_compute)
+
+        evaluate._compute_case_operator_with_progress(
+            sample_case_operator,
+            cache_dir=None,
+            event_queue=event_queue,
+            dispatch_id=0,
+        )
+
+        published = []
+        while not event_queue.empty():
+            published.append(event_queue.get_nowait())
+        phase_events = [e for e in published if not e.finished]
+        assert phase_events
+        case_id = sample_case_operator.case_metadata.case_id_number
+        target_name = sample_case_operator.target.name
+        forecast_name = sample_case_operator.forecast.name
+        expected = f"case {case_id} | {target_name} | {forecast_name}"
+        assert all(e.label == expected for e in phase_events)
+
+    def test_label_falls_back_when_inputs_have_no_name(
+        self, monkeypatch, sample_case_operator
+    ):
+        """Falls back gracefully when neither input has a name attribute."""
+
+        class Nameless:
+            variables: list = []
+
+        case_operator = cases.CaseOperator(
+            case_metadata=sample_case_operator.case_metadata,
+            metric_list=sample_case_operator.metric_list,
+            target=Nameless(),
+            forecast=Nameless(),
+        )
+        event_queue = queue.Queue()
+
+        def fake_compute(case_operator, cache_dir=None, **kwargs):
+            evaluate.progress_module.set_phase("target pipeline")
+            return pd.DataFrame({"value": [1.0]})
+
+        monkeypatch.setattr(evaluate, "compute_case_operator", fake_compute)
+
+        evaluate._compute_case_operator_with_progress(
+            case_operator, cache_dir=None, event_queue=event_queue, dispatch_id=0
+        )
+
+        published = []
+        while not event_queue.empty():
+            published.append(event_queue.get_nowait())
+        phase_events = [e for e in published if not e.finished]
+        assert phase_events
+        case_id = case_operator.case_metadata.case_id_number
+        expected = f"case {case_id} | target | forecast"
+        assert all(e.label == expected for e in phase_events)
 
 
 class TestComputeCaseOperator:
@@ -1769,8 +2219,11 @@ class TestErrorHandling:
     ):
         """Test serial execution behavior when some case operators fail."""
         case_op_1 = mock.Mock()
+        case_op_1.metric_list = []
         case_op_2 = mock.Mock()
+        case_op_2.metric_list = []
         case_op_3 = mock.Mock()
+        case_op_3.metric_list = []
         case_operators = [case_op_1, case_op_2, case_op_3]
 
         mock_tqdm.return_value = case_operators
@@ -2005,7 +2458,9 @@ class TestIntegration:
         """Test that serial and parallel execution produce identical results."""
         # Setup mock case operators
         case_op_1 = mock.Mock()
+        case_op_1.metric_list = []
         case_op_2 = mock.Mock()
+        case_op_2.metric_list = []
         case_operators = [case_op_1, case_op_2]
 
         # Define consistent results
@@ -2038,10 +2493,15 @@ class TestIntegration:
             mock_compute_case_operator.side_effect = [result_1, result_2]
             serial_result = ewb.run_evaluation(n_jobs=1)
 
-            # Reset mock and test parallel execution
+            # Reset mock and test parallel execution. Threading (rather than
+            # the default loky) keeps this in-process, since the mocked
+            # compute_case_operator can't be pickled across process
+            # boundaries by the progress-reporting wrapper.
             mock_compute_case_operator.reset_mock()
             mock_compute_case_operator.side_effect = [result_1, result_2]
-            parallel_result = ewb.run_evaluation(n_jobs=2)
+            parallel_result = ewb.run_evaluation(
+                parallel_config={"backend": "threading", "n_jobs": 2}
+            )
 
             # Both should produce valid DataFrames with same structure
             assert isinstance(serial_result, pd.DataFrame)
@@ -2060,6 +2520,8 @@ class TestIntegration:
 
         # Create many case operators to simulate realistic workload
         case_operators = [mock.Mock() for _ in range(10)]
+        for case_operator in case_operators:
+            case_operator.metric_list = []
         mock_tqdm.return_value = case_operators
 
         # Mock results
@@ -2115,6 +2577,8 @@ class TestIntegration:
     def test_mixed_execution_parameters(self, mock_tqdm, mock_compute_case_operator):
         """Test various parameter combinations for execution methods."""
         case_operators = [mock.Mock(), mock.Mock()]
+        for case_operator in case_operators:
+            case_operator.metric_list = []
         mock_tqdm.return_value = case_operators
         mock_results = [
             pd.DataFrame({"value": [1.0], "case_id_number": [1]}),
@@ -2175,6 +2639,7 @@ class TestIntegration:
     def test_execution_method_kwargs_propagation(self):
         """Test that kwargs are properly propagated through execution methods."""
         case_operator = mock.Mock()
+        case_operator.metric_list = []
 
         # Mock compute_case_operator to capture kwargs
         def mock_compute_with_kwargs(case_op, cache_dir, **kwargs):
@@ -2227,7 +2692,9 @@ class TestIntegration:
                     )
 
                     # Verify parallel execution was set up correctly
-                    mock_parallel_class.assert_called_once_with(total_tasks=1)
+                    mock_parallel_class.assert_called_once_with(
+                        pre_close=mock.ANY, total_tasks=1
+                    )
                     assert isinstance(result, list)
 
     def test_empty_case_operators_all_methods(self):
@@ -2267,6 +2734,8 @@ class TestIntegration:
         # Create a large list of case operators
         num_cases = 100
         case_operators = [mock.Mock() for _ in range(num_cases)]
+        for case_operator in case_operators:
+            case_operator.metric_list = []
         mock_tqdm.return_value = case_operators
 
         # Create mock results
@@ -2300,7 +2769,9 @@ class TestIntegration:
             )
 
             assert len(parallel_results) == num_cases
-            mock_parallel_class.assert_called_once_with(total_tasks=100)
+            mock_parallel_class.assert_called_once_with(
+                pre_close=mock.ANY, total_tasks=100
+            )
 
 
 class MockDerivedVariableWithOutputs(derived.DerivedVariable):
@@ -2811,6 +3282,42 @@ class TestParallelSerialConfigCheck:
         assert evaluate._parallel_serial_config_check(
             n_jobs=2, parallel_config={"backend": "threading", "n_jobs": 2}
         ) == {"backend": "threading", "n_jobs": 2}
+
+
+def test_metric_log_includes_case_id(
+    caplog, sample_case_operator, sample_forecast_dataset, sample_target_dataset
+):
+    """Metric logs must name the case so parallel output is readable."""
+    caplog.set_level(logging.INFO, logger="extremeweatherbench.evaluate")
+    case_id = sample_case_operator.case_metadata.case_id_number
+    # The default fixture datasets have no overlap with the case time range,
+    # so compute_case_operator returns before the metric loop; supply
+    # datasets that actually align, mirroring test_compute_case_operator_basic.
+    sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
+        sample_forecast_dataset,
+        sample_target_dataset,
+    )
+    with mock.patch(
+        "extremeweatherbench.evaluate._build_datasets"
+    ) as mock_build_datasets:
+        mock_build_datasets.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+        evaluate.compute_case_operator(sample_case_operator)
+    metric_logs = [
+        r.getMessage() for r in caplog.records if "Computing metric" in r.getMessage()
+    ]
+    assert metric_logs
+    assert all(f"case {case_id}" in message for message in metric_logs)
+
+
+def test_plan_metric_evaluations_counts_pairs(sample_case_operator):
+    """The plan enumerates every metric x variable-pair evaluation."""
+    plan = evaluate._plan_metric_evaluations(sample_case_operator)
+    assert plan
+    expected = sum(len(expanded) * len(pairs) for _, expanded, pairs in plan)
+    assert evaluate._count_metric_evaluations(sample_case_operator) == expected
 
 
 if __name__ == "__main__":
