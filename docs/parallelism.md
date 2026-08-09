@@ -42,16 +42,52 @@ The _safest_ approach is to run EWB in serial, with `n_jobs` set to 1. `Dask` wi
 
 ## Progress Reporting
 
-EWB shows one progress bar per run, tracking how many `CaseOperator`s are
-done with a percentage and ETA in both serial and parallel mode.
+EWB reports progress at three nested levels: how many `CaseOperator`s are
+done, how far the current case has progressed through its pipelines and
+metrics, and how many dask tasks the in-flight compute has finished.
 
-In serial mode, the bar also shows the current phase (e.g. which pipeline
-or metric is running) and a live dask task count while a compute is in
-flight. In parallel mode, multiple cases run at once, so there's no single
-phase to show; only the case-level bar updates.
+In serial mode, this renders as three stacked bars:
 
-To turn off the bar, pass `progress=False` to `run_evaluation()`, use
-`--no-progress` on the CLI, or set the `EWB_DISABLE_PROGRESS` env var. If
-you're using `parallel_config={"backend": "dask", ...}`, use the
-[dask dashboard](https://docs.dask.org/en/stable/dashboard.html) instead
-for task-level progress.
+```
+Evaluating cases:  40%|████      | 2/5 [01:12<01:48]
+  case 12:         33%|███       | 3/9 [00:21<00:42] RootMeanSquaredError
+    dask tasks:    71%|███████   | 12904/18332
+```
+
+The case bar tracks overall run completion. The case-step bar's total is
+the number of pipeline runs, cache writes, and metric evaluations that
+case will perform, and its postfix names the current phase. The dask
+task bar resizes for each compute call and only reflects local-scheduler
+computes; it never advances under `dask.distributed`.
+
+In parallel mode, cases run concurrently across worker processes, so
+each worker slot gets its own fixed bar, reused as cases finish and new
+ones start:
+
+```
+Evaluating cases:  40%|████      | 2/5 [01:12<01:48]
+  slot 0 | case 12: 33%|███     | 3/9 [00:21<00:42] RootMeanSquaredError
+  slot 1 | case 14: 88%|████████| 8/9 [00:19<00:02] dask 4001/4412
+  slot 2 | idle
+```
+
+The number of slots is `joblib.effective_n_jobs(n_jobs)`, so it stays
+bounded even when `n_jobs` is negative (e.g. `-1` for "all but one
+core") or `None`. Slot bars are rendered from progress events published
+by worker processes over a `multiprocessing.Manager` queue, so this adds
+one extra process only while parallel progress is actually being shown.
+
+When `sys.stderr` isn't a terminal (CI logs, captured notebook cells),
+nested bars would just produce unreadable escape-code noise, so EWB
+skips them entirely: no `Manager` process is created, and phase
+transitions instead appear as throttled `INFO` log lines (at most once
+every 5 seconds per case).
+
+To turn off all progress reporting, pass `progress=False` to
+`run_evaluation()`, use `--no-progress` on the CLI, or set the
+`EWB_DISABLE_PROGRESS` env var; none of the three levels render and no
+extra process is created. If you're using
+`parallel_config={"backend": "dask", ...}`, dask-task-level progress
+isn't available through this mechanism; use the
+[dask dashboard](https://docs.dask.org/en/stable/dashboard.html)
+instead. The case- and step-level bars still work under that backend.

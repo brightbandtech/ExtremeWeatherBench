@@ -57,7 +57,7 @@ import extremeweatherbench.evaluate as evaluate
 @click.option(
     "--no-progress",
     is_flag=True,
-    help="Disable the case-level progress bar",
+    help="Disable all progress bars",
 )
 @click.pass_context
 def cli_runner(
@@ -98,7 +98,7 @@ def cli_runner(
             precedence over n_jobs if provided.
         save_case_operators: Save CaseOperator objects to a pickle file at this
             path.
-        no_progress: Disable the case-level progress bar.
+        no_progress: Disable all progress bars.
     Examples:
         # Use default evaluation objects
         $ ewb --default
