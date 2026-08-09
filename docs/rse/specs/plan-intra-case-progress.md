@@ -700,7 +700,7 @@ fixed bar per worker slot.
 
 **Tasks:**
 
-- [ ] **Write the failing test** for the event type and queue sink.
+- [x] **Write the failing test** for the event type and queue sink.
   - File: `tests/test_progress.py` (append)
 
   ```python
@@ -715,11 +715,11 @@ fixed bar per worker slot.
       assert event.step == 1
   ```
 
-- [ ] **Run it, watch it fail:**
+- [x] **Run it, watch it fail:**
   `pytest tests/test_progress.py::test_queue_sink_publishes_events -v`
   → expect FAIL (`AttributeError: module has no attribute 'ProgressEvent'`)
 
-- [ ] **Implement** the event and sink.
+- [x] **Implement** the event and sink.
   - File: `src/extremeweatherbench/progress.py` (append)
 
   ```python
@@ -766,10 +766,10 @@ fixed bar per worker slot.
 
   Add `import dataclasses` and `import queue` to the imports at `progress.py:13-20`.
 
-- [ ] **Run it, watch it pass:**
+- [x] **Run it, watch it pass:**
   `pytest tests/test_progress.py::test_queue_sink_publishes_events -v` → expect PASS
 
-- [ ] **Write the failing test** for slot assignment and reuse.
+- [x] **Write the failing test** for slot assignment and reuse.
   - File: `tests/test_progress.py` (append)
 
   ```python
@@ -799,11 +799,11 @@ fixed bar per worker slot.
           renderer.close()
   ```
 
-- [ ] **Run them, watch them fail:**
+- [x] **Run them, watch them fail:**
   `pytest tests/test_progress.py -k slot_renderer -v`
   → expect FAIL (`AttributeError: module has no attribute 'WorkerSlotRenderer'`)
 
-- [ ] **Implement** the renderer.
+- [x] **Implement** the renderer.
   - File: `src/extremeweatherbench/progress.py` (append)
 
   ```python
@@ -894,10 +894,10 @@ fixed bar per worker slot.
 
   Add `import threading` to the imports at `progress.py:13-20`.
 
-- [ ] **Run them, watch them pass:**
+- [x] **Run them, watch them pass:**
   `pytest tests/test_progress.py -k slot_renderer -v` → expect PASS
 
-- [ ] **Implement** worker-side publishing. Add the sink to `_ProgressState` and a
+- [x] **Implement** worker-side publishing. Add the sink to `_ProgressState` and a
   registration function, then make `set_phase` publish:
 
   ```python
@@ -938,7 +938,7 @@ fixed bar per worker slot.
 
   Add `Callable` to the `typing` import at `progress.py:17`.
 
-- [ ] **Implement** the worker entry point. Add to
+- [x] **Implement** the worker entry point. Add to
   `src/extremeweatherbench/evaluate.py`, next to `compute_case_operator` at `:347`:
 
   ```python
@@ -978,7 +978,7 @@ fixed bar per worker slot.
           progress_module.register_sink(None)
   ```
 
-- [ ] **Implement** `DaskTaskSink`, the worker-side counterpart of `DaskTaskBar`.
+- [x] **Implement** `DaskTaskSink`, the worker-side counterpart of `DaskTaskBar`.
   - File: `src/extremeweatherbench/progress.py` (append)
 
   ```python
@@ -1027,7 +1027,7 @@ fixed bar per worker slot.
           )
   ```
 
-- [ ] **Implement** the parallel wiring. Replace `evaluate.py:325-339` with:
+- [x] **Implement** the parallel wiring. Replace `evaluate.py:325-339` with:
 
   ```python
       parallel_tqdm_kwargs: dict[str, Any] = {"total_tasks": len(case_operators)}
@@ -1068,7 +1068,7 @@ fixed bar per worker slot.
 
   Add `import multiprocessing` to the imports at `evaluate.py:3-22`.
 
-- [ ] **Write the failing test** for the non-tty guard.
+- [x] **Write the failing test** for the non-tty guard.
   - File: `tests/test_progress.py` (append)
 
   ```python
@@ -1086,11 +1086,11 @@ fixed bar per worker slot.
       assert progress.supports_nested_bars() is False
   ```
 
-- [ ] **Run them, watch them fail:**
+- [x] **Run them, watch them fail:**
   `pytest tests/test_progress.py -k supports_nested_bars -v`
   → expect FAIL (`AttributeError: module has no attribute 'supports_nested_bars'`)
 
-- [ ] **Implement** the guard and the log fallback.
+- [x] **Implement** the guard and the log fallback.
   - File: `src/extremeweatherbench/progress.py` (append)
 
   ```python
@@ -1139,10 +1139,10 @@ fixed bar per worker slot.
 
   Add `import sys` to the imports at `progress.py:13-20`.
 
-- [ ] **Run them, watch them pass:**
+- [x] **Run them, watch them pass:**
   `pytest tests/test_progress.py -k supports_nested_bars -v` → expect PASS
 
-- [ ] **Write the integration test** for end-to-end worker reporting.
+- [x] **Write the integration test** for end-to-end worker reporting.
   - File: `tests/test_progress.py` (append)
 
   ```python
@@ -1180,19 +1180,19 @@ fixed bar per worker slot.
           manager.shutdown()
   ```
 
-- [ ] **Run it:**
+- [x] **Run it:**
   `pytest tests/test_progress.py::test_progress_events_cross_loky_process_boundary -v`
   → expect PASS (the mechanism was verified by probe before planning)
 
-- [ ] **Commit:** `git commit -m "feat: report intra-case progress from parallel workers"`
+- [x] **Commit:** `git commit -m "feat: report intra-case progress from parallel workers"`
 
 **Dependencies:** Requires Phase 2 (`make_case_step_bar`, `_count_case_steps`,
 `register_step_bar`, and the `set_phase` restructure).
 
 **Verification:**
-- [ ] `pytest tests/ -v` → all pass
-- [ ] `mypy src/extremeweatherbench/` → no new errors
-- [ ] `EWB_DISABLE_PROGRESS=1 python -c "import multiprocessing, ..."` confirms no
+- [x] `pytest tests/ -v` → all pass
+- [x] `mypy src/extremeweatherbench/` → no new errors
+- [x] `EWB_DISABLE_PROGRESS=1 python -c "import multiprocessing, ..."` confirms no
       `Manager` process is spawned (check via `multiprocessing.active_children()`)
 
 ### Phase 4: Documentation
@@ -1201,48 +1201,58 @@ fixed bar per worker slot.
 
 **Tasks:**
 
-- [ ] **Rewrite** the Progress Reporting section at `docs/parallelism.md:43-57` to
+- [x] **Rewrite** the Progress Reporting section at `docs/parallelism.md:43-57` to
   cover three levels, the slot model, the non-tty fallback, and the unchanged
   `dask.distributed` guidance. Include the two sample bar layouts from the *Desired
   End State* section above.
 
-- [ ] **Update** the CLI help text at `src/extremeweatherbench/evaluate_cli.py:60`
+- [x] **Update** the CLI help text at `src/extremeweatherbench/evaluate_cli.py:60`
   from `"Disable the case-level progress bar"` to `"Disable all progress bars"`.
 
-- [ ] **Update** the `progress` argument docstrings at `evaluate.py:122`, `:168`,
+- [x] **Update** the `progress` argument docstrings at `evaluate.py:122`, `:168`,
   `:248`, and `:295` from `"Whether to display the case-level progress bar."` to
   `"Whether to display progress bars."`
 
-- [ ] **Commit:** `git commit -m "docs: describe the nested progress bars"`
+- [x] **Commit:** `git commit -m "docs: describe the nested progress bars"`
 
 **Dependencies:** Requires Phase 3.
 
 **Verification:**
-- [ ] `ewb --help` shows the updated flag description
-- [ ] `ruff check src/ tests/` → no errors
+- [x] `ewb --help` shows the updated flag description
+- [x] `ruff check src/ tests/` → no errors
 
 ## Success Criteria
 
 ### Automated Verification
 
-- [ ] `make dev-test` passes
-- [ ] `pytest tests/test_progress.py -v` passes, including the new step-bar,
+- [x] `make dev-test` passes
+- [x] `pytest tests/test_progress.py -v` passes, including the new step-bar,
       slot-renderer, non-tty, and cross-process tests
-- [ ] `pytest tests/test_evaluate.py -v` passes, confirming the hoist in Phase 2
+- [x] `pytest tests/test_evaluate.py -v` passes, confirming the hoist in Phase 2
       changed no evaluation behaviour
-- [ ] `make lint` passes
-- [ ] `make typecheck` passes
+- [x] `make lint` passes
+- [ ] `make typecheck` passes — not literally true: 58 pre-existing errors
+      remain (down from the 64 quoted at kickoff; verified none are new by
+      diffing against the pre-Phase-3 commit). No new errors were introduced.
 - [ ] `_count_case_steps` equals the observed number of `set_phase` calls for a
-      sample case operator, asserted in `tests/test_evaluate.py`
+      sample case operator, asserted in `tests/test_evaluate.py` — not
+      implemented in any phase; see final report for why and what it would
+      take.
 
 ### Manual Verification
 
 - [ ] A serial run with `n_jobs=1` shows three stacked bars; the step bar reaches its
-      total before the case bar ticks
+      total before the case bar ticks — NOT VERIFIED: this sandbox has no tty,
+      so this could only be checked programmatically (bar `.n`/`.total` state),
+      not by eye. See the Phase 2 report for that programmatic evidence.
 - [ ] A parallel run with `n_jobs=4` shows exactly four slot bars, and slots visibly
-      recycle between cases
+      recycle between cases — NOT VERIFIED visually for the same reason; the
+      underlying slot-assignment/reuse logic is covered by
+      `test_slot_renderer_assigns_and_reuses_slots` and confirmed manually via
+      a script that a `Manager` process is created only when a tty is
+      simulated (`sys.stderr.isatty` patched to return True).
 - [ ] The dask task bar visibly moves during a long metric compute, confirming a slow
-      case is distinguishable from a hang
+      case is distinguishable from a hang — NOT VERIFIED (no tty)
 - [ ] `ewb --default --no-progress` emits no bars
 - [ ] Piping output to a file (`ewb --default > out.log 2>&1`) produces readable log
       lines with no escape-sequence noise
@@ -1255,21 +1265,22 @@ Unit tests are written test-first within each phase. This section covers the
 additional integration and manual coverage.
 
 **Unit Test Coverage (summary, written in-phase):**
-- [ ] Bar construction: totals, descriptions, positions, disable paths
-- [ ] `set_phase` step ticking, including the overshoot clamp
-- [ ] `DaskTaskBar` resizing and draining across consecutive computes
-- [ ] Slot assignment, release, reuse, and exhaustion
-- [ ] `supports_nested_bars` for tty and env-var combinations
-- [ ] `_plan_metric_evaluations` / `_count_metric_evaluations` agreement
-- [ ] Mock external dependencies: none needed; `dask.array` and a real
+- [x] Bar construction: totals, descriptions, positions, disable paths
+- [x] `set_phase` step ticking, including the overshoot clamp
+- [x] `DaskTaskBar` resizing and draining across consecutive computes
+- [x] Slot assignment, release, reuse, and exhaustion
+- [x] `supports_nested_bars` for tty and env-var combinations
+- [x] `_plan_metric_evaluations` / `_count_metric_evaluations` agreement
+- [x] Mock external dependencies: none needed; `dask.array` and a real
       `Manager().Queue()` are used directly, as in the existing
       `tests/test_progress.py:90`
 
 **Integration Tests:**
-- [ ] Events published from loky workers arrive in the parent, one `finished` event
+- [x] Events published from loky workers arrive in the parent, one `finished` event
       per case (Phase 3)
 - [ ] A full `_run_evaluation` in serial mode with progress enabled produces results
-      identical to progress disabled
+      identical to progress disabled — not implemented in any phase; see
+      final report.
 
 **Manual Testing:**
 - [ ] Scenario 1: `ewb --default --n-jobs 1` in a terminal; watch the three bars
