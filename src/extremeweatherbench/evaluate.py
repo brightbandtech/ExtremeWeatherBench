@@ -655,7 +655,11 @@ def _compute_case_operator_with_progress(
     case_id = case_operator.case_metadata.case_id_number
     slot_key = dispatch_id if dispatch_id is not None else case_id
     target_name = getattr(case_operator.target, "name", None) or "target"
-    label = f"case {case_id} | {target_name}"
+    forecast_name = getattr(case_operator.forecast, "name", None) or "forecast"
+    # One case fans out into a dispatch per EvaluationObject, so the
+    # case id alone doesn't say which slot is which; the target and
+    # forecast names are what actually distinguish them.
+    label = f"case {case_id} | {target_name} | {forecast_name}"
     sink = progress_module.QueueSink(event_queue)
     progress_module.register_sink(
         sink,

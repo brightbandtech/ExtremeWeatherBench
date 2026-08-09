@@ -351,10 +351,10 @@ class DaskTaskSink(dask.callbacks.Callback):
     posttask runs on the dask scheduler's own loop, so an unthrottled
     publish would put that on the critical path of every task.
 
-    One case typically runs many sequential dask graphs, so in addition
-    to the per-graph done/total this also tracks a cumulative count that
-    accumulates across graphs for the lifetime of this sink and never
-    resets, since a case's parallel-mode slot bar shows that instead.
+    One case typically runs many sequential dask graphs. Alongside the
+    per-graph done/total that the slot bar renders, this also publishes
+    a count that accumulates across graphs and never resets, for sinks
+    that want a strictly monotonic liveness signal instead.
     """
 
     def __init__(
@@ -386,6 +386,18 @@ class DaskTaskSink(dask.callbacks.Callback):
         if now - self._last_write < self.throttle_seconds:
             return
         self._last_write = now
+        self._publish()
+
+    def _finish(self, dsk, state, failed) -> None:
+        # The throttle nearly always swallows a graph's last tasks, so
+        # without an unthrottled publish here the slot would sit on a
+        # partial fraction until the next graph resets it. On failure
+        # the real total stays, since a partial count is honest there.
+        if not failed and self.completed_tasks < self.total_tasks:
+            self.total_tasks = self.completed_tasks
+        self._publish()
+
+    def _publish(self) -> None:
         self.sink(
             ProgressEvent(
                 case_id=self.case_id,
@@ -417,7 +429,8 @@ class ProgressEvent:
         dask_done: Tasks completed in the in-flight dask graph.
         dask_total: Tasks in the in-flight dask graph.
         dask_tasks_done: Cumulative dask tasks completed across every
-            graph run so far for this dispatch; never decreases.
+            graph run so far for this dispatch; never decreases. Not
+            rendered by the slot bar, which shows dask_done/dask_total.
         finished: True when the case is complete and its slot frees.
     """
 
@@ -568,10 +581,14 @@ class WorkerSlotRenderer:
 
         bar = self._bars[slot]
         bar.update(event.step - bar.n)
-        if event.dask_tasks_done:
-            bar.set_postfix_str(f"{event.phase} | dask {event.dask_tasks_done} tasks")
+        # The description already names the case, so drop the phase's
+        # own "case N | " prefix rather than printing it twice on a line
+        # that is already close to the terminal width.
+        phase = event.phase.removeprefix(f"case {event.case_id} | ")
+        if event.dask_total:
+            bar.set_postfix_str(f"{phase} | dask {event.dask_done}/{event.dask_total}")
         else:
-            bar.set_postfix_str(event.phase)
+            bar.set_postfix_str(phase)
 
     def start(self, event_queue) -> None:
         """Begin draining event_queue on a daemon thread.

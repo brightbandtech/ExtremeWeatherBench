@@ -270,8 +270,8 @@ def test_slot_renderer_uses_label_for_description():
         renderer.close()
 
 
-def test_slot_renderer_shows_cumulative_dask_count_without_denominator():
-    """Slot bars show a bare cumulative dask count, not done/total."""
+def test_slot_renderer_shows_dask_progress_as_a_fraction():
+    """Slot bars show the in-flight graph's done/total, as serial does."""
     renderer = progress.WorkerSlotRenderer(n_slots=1, disable=False)
     try:
         renderer.handle(
@@ -280,15 +280,51 @@ def test_slot_renderer_shows_cumulative_dask_count_without_denominator():
                 slot_key=0,
                 total_steps=3,
                 phase="RootMeanSquaredError",
+                dask_done=341,
+                dask_total=10699,
                 dask_tasks_done=12904,
             )
         )
         slot = renderer.slot_by_case[0]
-        postfix = renderer._bars[slot].postfix
-        assert "12904 tasks" in postfix
-        assert "/" not in postfix
+        assert "dask 341/10699" in renderer._bars[slot].postfix
     finally:
         renderer.close()
+
+
+def test_slot_renderer_drops_case_prefix_duplicated_in_description():
+    """The case id shows once, in the description, not again in the postfix."""
+    renderer = progress.WorkerSlotRenderer(n_slots=1, disable=False)
+    try:
+        renderer.handle(
+            progress.ProgressEvent(
+                case_id=220,
+                slot_key=0,
+                label="case 220 | IBTrACS | HRES",
+                total_steps=5,
+                phase="case 220 | forecast pipeline",
+            )
+        )
+        slot = renderer.slot_by_case[0]
+        assert renderer._bars[slot].postfix == "forecast pipeline"
+        assert "case 220" in renderer._bars[slot].desc
+    finally:
+        renderer.close()
+
+
+def test_dask_task_sink_publishes_completed_fraction_on_finish():
+    """A graph's final publish lands on its total despite the throttle.
+
+    The throttle nearly always drops a graph's last tasks, which would
+    otherwise leave the slot showing a partial fraction until the next
+    graph resets it.
+    """
+    published = []
+    sink = progress.DaskTaskSink(published.append, case_id=1)
+    sink._start_state(dsk={"a": 1, "b": 2, "c": 3}, state={})
+    for _ in range(3):
+        sink._posttask("k", None, {}, {}, 0)
+    sink._finish(dsk={}, state={}, failed=False)
+    assert published[-1].dask_done == published[-1].dask_total == 3
 
 
 def test_slot_renderer_leaves_finished_bar_until_reclaimed():

@@ -66,21 +66,19 @@ ones start:
 
 ```
 Evaluating cases:  40%|████      | 2/5 [01:12<01:48]
-  case 12 | pph_target: 33%|███  | 3/9 [00:21<00:42] RootMeanSquaredError
-  case 14 | ir_target:  88%|████████| 8/9 [00:19<00:02] dask 12904 tasks
+  case 12 | pph_target | HRES: 33%|███ | 3/9 [00:21<00:42] RootMeanSquaredError
+  case 14 | ir_target | GraphCast: 88%|███| 8/9 [00:19<00:02] dask 4183/10699
 
 ```
 
-Each slot's label names the case _and_ the target, since one case can
-have several `CaseOperator`s (one per `EvaluationObject`) running in
+Each slot's label names the case, target _and_ forecast, since one case
+can have several `CaseOperator`s (one per `EvaluationObject`) running in
 different slots at once, and the case id alone can't tell those apart.
-The dask count on a slot bar is a cumulative, ever-increasing count of
-tasks completed across every dask graph the case has run so far, not a
-`done/total` fraction, since a case runs many sequential graphs and a
-fraction that resets on each one is confusing more than informative. A
-slot with no case assigned yet renders as a blank line, and a slot
-whose case just finished keeps showing that case's final state until a
-new case claims it, so finishing mid-run doesn't cause visible churn.
+The dask fraction is per graph, as in serial, so it restarts each time
+the case begins a new compute. A slot with no case assigned yet renders
+as a blank line, and a slot whose case just finished keeps showing that
+case's final state until a new case claims it, so finishing mid-run
+doesn't cause visible churn.
 
 The number of slots is `joblib.effective_n_jobs(n_jobs)`, so it stays
 bounded even when `n_jobs` is negative (e.g. `-1` for "all but one

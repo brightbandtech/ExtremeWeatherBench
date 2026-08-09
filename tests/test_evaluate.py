@@ -1336,8 +1336,14 @@ class TestComputeCaseOperatorWithProgress:
             published.append(event_queue.get_nowait())
         assert all(e.slot_key == 7 for e in published)
 
-    def test_computes_label_from_target_name(self, monkeypatch, sample_case_operator):
-        """The published label includes the case id and target name."""
+    def test_computes_label_from_target_and_forecast_names(
+        self, monkeypatch, sample_case_operator
+    ):
+        """The label carries case id, target and forecast.
+
+        One case fans out into a dispatch per EvaluationObject, so the
+        case id alone can't tell two concurrent slots apart.
+        """
         event_queue = queue.Queue()
 
         def fake_compute(case_operator, cache_dir=None, **kwargs):
@@ -1360,22 +1366,23 @@ class TestComputeCaseOperatorWithProgress:
         assert phase_events
         case_id = sample_case_operator.case_metadata.case_id_number
         target_name = sample_case_operator.target.name
-        expected = f"case {case_id} | {target_name}"
+        forecast_name = sample_case_operator.forecast.name
+        expected = f"case {case_id} | {target_name} | {forecast_name}"
         assert all(e.label == expected for e in phase_events)
 
-    def test_label_falls_back_when_target_has_no_name(
+    def test_label_falls_back_when_inputs_have_no_name(
         self, monkeypatch, sample_case_operator
     ):
-        """Falls back gracefully when the target has no name attribute."""
+        """Falls back gracefully when neither input has a name attribute."""
 
-        class NamelessTarget:
+        class Nameless:
             variables: list = []
 
         case_operator = cases.CaseOperator(
             case_metadata=sample_case_operator.case_metadata,
             metric_list=sample_case_operator.metric_list,
-            target=NamelessTarget(),
-            forecast=sample_case_operator.forecast,
+            target=Nameless(),
+            forecast=Nameless(),
         )
         event_queue = queue.Queue()
 
@@ -1395,7 +1402,8 @@ class TestComputeCaseOperatorWithProgress:
         phase_events = [e for e in published if not e.finished]
         assert phase_events
         case_id = case_operator.case_metadata.case_id_number
-        assert all(e.label == f"case {case_id} | target" for e in phase_events)
+        expected = f"case {case_id} | target | forecast"
+        assert all(e.label == expected for e in phase_events)
 
 
 class TestComputeCaseOperator:
