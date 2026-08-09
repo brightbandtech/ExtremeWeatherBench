@@ -785,9 +785,7 @@ class TestRunParallel:
         )
 
         # Verify Parallel was called with total_tasks (n_jobs via parallel_config)
-        mock_parallel_class.assert_called_once_with(
-            pre_close=mock.ANY, total_tasks=1
-        )
+        mock_parallel_class.assert_called_once_with(pre_close=mock.ANY, total_tasks=1)
 
         # Verify the parallel instance was called (generator consumed)
         mock_parallel_instance.assert_called_once()

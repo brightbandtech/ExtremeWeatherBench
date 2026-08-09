@@ -241,12 +241,8 @@ def test_slot_renderer_disambiguates_same_case_id_via_slot_key():
     """
     renderer = progress.WorkerSlotRenderer(n_slots=2, disable=True)
     try:
-        renderer.handle(
-            progress.ProgressEvent(case_id=305, slot_key=0, total_steps=3)
-        )
-        renderer.handle(
-            progress.ProgressEvent(case_id=305, slot_key=1, total_steps=3)
-        )
+        renderer.handle(progress.ProgressEvent(case_id=305, slot_key=0, total_steps=3))
+        renderer.handle(progress.ProgressEvent(case_id=305, slot_key=1, total_steps=3))
         assert set(renderer.slot_by_case) == {0, 1}
         assert renderer.slot_by_case[0] != renderer.slot_by_case[1]
     finally:
@@ -343,9 +339,7 @@ def test_slot_renderer_leaves_finished_bar_until_reclaimed():
         assert renderer._bars[slot_before].desc == desc_before
         assert 0 not in renderer.slot_by_case
 
-        renderer.handle(
-            progress.ProgressEvent(case_id=2, slot_key=1, total_steps=5)
-        )
+        renderer.handle(progress.ProgressEvent(case_id=2, slot_key=1, total_steps=5))
         new_slot = renderer.slot_by_case[1]
         assert new_slot == slot_before
         assert renderer._bars[new_slot].desc != desc_before
@@ -422,8 +416,7 @@ def test_progress_events_cross_loky_process_boundary():
     try:
         with joblib.parallel_config(backend="loky", n_jobs=2):
             joblib.Parallel()(
-                joblib.delayed(_publish_from_worker)(i, event_queue)
-                for i in range(4)
+                joblib.delayed(_publish_from_worker)(i, event_queue) for i in range(4)
             )
         received = []
         while not event_queue.empty():

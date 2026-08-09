@@ -466,9 +466,7 @@ def _plan_metric_evaluations(
                 for v in target_vars_expanded
                 if v not in explicitly_claimed_target_vars
             ]
-            variable_pairs = list(
-                zip(forecast_vars_available, target_vars_available)
-            )
+            variable_pairs = list(zip(forecast_vars_available, target_vars_available))
         plan.append((metric, metrics_to_evaluate, variable_pairs))
     return plan
 
