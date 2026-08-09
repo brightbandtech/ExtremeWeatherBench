@@ -95,9 +95,12 @@ def is_valid_landfall(landfall: xr.DataArray | None) -> bool:
         return False
     if "init_time" not in landfall.coords:
         return False
-    if np.isnan(landfall.values).all():
+    if landfall.size == 0:
         return False
-    return True
+    # notnull().any() reduces chunk by chunk. Reading .values first would pull
+    # every chunk into one array and build a full-size boolean beside it, all
+    # to answer a single yes-or-no question.
+    return bool(landfall.notnull().any())
 
 
 def _create_nan_dataarray(
@@ -270,7 +273,9 @@ def min_if_all_timesteps_present(
         otherwise the original DataArray.
     """
     timesteps_per_day = 24 / time_resolution_hours
-    if da.values.size == timesteps_per_day:
+    # .size rather than .values.size: the element count is known from the
+    # shape, so asking for it should not pull a dask-backed day into memory.
+    if da.size == timesteps_per_day:
         return da.min()
     else:
         return xr.DataArray(np.nan)
@@ -312,9 +317,15 @@ def determine_temporal_resolution(
     Returns:
         The temporal resolution of the data as a float in hours.
     """
-    num_timesteps = (
-        np.unique(np.diff(data.valid_time)).astype("timedelta64[h]").astype(int)
-    )
+    # Read the times off the index where there is one. Going through
+    # data.valid_time builds a DataArray and diffs it through xarray's
+    # dispatch, which costs several times more than diffing the index.
+    if "valid_time" in data.indexes:
+        valid_time = data.indexes["valid_time"].to_numpy()
+    else:
+        valid_time = np.asarray(data["valid_time"].values)
+
+    num_timesteps = np.unique(np.diff(valid_time)).astype("timedelta64[h]").astype(int)
     if len(num_timesteps) > 1:
         logger.warning(
             "Multiple time resolutions found in dataset, data may be missing in "

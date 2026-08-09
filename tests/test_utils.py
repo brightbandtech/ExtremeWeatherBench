@@ -152,6 +152,23 @@ def test_min_if_all_timesteps_present():
     assert np.isnan(result_incomplete.values)
 
 
+def test_min_if_all_timesteps_present_does_not_materialize_for_the_size_check():
+    """.size is shape-derived and known without computing; reading .values
+    to get the size would force a dask-backed day fully into memory."""
+    import dask
+    import dask.array as dask_array
+
+    def boom():
+        raise AssertionError("da.values was read to check the timestep count")
+
+    arr = dask_array.from_delayed(dask.delayed(boom)(), shape=(4,), dtype=float)
+    da = xr.DataArray(arr, dims=["time"])
+
+    result = utils.min_if_all_timesteps_present(da, 6)
+
+    assert result.chunks is not None, "result should still be a lazy dask array"
+
+
 def test_min_if_all_timesteps_present_forecast():
     """Test returning minimum for forecast with valid_time dimension."""
     # Test with complete timesteps
@@ -199,6 +216,39 @@ def test_determine_temporal_resolution():
 
     result_hourly = utils.determine_temporal_resolution(ds_hourly)
     assert result_hourly == 1  # 1-hour resolution
+
+
+def test_determine_temporal_resolution_diffs_a_plain_array(monkeypatch):
+    """Diffing data.valid_time dispatches through xarray's DataArray
+    machinery; diffing the index's plain ndarray skips that overhead."""
+    ds = xr.Dataset(
+        {"t": ("valid_time", np.zeros(4))},
+        coords={"valid_time": pd.date_range("2021-01-01", periods=4, freq="6h")},
+    )
+    seen_types = []
+    original_diff = np.diff
+
+    def spy_diff(a, *args, **kwargs):
+        seen_types.append(type(a))
+        return original_diff(a, *args, **kwargs)
+
+    monkeypatch.setattr(np, "diff", spy_diff)
+
+    utils.determine_temporal_resolution(ds)
+
+    assert seen_types == [np.ndarray], seen_types
+
+
+def test_determine_temporal_resolution_without_a_valid_time_index():
+    """Falls back to the coordinate's values when valid_time isn't indexed."""
+    ds = xr.Dataset(
+        {"t": ("step", np.zeros(5))},
+        coords={
+            "step": np.arange(5),
+            "valid_time": ("step", pd.date_range("2021-01-01", periods=5, freq="3h")),
+        },
+    )
+    assert utils.determine_temporal_resolution(ds) == 3.0
 
 
 def test_determine_temporal_resolution_multiple_resolutions():
@@ -2085,6 +2135,26 @@ class TestIsValidLandfall:
         # This should return True because init_time IS in coords
         # (even though it's not a dimension)
         assert utils.is_valid_landfall(da) is True
+
+    def test_does_not_pull_the_full_array_into_memory(self, monkeypatch):
+        """notnull().any() must reduce chunk by chunk rather than reading a
+        full-size .values and building a same-size boolean array beside it."""
+        da = xr.DataArray(
+            np.array([np.nan, 1.0, np.nan]),
+            dims=["init_time"],
+            coords={"init_time": pd.date_range("2023-09-14", periods=3)},
+        )
+        accessed_sizes = []
+        original_values = xr.DataArray.values.fget
+
+        def spy_values(self):
+            accessed_sizes.append(self.size)
+            return original_values(self)
+
+        monkeypatch.setattr(xr.DataArray, "values", property(spy_values))
+
+        assert utils.is_valid_landfall(da) is True
+        assert all(size <= 1 for size in accessed_sizes), accessed_sizes
 
 
 class TestParallelTqdmPreClose:
