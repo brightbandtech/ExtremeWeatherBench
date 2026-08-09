@@ -14,6 +14,7 @@ registered via register_sink; otherwise they publish nothing.
 import contextlib
 import dataclasses
 import logging
+import logging.handlers
 import os
 import queue
 import sys
@@ -49,6 +50,8 @@ class _ProgressState:
         self.case_id: Union[int, str] = ""
         self.total_steps: int = 0
         self.step: int = 0
+        self.slot_key: Union[int, str] = ""
+        self.label: str = ""
 
 
 _state = _ProgressState()
@@ -172,6 +175,8 @@ def register_sink(
     sink: Optional[Callable[["ProgressEvent"], None]],
     case_id: Union[int, str] = "",
     total_steps: int = 0,
+    slot_key: Union[int, str] = "",
+    label: str = "",
 ) -> None:
     """Route this process's progress events to sink.
 
@@ -181,11 +186,17 @@ def register_sink(
         sink: Receives every ProgressEvent, or None to stop publishing.
         case_id: The case this process is currently computing.
         total_steps: How many steps that case will run.
+        slot_key: Unique run-scoped key identifying this dispatch, since
+            two CaseOperators (e.g. one case with two EvaluationObjects)
+            can share the same case_id.
+        label: Precomputed display label for this dispatch.
     """
     _state.sink = sink
     _state.case_id = case_id
     _state.total_steps = total_steps
     _state.step = 0
+    _state.slot_key = slot_key
+    _state.label = label
 
 
 @contextlib.contextmanager
@@ -230,6 +241,8 @@ def set_phase(text: str) -> None:
         _state.sink(
             ProgressEvent(
                 case_id=_state.case_id,
+                slot_key=_state.slot_key,
+                label=_state.label,
                 phase=text,
                 step=_state.step,
                 total_steps=_state.total_steps,
@@ -289,6 +302,11 @@ class DaskTaskSink(dask.callbacks.Callback):
     The worker-process counterpart of DaskTaskBar. Throttled because
     posttask callbacks run on the dask scheduler's own loop, so every
     publish is on the critical path of the compute.
+
+    One case typically runs many sequential dask graphs, so in addition
+    to the per-graph done/total this also tracks a cumulative count that
+    accumulates across graphs for the lifetime of this sink and never
+    resets, since a case's parallel-mode slot bar shows that instead.
     """
 
     def __init__(
@@ -303,15 +321,19 @@ class DaskTaskSink(dask.callbacks.Callback):
         self.throttle_seconds = throttle_seconds
         self.total_tasks = 0
         self.completed_tasks = 0
+        self.cumulative_completed_tasks = 0
         self._last_write = 0.0
 
     def _start_state(self, dsk, state) -> None:
+        # Per-graph bookkeeping only; cumulative_completed_tasks must
+        # keep counting across graphs, so it is never reset here.
         self.total_tasks = len(dsk)
         self.completed_tasks = 0
         self._last_write = 0.0
 
     def _posttask(self, key, result, dsk, state, worker_id) -> None:
         self.completed_tasks += 1
+        self.cumulative_completed_tasks += 1
         now = time.monotonic()
         if now - self._last_write < self.throttle_seconds:
             return
@@ -319,11 +341,14 @@ class DaskTaskSink(dask.callbacks.Callback):
         self.sink(
             ProgressEvent(
                 case_id=self.case_id,
+                slot_key=_state.slot_key,
+                label=_state.label,
                 phase=_state.current_phase,
                 step=_state.step,
                 total_steps=_state.total_steps,
                 dask_done=self.completed_tasks,
                 dask_total=self.total_tasks,
+                dask_tasks_done=self.cumulative_completed_tasks,
             )
         )
 
@@ -333,21 +358,30 @@ class ProgressEvent:
     """One progress update from wherever a case is being computed.
 
     Attributes:
-        case_id: The case the event describes.
+        case_id: The case the event describes, for display only. Two
+            dispatches (e.g. one case with two EvaluationObjects) can
+            share a case_id, so this must not be used as a slot key.
+        slot_key: Unique run-scoped key identifying this dispatch.
+        label: Precomputed display label for the slot bar description.
         phase: Human-readable description of the current step.
         step: How many steps of the case are done.
         total_steps: How many steps the case has in total.
-        dask_done: Tasks completed in the in-flight dask compute.
-        dask_total: Tasks in the in-flight dask compute.
+        dask_done: Tasks completed in the in-flight dask graph.
+        dask_total: Tasks in the in-flight dask graph.
+        dask_tasks_done: Cumulative dask tasks completed across every
+            graph run so far for this dispatch; never decreases.
         finished: True when the case is complete and its slot frees.
     """
 
     case_id: Union[int, str]
+    slot_key: Union[int, str] = ""
+    label: str = ""
     phase: str = ""
     step: int = 0
     total_steps: int = 0
     dask_done: int = 0
     dask_total: int = 0
+    dask_tasks_done: int = 0
     finished: bool = False
 
 
@@ -425,10 +459,16 @@ class WorkerSlotRenderer:
         self._free_slots = list(range(n_slots))
         self._bars = [
             make_case_step_bar(
-                case_id="idle", total_steps=1, position=i + 1, disable=disable
+                case_id="", total_steps=1, position=i + 1, disable=disable
             )
             for i in range(n_slots)
         ]
+        for bar in self._bars:
+            # An unclaimed slot renders as a blank reserved line rather
+            # than a "case idle" placeholder, since that's just noise
+            # before anything has actually started.
+            bar.set_description_str("")
+            bar.bar_format = "{desc}"
         self._queue: Optional[Any] = None
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -436,18 +476,27 @@ class WorkerSlotRenderer:
     def handle(self, event: ProgressEvent) -> None:
         """Apply one event to the slot bars.
 
+        Events key on slot_key, not case_id: build_case_operators can
+        emit multiple CaseOperators sharing a case_id (one case, several
+        EvaluationObjects), and those must not collide onto one slot.
+
         Args:
             event: The event to render.
         """
+        # slot_key defaults to "" for callers that never set it (e.g.
+        # serial-mode helpers), so fall back to case_id in that case.
+        key = event.slot_key if event.slot_key != "" else event.case_id
+
         if event.finished:
-            slot = self.slot_by_case.pop(event.case_id, None)
+            slot = self.slot_by_case.pop(key, None)
             if slot is not None:
                 self._free_slots.append(slot)
-                self._bars[slot].reset(total=1)
-                self._bars[slot].set_description_str("  idle")
+                # Leave the bar showing the case's final state; it is
+                # only reset once a new case actually claims this slot,
+                # so finishing mid-run doesn't cause visible churn.
             return
 
-        slot = self.slot_by_case.get(event.case_id)
+        slot = self.slot_by_case.get(key)
         if slot is None:
             if not self._free_slots:
                 # More cases in flight than slots; the case bar still
@@ -455,16 +504,16 @@ class WorkerSlotRenderer:
                 # reflowing the display.
                 return
             slot = self._free_slots.pop(0)
-            self.slot_by_case[event.case_id] = slot
-            self._bars[slot].reset(total=max(event.total_steps, 1))
-            self._bars[slot].set_description_str(f"  case {event.case_id}")
+            self.slot_by_case[key] = slot
+            bar = self._bars[slot]
+            bar.bar_format = BAR_FORMAT
+            bar.reset(total=max(event.total_steps, 1))
+            bar.set_description_str(f"  {event.label or f'case {event.case_id}'}")
 
         bar = self._bars[slot]
         bar.update(event.step - bar.n)
-        if event.dask_total:
-            bar.set_postfix_str(
-                f"{event.phase} | dask {event.dask_done}/{event.dask_total}"
-            )
+        if event.dask_tasks_done:
+            bar.set_postfix_str(f"{event.phase} | dask {event.dask_tasks_done} tasks")
         else:
             bar.set_postfix_str(event.phase)
 
@@ -496,3 +545,125 @@ class WorkerSlotRenderer:
             self._thread.join(timeout=2)
         for bar in self._bars:
             bar.close()
+
+
+@contextlib.contextmanager
+def captured_warnings() -> Iterator[None]:
+    """Route warnings.warn() through logging for the duration of the block.
+
+    Idempotent with respect to a caller that already enabled capture: in
+    that case this is a no-op on both enter and exit, so a library caller
+    with its own warning handling is left untouched.
+    """
+    already_enabled = getattr(logging, "_warnings_showwarning", None) is not None
+    if not already_enabled:
+        logging.captureWarnings(True)
+    try:
+        yield
+    finally:
+        if not already_enabled:
+            logging.captureWarnings(False)
+
+
+class _ForwardingQueueHandler(logging.handlers.QueueHandler):
+    """QueueHandler that drops records instead of raising or printing.
+
+    Progress and logging must never break an evaluation, so a full queue
+    or a parent that has gone away is dropped silently rather than
+    falling back to the base class's default stderr traceback.
+    """
+
+    def enqueue(self, record: logging.LogRecord) -> None:
+        try:
+            self.queue.put_nowait(record)
+        except Exception:  # noqa: BLE001 - logging must never break a run
+            pass
+
+
+@contextlib.contextmanager
+def forwarding_logs_to(log_queue: Any) -> Iterator[None]:
+    """Route this process's log records (and warnings) to log_queue.
+
+    Swaps the root logger's handlers for a single QueueHandler and
+    enables warning capture, so every logger.* call and warnings.warn()
+    call in this process reaches the parent instead of this process's
+    own stderr. Restores the prior handlers on exit, even if the
+    wrapped block raises.
+
+    Args:
+        log_queue: Cross-process queue to publish LogRecords to.
+    """
+    root = logging.getLogger()
+    previous_handlers = root.handlers[:]
+    root.handlers = [_ForwardingQueueHandler(log_queue)]
+    try:
+        with captured_warnings():
+            yield
+    finally:
+        root.handlers = previous_handlers
+
+
+class LogQueueListener:
+    """Drain worker log records and re-emit them via the parent's loggers.
+
+    Uses handle() rather than log() because the worker already applied
+    its own effective-level check, so handle() skips a redundant one.
+    """
+
+    def __init__(self) -> None:
+        self._queue: Optional[Any] = None
+        self._stop = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+
+    def start(self, log_queue: Any) -> None:
+        """Begin draining log_queue on a daemon thread.
+
+        Args:
+            log_queue: The cross-process queue of LogRecords to drain.
+        """
+        self._queue = log_queue
+        self._thread = threading.Thread(target=self._drain, daemon=True)
+        self._thread.start()
+
+    def _drain(self) -> None:
+        assert self._queue is not None, "start() must be called before _drain()"
+        while not self._stop.is_set():
+            try:
+                record = self._queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            except (EOFError, OSError, BrokenPipeError):
+                return
+            except Exception:  # noqa: BLE001 - logging must never break a run
+                continue
+            self._emit(record)
+
+    def _emit(self, record: logging.LogRecord) -> None:
+        try:
+            logging.getLogger(record.name).handle(record)
+        except Exception:  # noqa: BLE001 - logging must never break a run
+            pass
+
+    def close(self, drain_deadline: float = 2.0) -> None:
+        """Stop draining, then flush any records still sitting in the queue.
+
+        Args:
+            drain_deadline: Max seconds to spend on the final flush, so a
+                wedged queue can't hang shutdown.
+        """
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2)
+        if self._queue is None:
+            return
+        deadline = time.monotonic() + drain_deadline
+        while time.monotonic() < deadline:
+            try:
+                record = self._queue.get_nowait()
+            except queue.Empty:
+                break
+            except (EOFError, OSError, BrokenPipeError):
+                break
+            except Exception:  # noqa: BLE001 - logging must never break a run
+                break
+            self._emit(record)

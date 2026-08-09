@@ -521,7 +521,12 @@ class ParallelTqdm(Parallel):
         show_joblib_header: bool, default: False
             If True, show joblib header before the progressbar.
 
-
+        pre_close: Callable[[], None] | None, default: None
+            Invoked at the top of __call__'s finally block, before the
+            case bar closes. Callers with bars nested below the case
+            bar (e.g. parallel-mode worker slot bars) must close those
+            here, since closing the case bar first leaves them
+            redrawing into space the case bar has already vacated.
 
     Example:
     >>> from joblib import delayed
@@ -538,6 +543,7 @@ class ParallelTqdm(Parallel):
         desc: str | None = None,
         disable_progressbar: bool = False,
         show_joblib_header: bool = False,
+        pre_close: Callable[[], None] | None = None,
         **kwargs,
     ):
         if "verbose" in kwargs:
@@ -549,6 +555,7 @@ class ParallelTqdm(Parallel):
         self.total_tasks = total_tasks
         self.desc = desc
         self.disable_progressbar = disable_progressbar
+        self.pre_close = pre_close
         self.progress_bar: tqdm.tqdm | None = None
 
     def __call__(self, iterable):
@@ -562,6 +569,8 @@ class ParallelTqdm(Parallel):
             # call parent function
             return super().__call__(iterable)
         finally:
+            if self.pre_close is not None:
+                self.pre_close()
             # close tqdm progress bar
             if self.progress_bar is not None:
                 self.progress_bar.close()

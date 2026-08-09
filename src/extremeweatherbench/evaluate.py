@@ -1,5 +1,6 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
+import contextlib
 import copy
 import dataclasses
 import logging
@@ -252,7 +253,7 @@ def _run_evaluation(
     Returns:
         List of result DataFrames.
     """
-    with logging_redirect_tqdm():
+    with progress_module.captured_warnings(), logging_redirect_tqdm():
         if parallel_config is not None:
             logger.info("Running case operators in parallel...")
             run_results = _run_parallel_evaluation(
@@ -344,6 +345,8 @@ def _run_parallel_evaluation(
     manager = None
     event_queue = None
     renderer = None
+    log_queue = None
+    log_listener = None
     if progress and progress_module.supports_nested_bars():
         n_jobs = parallel_config.get("n_jobs")
         # n_jobs may be negative (all-but-N cores) or None (backend
@@ -353,24 +356,43 @@ def _run_parallel_evaluation(
         event_queue = manager.Queue()
         renderer = progress_module.WorkerSlotRenderer(n_slots=n_slots)
         renderer.start(event_queue)
+        # A separate queue from event_queue: log records and progress
+        # events have different payloads and drain logic.
+        log_queue = manager.Queue()
+        log_listener = progress_module.LogQueueListener()
+        log_listener.start(log_queue)
+
+    def _close_worker_progress() -> None:
+        # Flush trailing log records before the bars they'd otherwise
+        # tear through close, then close the slot bars themselves.
+        # Passed to ParallelTqdm as pre_close so it runs before the
+        # case bar closes; also called as a safety net below in case
+        # ParallelTqdm's own finally never ran (idempotent either way).
+        if log_listener is not None:
+            log_listener.close()
+        if renderer is not None:
+            renderer.close()
 
     try:
         # TODO(198): return a generator and compute at a higher level
         with joblib.parallel_config(**parallel_config):
-            run_results = utils.ParallelTqdm(**parallel_tqdm_kwargs)(
+            run_results = utils.ParallelTqdm(
+                pre_close=_close_worker_progress, **parallel_tqdm_kwargs
+            )(
                 # None is the cache_dir, we can't cache in parallel mode
                 joblib.delayed(_compute_case_operator_with_progress)(
                     case_operator,
                     cache_dir=cache_dir,
                     event_queue=event_queue,
+                    log_queue=log_queue,
+                    dispatch_id=dispatch_id,
                     **kwargs,
                 )
-                for case_operator in case_operators
+                for dispatch_id, case_operator in enumerate(case_operators)
             )
         return run_results
     finally:
-        if renderer is not None:
-            renderer.close()
+        _close_worker_progress()
         if manager is not None:
             manager.shutdown()
         # Clean up the dask client if we created it
@@ -602,6 +624,8 @@ def _compute_case_operator_with_progress(
     case_operator: "cases.CaseOperator",
     cache_dir: Optional[pathlib.Path] = None,
     event_queue=None,
+    log_queue=None,
+    dispatch_id=None,
     **kwargs,
 ) -> pd.DataFrame:
     """Compute a case operator, publishing progress to event_queue.
@@ -613,6 +637,13 @@ def _compute_case_operator_with_progress(
         case_operator: The case operator to compute.
         cache_dir: The directory to cache mid-flight outputs.
         event_queue: Cross-process queue for progress events, or None.
+        log_queue: Cross-process queue for log records, or None. When
+            set, this process's log records and warnings are forwarded
+            there instead of going to this worker's own stderr.
+        dispatch_id: Unique key for this dispatch, assigned by the
+            caller via enumerate(). build_case_operators can emit
+            several CaseOperators sharing one case_id (one case, many
+            EvaluationObjects), so case_id alone can't key a slot.
         **kwargs: Additional arguments for compute_case_operator.
 
     Returns:
@@ -622,15 +653,32 @@ def _compute_case_operator_with_progress(
         return compute_case_operator(case_operator, cache_dir, **kwargs)
 
     case_id = case_operator.case_metadata.case_id_number
+    slot_key = dispatch_id if dispatch_id is not None else case_id
+    target_name = getattr(case_operator.target, "name", None) or "target"
+    label = f"case {case_id} | {target_name}"
     sink = progress_module.QueueSink(event_queue)
     progress_module.register_sink(
-        sink, case_id=case_id, total_steps=_count_case_steps(case_operator, cache_dir)
+        sink,
+        case_id=case_id,
+        total_steps=_count_case_steps(case_operator, cache_dir),
+        slot_key=slot_key,
+        label=label,
+    )
+    log_context = (
+        progress_module.forwarding_logs_to(log_queue)
+        if log_queue is not None
+        else contextlib.nullcontext()
     )
     try:
-        with progress_module.DaskTaskSink(sink, case_id):
-            return compute_case_operator(case_operator, cache_dir, **kwargs)
+        with log_context:
+            with progress_module.DaskTaskSink(sink, case_id):
+                return compute_case_operator(case_operator, cache_dir, **kwargs)
     finally:
-        sink(progress_module.ProgressEvent(case_id=case_id, finished=True))
+        sink(
+            progress_module.ProgressEvent(
+                case_id=case_id, slot_key=slot_key, finished=True
+            )
+        )
         progress_module.register_sink(None)
 
 

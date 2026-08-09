@@ -66,10 +66,21 @@ ones start:
 
 ```
 Evaluating cases:  40%|████      | 2/5 [01:12<01:48]
-  slot 0 | case 12: 33%|███     | 3/9 [00:21<00:42] RootMeanSquaredError
-  slot 1 | case 14: 88%|████████| 8/9 [00:19<00:02] dask 4001/4412
-  slot 2 | idle
+  case 12 | pph_target: 33%|███  | 3/9 [00:21<00:42] RootMeanSquaredError
+  case 14 | ir_target:  88%|████████| 8/9 [00:19<00:02] dask 12904 tasks
+
 ```
+
+Each slot's label names the case _and_ the target, since one case can
+have several `CaseOperator`s (one per `EvaluationObject`) running in
+different slots at once, and the case id alone can't tell those apart.
+The dask count on a slot bar is a cumulative, ever-increasing count of
+tasks completed across every dask graph the case has run so far, not a
+`done/total` fraction, since a case runs many sequential graphs and a
+fraction that resets on each one is confusing more than informative. A
+slot with no case assigned yet renders as a blank line, and a slot
+whose case just finished keeps showing that case's final state until a
+new case claims it, so finishing mid-run doesn't cause visible churn.
 
 The number of slots is `joblib.effective_n_jobs(n_jobs)`, so it stays
 bounded even when `n_jobs` is negative (e.g. `-1` for "all but one
@@ -82,6 +93,15 @@ nested bars would just produce unreadable escape-code noise, so EWB
 skips them entirely: no `Manager` process is created, and phase
 transitions instead appear as throttled `INFO` log lines (at most once
 every 5 seconds per case).
+
+Log lines and `warnings.warn()` output no longer tear through the bars.
+`logging.captureWarnings(True)` is enabled for the run (and restored
+afterwards), so warnings become log records; in the parent process they
+already flow through `tqdm`'s log redirect, and in parallel mode each
+worker forwards its log records to the parent over a second
+`Manager` queue, where a listener thread re-emits them the same way.
+This queue and its listener thread are only created under the same
+conditions as the slot renderer above.
 
 To turn off all progress reporting, pass `progress=False` to
 `run_evaluation()`, use `--no-progress` on the CLI, or set the
