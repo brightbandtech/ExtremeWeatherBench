@@ -895,6 +895,72 @@ class TestRunParallel:
 
                 assert result == []
 
+    @mock.patch("extremeweatherbench.evaluate.multiprocessing.Manager")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.supports_nested_bars")
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
+    def test_run_parallel_evaluation_skips_manager_without_nested_bars(
+        self,
+        mock_tqdm,
+        mock_delayed,
+        mock_parallel_class,
+        mock_supports_nested_bars,
+        mock_manager,
+        sample_case_operator,
+    ):
+        """No Manager is created when nested bars aren't supported."""
+        mock_supports_nested_bars.return_value = False
+        mock_tqdm.return_value = [sample_case_operator]
+        mock_delayed.return_value = mock.Mock()
+        mock_parallel_instance = mock.Mock()
+        mock_parallel_class.return_value = mock_parallel_instance
+        mock_parallel_instance.return_value = [pd.DataFrame({"value": [1.0]})]
+
+        evaluate._run_parallel_evaluation(
+            [sample_case_operator],
+            parallel_config={"backend": "loky", "n_jobs": 2},
+            progress=True,
+        )
+
+        mock_manager.assert_not_called()
+
+    @mock.patch("extremeweatherbench.evaluate.multiprocessing.Manager")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.WorkerSlotRenderer")
+    @mock.patch("extremeweatherbench.evaluate.progress_module.supports_nested_bars")
+    @mock.patch("extremeweatherbench.utils.ParallelTqdm")
+    @mock.patch("joblib.delayed")
+    @mock.patch("tqdm.auto.tqdm")
+    def test_run_parallel_evaluation_bounds_slots_for_negative_n_jobs(
+        self,
+        mock_tqdm,
+        mock_delayed,
+        mock_parallel_class,
+        mock_supports_nested_bars,
+        mock_renderer_class,
+        mock_manager,
+        sample_case_operator,
+    ):
+        """A negative n_jobs resolves to a bounded slot count, not a crash."""
+        mock_supports_nested_bars.return_value = True
+        mock_tqdm.return_value = [sample_case_operator]
+        mock_delayed.return_value = mock.Mock()
+        mock_parallel_instance = mock.Mock()
+        mock_parallel_class.return_value = mock_parallel_instance
+        mock_parallel_instance.return_value = [pd.DataFrame({"value": [1.0]})]
+        mock_manager.return_value.Queue.return_value = mock.Mock()
+
+        evaluate._run_parallel_evaluation(
+            [sample_case_operator],
+            parallel_config={"backend": "loky", "n_jobs": -1},
+            progress=True,
+        )
+
+        mock_manager.assert_called_once()
+        _, renderer_kwargs = mock_renderer_class.call_args
+        n_slots = renderer_kwargs["n_slots"]
+        assert 0 < n_slots <= 64
+
     @pytest.mark.skipif(
         not HAS_DASK_DISTRIBUTED, reason="dask.distributed not installed"
     )
@@ -2051,10 +2117,15 @@ class TestIntegration:
             mock_compute_case_operator.side_effect = [result_1, result_2]
             serial_result = ewb.run_evaluation(n_jobs=1)
 
-            # Reset mock and test parallel execution
+            # Reset mock and test parallel execution. Threading (rather than
+            # the default loky) keeps this in-process, since the mocked
+            # compute_case_operator can't be pickled across process
+            # boundaries by the progress-reporting wrapper.
             mock_compute_case_operator.reset_mock()
             mock_compute_case_operator.side_effect = [result_1, result_2]
-            parallel_result = ewb.run_evaluation(n_jobs=2)
+            parallel_result = ewb.run_evaluation(
+                parallel_config={"backend": "threading", "n_jobs": 2}
+            )
 
             # Both should produce valid DataFrames with same structure
             assert isinstance(serial_result, pd.DataFrame)

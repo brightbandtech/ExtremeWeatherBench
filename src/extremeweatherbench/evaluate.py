@@ -3,6 +3,7 @@
 import copy
 import dataclasses
 import logging
+import multiprocessing
 import pathlib
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
@@ -340,18 +341,38 @@ def _run_parallel_evaluation(
     if not progress:
         parallel_tqdm_kwargs["disable_progressbar"] = True
 
+    manager = None
+    event_queue = None
+    renderer = None
+    if progress and progress_module.supports_nested_bars():
+        n_jobs = parallel_config.get("n_jobs")
+        # n_jobs may be negative (all-but-N cores) or None (backend
+        # default), so resolve it to a real, bounded slot count.
+        n_slots = joblib.effective_n_jobs(n_jobs) if n_jobs else 1
+        manager = multiprocessing.Manager()
+        event_queue = manager.Queue()
+        renderer = progress_module.WorkerSlotRenderer(n_slots=n_slots)
+        renderer.start(event_queue)
+
     try:
         # TODO(198): return a generator and compute at a higher level
         with joblib.parallel_config(**parallel_config):
             run_results = utils.ParallelTqdm(**parallel_tqdm_kwargs)(
                 # None is the cache_dir, we can't cache in parallel mode
-                joblib.delayed(compute_case_operator)(
-                    case_operator, cache_dir=cache_dir, **kwargs
+                joblib.delayed(_compute_case_operator_with_progress)(
+                    case_operator,
+                    cache_dir=cache_dir,
+                    event_queue=event_queue,
+                    **kwargs,
                 )
                 for case_operator in case_operators
             )
         return run_results
     finally:
+        if renderer is not None:
+            renderer.close()
+        if manager is not None:
+            manager.shutdown()
         # Clean up the dask client if we created it
         if dask_client is not None:
             logger.info("Closing dask client")
@@ -575,6 +596,42 @@ def compute_case_operator(
                 )
 
     return _safe_concat(results, ignore_index=True)
+
+
+def _compute_case_operator_with_progress(
+    case_operator: "cases.CaseOperator",
+    cache_dir: Optional[pathlib.Path] = None,
+    event_queue=None,
+    **kwargs,
+) -> pd.DataFrame:
+    """Compute a case operator, publishing progress to event_queue.
+
+    Runs inside a worker process. Falls back to plain computation when no
+    queue is supplied so serial callers are unaffected.
+
+    Args:
+        case_operator: The case operator to compute.
+        cache_dir: The directory to cache mid-flight outputs.
+        event_queue: Cross-process queue for progress events, or None.
+        **kwargs: Additional arguments for compute_case_operator.
+
+    Returns:
+        A pd.DataFrame of results from the case operator.
+    """
+    if event_queue is None:
+        return compute_case_operator(case_operator, cache_dir, **kwargs)
+
+    case_id = case_operator.case_metadata.case_id_number
+    sink = progress_module.QueueSink(event_queue)
+    progress_module.register_sink(
+        sink, case_id=case_id, total_steps=_count_case_steps(case_operator, cache_dir)
+    )
+    try:
+        with progress_module.DaskTaskSink(sink, case_id):
+            return compute_case_operator(case_operator, cache_dir, **kwargs)
+    finally:
+        sink(progress_module.ProgressEvent(case_id=case_id, finished=True))
+        progress_module.register_sink(None)
 
 
 def _extract_standard_metadata(
