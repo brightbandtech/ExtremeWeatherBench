@@ -408,7 +408,7 @@ bar, replacing the overloaded single postfix.
 
 - [x] **Commit:** `git commit -m "refactor: hoist metric evaluation planning out of the loop"`
 
-- [ ] **Write the failing test** for the step bar.
+- [x] **Write the failing test** for the step bar.
   - File: `tests/test_progress.py` (append)
 
   ```python
@@ -424,11 +424,11 @@ bar, replacing the overloaded single postfix.
           bar.close()
   ```
 
-- [ ] **Run it, watch it fail:**
+- [x] **Run it, watch it fail:**
   `pytest tests/test_progress.py::test_case_step_bar_totals_and_advances -v`
   → expect FAIL (`AttributeError: module has no attribute 'make_case_step_bar'`)
 
-- [ ] **Implement** the two new bar factories.
+- [x] **Implement** the two new bar factories.
   - File: `src/extremeweatherbench/progress.py` (append after `make_case_bar` at `:70`)
 
   ```python
@@ -494,11 +494,11 @@ bar, replacing the overloaded single postfix.
 
   Add `Union` to the `typing` import at `progress.py:17`.
 
-- [ ] **Run it, watch it pass:**
+- [x] **Run it, watch it pass:**
   `pytest tests/test_progress.py::test_case_step_bar_totals_and_advances -v`
   → expect PASS
 
-- [ ] **Write the failing test** for the dask bar resetting per compute.
+- [x] **Write the failing test** for the dask bar resetting per compute.
   - File: `tests/test_progress.py` (append)
 
   ```python
@@ -518,11 +518,11 @@ bar, replacing the overloaded single postfix.
           task_bar.close()
   ```
 
-- [ ] **Run it, watch it fail:**
+- [x] **Run it, watch it fail:**
   `pytest tests/test_progress.py::test_dask_task_bar_resets_between_computes -v`
   → expect FAIL (`AttributeError: module has no attribute 'DaskTaskBar'`)
 
-- [ ] **Implement** `DaskTaskBar`, replacing `DaskTaskPostfix` at `progress.py:127`.
+- [x] **Implement** `DaskTaskBar`, replacing `DaskTaskPostfix` at `progress.py:127`.
 
   ```python
   class DaskTaskBar(dask.callbacks.Callback):
@@ -564,11 +564,11 @@ bar, replacing the overloaded single postfix.
           self.bar.update(self.completed_tasks - self.bar.n)
   ```
 
-- [ ] **Run it, watch it pass:**
+- [x] **Run it, watch it pass:**
   `pytest tests/test_progress.py::test_dask_task_bar_resets_between_computes -v`
   → expect PASS
 
-- [ ] **Implement** the serial wiring. Replace `evaluate.py:266-277` with:
+- [x] **Implement** the serial wiring. Replace `evaluate.py:266-277` with:
 
   ```python
               run_results = []
@@ -649,7 +649,7 @@ bar, replacing the overloaded single postfix.
   step-bar tick, or gate only the postfix write, so the step bar still advances in
   parallel mode where `phase_updates_allowed` is False.
 
-- [ ] **Write the failing test** for the step tick.
+- [x] **Write the failing test** for the step tick.
   - File: `tests/test_progress.py` (append)
 
   ```python
@@ -679,17 +679,19 @@ bar, replacing the overloaded single postfix.
           step_bar.close()
   ```
 
-- [ ] **Run them:**
+- [x] **Run them:**
   `pytest tests/test_progress.py -v` → expect all PASS
 
-- [ ] **Commit:** `git commit -m "feat: add nested step and dask task bars for serial runs"`
+- [x] **Commit:** `git commit -m "feat: add nested step and dask task bars for serial runs"`
 
 **Dependencies:** Requires Phase 1 only for ordering convenience, not technically.
 
 **Verification:**
-- [ ] `pytest tests/test_progress.py tests/test_evaluate.py -v` → all pass
-- [ ] `mypy src/extremeweatherbench/` → no new errors
+- [x] `pytest tests/test_progress.py tests/test_evaluate.py -v` → all pass
+- [x] `mypy src/extremeweatherbench/` → no new errors
 - [ ] Manual: run a two-case serial evaluation and observe three stacked bars
+      (pending user confirmation; a mocked-data smoke test was run and looked
+      correct — see report)
 
 ### Phase 3: Cross-process progress for parallel runs
 

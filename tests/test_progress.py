@@ -87,16 +87,69 @@ def test_registered_bar_clears_on_exit():
         bar.close()
 
 
-def test_dask_task_postfix_counts_tasks():
-    """DaskTaskPostfix counts tasks over a small dask.array compute."""
-    bar = progress.make_case_bar(1)
-    array = da.ones((4, 4), chunks=(2, 2)) + 1
+def test_case_step_bar_totals_and_advances():
+    """The step bar carries the case id and advances once per phase."""
+    bar = progress.make_case_step_bar(case_id=12, total_steps=4)
     try:
-        with progress.registered_bar(bar, allow_phase_updates=True):
-            callback = progress.DaskTaskPostfix(throttle_seconds=0.0)
-            with callback:
-                array.compute()
-            assert callback.completed_tasks == callback.total_tasks
-            assert callback.completed_tasks > 0
+        assert bar.total == 4
+        assert "case 12" in bar.desc
+        bar.update(1)
+        assert bar.n == 1
     finally:
         bar.close()
+
+
+def test_dask_task_postfix_counts_tasks():
+    """DaskTaskPostfix (now an alias for DaskTaskBar) counts dask tasks."""
+    bar = progress.make_dask_task_bar()
+    array = da.ones((4, 4), chunks=(2, 2)) + 1
+    try:
+        callback = progress.DaskTaskPostfix(bar, throttle_seconds=0.0)
+        with callback:
+            array.compute()
+        assert callback.completed_tasks == callback.total_tasks
+        assert callback.completed_tasks > 0
+    finally:
+        bar.close()
+
+
+def test_set_phase_advances_registered_step_bar():
+    """Each set_phase call advances the step bar by exactly one."""
+    step_bar = progress.make_case_step_bar(case_id=7, total_steps=3)
+    try:
+        progress.register_step_bar(step_bar)
+        progress.set_phase("case 7 | target pipeline")
+        progress.set_phase("case 7 | forecast pipeline")
+        assert step_bar.n == 2
+    finally:
+        progress.register_step_bar(None)
+        step_bar.close()
+
+
+def test_step_bar_does_not_overshoot_total():
+    """Extra phases clamp at the total rather than exceeding it."""
+    step_bar = progress.make_case_step_bar(case_id=7, total_steps=1)
+    try:
+        progress.register_step_bar(step_bar)
+        progress.set_phase("one")
+        progress.set_phase("two")
+        assert step_bar.n == 1
+    finally:
+        progress.register_step_bar(None)
+        step_bar.close()
+
+
+def test_dask_task_bar_resets_between_computes():
+    """Each compute resizes the dask bar and drains it to completion."""
+    task_bar = progress.make_dask_task_bar()
+    callback = progress.DaskTaskBar(task_bar, throttle_seconds=0.0)
+    try:
+        with callback:
+            (da.ones((4, 4), chunks=(2, 2)) + 1).compute()
+            first_total = task_bar.total
+            (da.ones((8, 8), chunks=(2, 2)) + 1).compute()
+        assert first_total > 0
+        assert task_bar.total > first_total
+        assert task_bar.n == task_bar.total
+    finally:
+        task_bar.close()

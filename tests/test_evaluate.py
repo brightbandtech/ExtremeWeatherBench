@@ -523,7 +523,9 @@ class TestExtremeWeatherBench:
         """Test the run method with multiple case operators."""
         # Create multiple case operators
         case_operator_1 = mock.Mock()
+        case_operator_1.metric_list = []
         case_operator_2 = mock.Mock()
+        case_operator_2.metric_list = []
 
         with mock.patch.object(
             evaluate.ExtremeWeatherBench,
@@ -667,7 +669,9 @@ class TestRunSerial:
     ):
         """Test serial execution with multiple case operators."""
         case_op_1 = mock.Mock()
+        case_op_1.metric_list = []
         case_op_2 = mock.Mock()
+        case_op_2.metric_list = []
         case_operators = [case_op_1, case_op_2]
 
         mock_tqdm.return_value = case_operators
@@ -1773,8 +1777,11 @@ class TestErrorHandling:
     ):
         """Test serial execution behavior when some case operators fail."""
         case_op_1 = mock.Mock()
+        case_op_1.metric_list = []
         case_op_2 = mock.Mock()
+        case_op_2.metric_list = []
         case_op_3 = mock.Mock()
+        case_op_3.metric_list = []
         case_operators = [case_op_1, case_op_2, case_op_3]
 
         mock_tqdm.return_value = case_operators
@@ -2009,7 +2016,9 @@ class TestIntegration:
         """Test that serial and parallel execution produce identical results."""
         # Setup mock case operators
         case_op_1 = mock.Mock()
+        case_op_1.metric_list = []
         case_op_2 = mock.Mock()
+        case_op_2.metric_list = []
         case_operators = [case_op_1, case_op_2]
 
         # Define consistent results
@@ -2064,6 +2073,8 @@ class TestIntegration:
 
         # Create many case operators to simulate realistic workload
         case_operators = [mock.Mock() for _ in range(10)]
+        for case_operator in case_operators:
+            case_operator.metric_list = []
         mock_tqdm.return_value = case_operators
 
         # Mock results
@@ -2119,6 +2130,8 @@ class TestIntegration:
     def test_mixed_execution_parameters(self, mock_tqdm, mock_compute_case_operator):
         """Test various parameter combinations for execution methods."""
         case_operators = [mock.Mock(), mock.Mock()]
+        for case_operator in case_operators:
+            case_operator.metric_list = []
         mock_tqdm.return_value = case_operators
         mock_results = [
             pd.DataFrame({"value": [1.0], "case_id_number": [1]}),
@@ -2179,6 +2192,7 @@ class TestIntegration:
     def test_execution_method_kwargs_propagation(self):
         """Test that kwargs are properly propagated through execution methods."""
         case_operator = mock.Mock()
+        case_operator.metric_list = []
 
         # Mock compute_case_operator to capture kwargs
         def mock_compute_with_kwargs(case_op, cache_dir, **kwargs):
@@ -2271,6 +2285,8 @@ class TestIntegration:
         # Create a large list of case operators
         num_cases = 100
         case_operators = [mock.Mock() for _ in range(num_cases)]
+        for case_operator in case_operators:
+            case_operator.metric_list = []
         mock_tqdm.return_value = case_operators
 
         # Create mock results

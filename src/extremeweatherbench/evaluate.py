@@ -267,13 +267,27 @@ def _run_evaluation(
             case_bar = progress_module.make_case_bar(
                 len(case_operators), disable=not progress
             )
+            task_bar = progress_module.make_dask_task_bar(disable=not progress)
             with progress_module.registered_bar(case_bar, allow_phase_updates=True):
-                with progress_module.DaskTaskPostfix():
+                with progress_module.DaskTaskBar(task_bar):
                     for case_operator in case_operators:
-                        run_results.append(
-                            compute_case_operator(case_operator, cache_dir, **kwargs)
+                        step_bar = progress_module.make_case_step_bar(
+                            case_operator.case_metadata.case_id_number,
+                            _count_case_steps(case_operator, cache_dir),
+                            disable=not progress,
                         )
+                        progress_module.register_step_bar(step_bar)
+                        try:
+                            run_results.append(
+                                compute_case_operator(
+                                    case_operator, cache_dir, **kwargs
+                                )
+                            )
+                        finally:
+                            progress_module.register_step_bar(None)
+                            step_bar.close()
                         case_bar.update(1)
+            task_bar.close()
             case_bar.close()
 
     return run_results
@@ -346,7 +360,7 @@ def _run_parallel_evaluation(
 
 def _plan_metric_evaluations(
     case_operator: "cases.CaseOperator",
-) -> list[tuple["metrics.BaseMetric", list["metrics.BaseMetric"], list[tuple]]]:
+) -> list[tuple["metrics.BaseMetric", Sequence["metrics.BaseMetric"], list[tuple]]]:
     """Enumerate the metric evaluations a case operator will perform.
 
     Depends only on metric and input metadata, never on the data, so the
@@ -429,6 +443,26 @@ def _count_metric_evaluations(case_operator: "cases.CaseOperator") -> int:
         len(expanded) * len(pairs)
         for _, expanded, pairs in _plan_metric_evaluations(case_operator)
     )
+
+
+def _count_case_steps(
+    case_operator: "cases.CaseOperator",
+    cache_dir: Optional[pathlib.Path] = None,
+) -> int:
+    """Count the coarse steps a case will report progress for.
+
+    Two pipeline runs, two cache writes when caching is on, and one step
+    per metric evaluation. Mirrors the set_phase call sites.
+
+    Args:
+        case_operator: The case operator about to be computed.
+        cache_dir: The cache directory, if caching is enabled.
+
+    Returns:
+        The total number of steps.
+    """
+    cache_steps = 2 if cache_dir is not None else 0
+    return 2 + cache_steps + _count_metric_evaluations(case_operator)
 
 
 def compute_case_operator(
