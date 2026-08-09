@@ -1,5 +1,6 @@
 """Tests for the progress module."""
 
+import io
 import logging
 import logging.handlers
 import multiprocessing
@@ -8,6 +9,7 @@ import sys
 import time
 import warnings
 
+import dask
 import dask.array as da
 import joblib
 
@@ -173,6 +175,22 @@ def test_supports_nested_bars_false_when_disabled(monkeypatch):
     assert progress.supports_nested_bars() is False
 
 
+def test_supports_nested_bars_forced_without_tty(monkeypatch):
+    """EWB_FORCE_PROGRESS overrides the isatty gate."""
+    monkeypatch.delenv("EWB_DISABLE_PROGRESS", raising=False)
+    monkeypatch.setenv("EWB_FORCE_PROGRESS", "1")
+    monkeypatch.setattr(sys.stderr, "isatty", lambda: False, raising=False)
+    assert progress.supports_nested_bars() is True
+
+
+def test_supports_nested_bars_disable_beats_force(monkeypatch):
+    """EWB_DISABLE_PROGRESS wins when both env vars are set."""
+    monkeypatch.setenv("EWB_DISABLE_PROGRESS", "1")
+    monkeypatch.setenv("EWB_FORCE_PROGRESS", "1")
+    monkeypatch.setattr(sys.stderr, "isatty", lambda: True, raising=False)
+    assert progress.supports_nested_bars() is False
+
+
 def test_set_phase_publishes_to_registered_sink():
     """set_phase publishes a ProgressEvent to a registered sink."""
     published = []
@@ -299,6 +317,33 @@ def test_slot_renderer_leaves_finished_bar_until_reclaimed():
         renderer.close()
 
 
+def test_slot_renderer_finished_case_paints_final_state():
+    """A case's final slot update is actually painted, not just counted.
+
+    Regression test: mininterval throttling can silently skip the
+    repaint on the update just before a case finishes, leaving
+    last_print_n (what was painted) behind n (the internal count)
+    until something forces a repaint.
+    """
+    renderer = progress.WorkerSlotRenderer(n_slots=1, disable=False)
+    try:
+        renderer.handle(progress.ProgressEvent(case_id=1, slot_key=0, total_steps=2))
+        bar = renderer._bars[0]
+        bar.mininterval = 1e9  # force the next update() to skip painting
+        renderer.handle(
+            progress.ProgressEvent(
+                case_id=1, slot_key=0, total_steps=2, phase="done", step=2
+            )
+        )
+        assert bar.n == 2
+        assert bar.last_print_n != bar.n
+
+        renderer.handle(progress.ProgressEvent(case_id=1, slot_key=0, finished=True))
+        assert bar.last_print_n == bar.n
+    finally:
+        renderer.close()
+
+
 def test_slot_renderer_initial_slots_are_blank():
     """An unclaimed slot renders as a blank line, not a placeholder."""
     renderer = progress.WorkerSlotRenderer(n_slots=1, disable=False)
@@ -367,6 +412,154 @@ def test_dask_task_bar_resets_between_computes():
         assert first_total > 0
         assert task_bar.total > first_total
         assert task_bar.n == task_bar.total
+    finally:
+        task_bar.close()
+
+
+def test_dask_task_bar_paints_final_state_on_finish():
+    """The bar's painted state reaches total when the graph finishes.
+
+    Regression test: mininterval throttling could silently skip the
+    final repaint, so n reached total while last_print_n (what was
+    actually painted) lagged behind - the reported stall-then-reset.
+    A test that only checked n would have passed before this fix.
+    """
+    task_bar = progress.make_dask_task_bar(disable=False)
+    try:
+        with progress.DaskTaskBar(task_bar):
+            (da.ones((4, 4), chunks=(2, 2)) + 1).compute()
+        assert task_bar.n == task_bar.total
+        assert task_bar.last_print_n == task_bar.n
+    finally:
+        task_bar.close()
+
+
+def test_dask_task_bar_writes_completed_frame_to_terminal():
+    """The completed count reaches the output stream, not just the bar.
+
+    Asserting on last_print_n alone would be circular, since the fix
+    sets it; this checks the bytes tqdm actually wrote. The graph
+    finishes well inside mininterval, so the only frame that can carry
+    the full count is the forced repaint at finish.
+    """
+    buffer = io.StringIO()
+    task_bar = progress.make_dask_task_bar(disable=False)
+    try:
+        task_bar.fp = buffer
+        task_bar.sp = task_bar.status_printer(buffer)
+        with progress.DaskTaskBar(task_bar):
+            (da.ones((4, 4), chunks=(2, 2)) + 1).compute()
+        total = task_bar.total
+        assert f"{total}/{total}" in buffer.getvalue()
+    finally:
+        task_bar.close()
+
+
+def test_dask_task_bar_counts_every_task():
+    """No task is dropped before reaching the bar.
+
+    The bar used to skip _sync_bar entirely for tasks arriving inside
+    the throttle window, so the count itself lagged rather than just
+    the repaint. Two back-to-back tasks land well inside any window.
+    """
+    task_bar = progress.make_dask_task_bar(disable=False)
+    try:
+        callback = progress.DaskTaskBar(task_bar)
+        callback._start_state(dsk={"a": 1, "b": 2}, state={})
+        callback._posttask("a", None, {}, {}, 0)
+        callback._posttask("b", None, {}, {}, 0)
+        assert task_bar.n == 2
+    finally:
+        task_bar.close()
+
+
+def test_fast_bars_are_time_gated_only():
+    """Inner bars gate on mininterval alone, not tqdm's miniters ratchet.
+
+    With miniters left at 0 and smoothing=0, tqdm auto-tunes miniters as
+    max(miniters, dn), which never falls back, so a fast burst makes the
+    bar progressively less responsive for the rest of the run.
+    """
+    for bar in (
+        progress.make_dask_task_bar(disable=False),
+        progress.make_case_step_bar(case_id=1, total_steps=3, disable=False),
+    ):
+        try:
+            assert bar.miniters == 1
+            assert bar.dynamic_miniters is False
+            assert bar.mininterval == progress.FAST_BAR_MININTERVAL
+        finally:
+            bar.close()
+
+
+def test_dask_task_sink_still_throttles_publishes():
+    """The worker sink keeps its throttle; each publish crosses processes.
+
+    A Manager-queue put is about as costly as a repaint and runs on the
+    dask scheduler's loop, so unthrottling this would put IPC on the
+    critical path of every task.
+    """
+    published = []
+    sink = progress.DaskTaskSink(published.append, case_id=1)
+    sink._start_state(dsk={}, state={})
+    for _ in range(50):
+        sink._posttask("k", None, {}, {}, 0)
+    assert sink.cumulative_completed_tasks == 50
+    assert len(published) < 50
+
+
+def test_dask_task_bar_repaints_several_times_during_a_slow_graph():
+    """A multi-second graph paints repeatedly, not once at the end.
+
+    This is the user-visible symptom: with a 0.5s app-level throttle
+    stacked on a 0.5s mininterval, a short graph could reach the
+    terminal only once.
+    """
+    buffer = io.StringIO()
+    task_bar = progress.make_dask_task_bar(disable=False)
+    try:
+        task_bar.fp = buffer
+        task_bar.sp = task_bar.status_printer(buffer)
+        tasks = [dask.delayed(time.sleep)(0.02) for _ in range(20)]
+        with progress.DaskTaskBar(task_bar):
+            dask.compute(*tasks, scheduler="single-threaded")
+        # 20 x 20ms spans ~8 windows of FAST_BAR_MININTERVAL; assert
+        # well under that so the test isn't timing-fragile.
+        assert buffer.getvalue().count("\r") >= 3
+    finally:
+        task_bar.close()
+
+
+def test_dask_task_bar_finish_snaps_total_down_when_tasks_fall_short():
+    """A success shortfall against len(dsk) still lands the bar full.
+
+    This never happens in practice (verified across several real graph
+    shapes), so the shortfall is simulated directly against a callback
+    that was never attached to a real compute.
+    """
+    task_bar = progress.make_dask_task_bar(disable=False)
+    try:
+        callback = progress.DaskTaskBar(task_bar)
+        task_bar.reset(total=10)
+        callback.completed_tasks = 7
+        callback._finish(dsk={}, state={}, failed=False)
+        assert task_bar.total == 7
+        assert task_bar.n == 7
+        assert task_bar.last_print_n == 7
+    finally:
+        task_bar.close()
+
+
+def test_dask_task_bar_finish_does_not_snap_total_on_failure():
+    """A failed compute keeps its real total; a partial bar is honest."""
+    task_bar = progress.make_dask_task_bar(disable=False)
+    try:
+        callback = progress.DaskTaskBar(task_bar)
+        task_bar.reset(total=10)
+        callback.completed_tasks = 7
+        callback._finish(dsk={}, state={}, failed=True)
+        assert task_bar.total == 10
+        assert task_bar.n == 7
     finally:
         task_bar.close()
 

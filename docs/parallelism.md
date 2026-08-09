@@ -92,7 +92,11 @@ When `sys.stderr` isn't a terminal (CI logs, captured notebook cells),
 nested bars would just produce unreadable escape-code noise, so EWB
 skips them entirely: no `Manager` process is created, and phase
 transitions instead appear as throttled `INFO` log lines (at most once
-every 5 seconds per case).
+every 5 seconds per case). Set `EWB_FORCE_PROGRESS` to render bars
+anyway.
+
+Bars repaint up to 20 times a second, which keeps terminal writes off
+the critical path of large dask graphs.
 
 Log lines and `warnings.warn()` output no longer tear through the bars.
 `logging.captureWarnings(True)` is enabled for the run (and restored

@@ -33,6 +33,35 @@ BAR_FORMAT = (
     "[{elapsed}<{remaining}]{postfix}"
 )
 
+# Repaint budget for the fast-moving inner bars. Painting every task
+# costs ~50us against ~0.4us for a throttled update(), so the counter is
+# advanced on every task and only the repaint is rate-limited. 20fps
+# reads as continuous while keeping terminal writes off the hot path.
+FAST_BAR_MININTERVAL = 0.05
+
+# Pair every fast bar with miniters=1 so mininterval is the only gate.
+# Left at 0, tqdm auto-tunes miniters, and with smoothing=0 that path is
+# miniters = max(miniters, dn): a ratchet that never falls back, so one
+# quick burst makes the bar progressively less responsive for the rest
+# of the graph.
+FAST_BAR_MINITERS = 1
+
+
+def _repaint(bar: tqdm) -> None:
+    """Force an immediate repaint, bypassing tqdm's mininterval throttle.
+
+    tqdm.refresh() repaints the terminal but does not update
+    last_print_n (only update()'s own throttle check does that), so a
+    caller checking last_print_n to see whether a frame was actually
+    painted would still see it as stale. Setting it here keeps that
+    bookkeeping consistent with the forced repaint.
+
+    Args:
+        bar: The bar to repaint.
+    """
+    bar.refresh()
+    bar.last_print_n = bar.n
+
 
 class _ProgressState:
     """Container for the single active-bar registry, mutated in place.
@@ -107,7 +136,8 @@ def make_case_step_bar(
         unit="step",
         bar_format=BAR_FORMAT,
         dynamic_ncols=True,
-        mininterval=0.5,
+        mininterval=FAST_BAR_MININTERVAL,
+        miniters=FAST_BAR_MINITERS,
         position=position,
         leave=False,
         smoothing=0,
@@ -135,7 +165,8 @@ def make_dask_task_bar(position: int = 2, disable: bool = False) -> tqdm:
         unit="task",
         bar_format=BAR_FORMAT,
         dynamic_ncols=True,
-        mininterval=0.5,
+        mininterval=FAST_BAR_MININTERVAL,
+        miniters=FAST_BAR_MINITERS,
         position=position,
         leave=False,
         smoothing=0,
@@ -259,11 +290,15 @@ class DaskTaskBar(dask.callbacks.Callback):
     Only works with local schedulers (single-threaded, threaded,
     multiprocessing); dask.distributed computations aren't covered.
 
-    The callbacks run on the scheduler's own loop, so writes are
-    throttled to keep rendering off the critical path.
+    The callbacks run on the scheduler's own loop, so rendering is kept
+    off the critical path. Rate limiting is left to the bar's own
+    mininterval rather than duplicated here: every task advances the
+    counter, and tqdm decides when that reaches the terminal. Setting
+    throttle_seconds above 0 additionally drops task events before the
+    bar sees them, which makes the count itself lag.
     """
 
-    def __init__(self, bar: tqdm, throttle_seconds: float = 0.5):
+    def __init__(self, bar: tqdm, throttle_seconds: float = 0.0):
         super().__init__()
         self.bar = bar
         self.throttle_seconds = throttle_seconds
@@ -279,14 +314,25 @@ class DaskTaskBar(dask.callbacks.Callback):
 
     def _posttask(self, key, result, dsk, state, worker_id) -> None:
         self.completed_tasks += 1
-        now = time.monotonic()
-        if now - self._last_write < self.throttle_seconds:
-            return
-        self._last_write = now
+        if self.throttle_seconds:
+            now = time.monotonic()
+            if now - self._last_write < self.throttle_seconds:
+                return
+            self._last_write = now
         self._sync_bar()
 
     def _finish(self, dsk, state, failed) -> None:
+        # Defensive: on success, a shortfall against len(dsk) shouldn't
+        # leave the bar visibly incomplete. Never fires today (verified
+        # empirically across several graph shapes) and must not fire on
+        # the failure path, where a partial bar is the honest display.
+        if not failed and self.completed_tasks < (self.bar.total or 0):
+            self.bar.total = self.completed_tasks
         self._sync_bar()
+        # The last update() may have been throttled by mininterval,
+        # leaving the terminal on a stale mid-graph value even though
+        # self.n reached the total; force the final frame to paint.
+        _repaint(self.bar)
 
     def _sync_bar(self) -> None:
         self.bar.update(self.completed_tasks - self.bar.n)
@@ -299,9 +345,11 @@ DaskTaskPostfix = DaskTaskBar
 class DaskTaskSink(dask.callbacks.Callback):
     """Publish local-scheduler dask task counts to a progress sink.
 
-    The worker-process counterpart of DaskTaskBar. Throttled because
-    posttask callbacks run on the dask scheduler's own loop, so every
-    publish is on the critical path of the compute.
+    The worker-process counterpart of DaskTaskBar. Unlike that class
+    this stays throttled, because a publish crosses a process boundary:
+    a Manager-queue put measures ~57us, as costly as a full repaint, and
+    posttask runs on the dask scheduler's own loop, so an unthrottled
+    publish would put that on the critical path of every task.
 
     One case typically runs many sequential dask graphs, so in addition
     to the per-graph done/total this also tracks a cumulative count that
@@ -313,7 +361,7 @@ class DaskTaskSink(dask.callbacks.Callback):
         self,
         sink: Callable[["ProgressEvent"], None],
         case_id: Union[int, str],
-        throttle_seconds: float = 0.5,
+        throttle_seconds: float = FAST_BAR_MININTERVAL,
     ):
         super().__init__()
         self.sink = sink
@@ -407,13 +455,18 @@ def supports_nested_bars() -> bool:
     """Report whether nested bars will render usefully here.
 
     Nested bars rely on cursor positioning, which produces unreadable
-    output in CI logs and captured notebook cells.
+    output in CI logs and captured notebook cells, so they are gated on
+    stderr being a terminal. EWB_FORCE_PROGRESS overrides that gate for
+    terminals that misreport isatty, or to capture bar output
+    deliberately; EWB_DISABLE_PROGRESS still wins over it.
 
     Returns:
-        True when stderr is a terminal and progress is not disabled.
+        True when nested bars should be rendered.
     """
     if os.environ.get("EWB_DISABLE_PROGRESS"):
         return False
+    if os.environ.get("EWB_FORCE_PROGRESS"):
+        return True
     return bool(getattr(sys.stderr, "isatty", lambda: False)())
 
 
@@ -493,7 +546,10 @@ class WorkerSlotRenderer:
                 self._free_slots.append(slot)
                 # Leave the bar showing the case's final state; it is
                 # only reset once a new case actually claims this slot,
-                # so finishing mid-run doesn't cause visible churn.
+                # so finishing mid-run doesn't cause visible churn. The
+                # last update before this may have been throttled, so
+                # force it to paint before the slot sits idle.
+                _repaint(self._bars[slot])
             return
 
         slot = self.slot_by_case.get(key)
