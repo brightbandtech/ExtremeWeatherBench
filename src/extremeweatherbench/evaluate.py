@@ -1,8 +1,10 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
+import contextlib
 import copy
 import dataclasses
 import logging
+import multiprocessing
 import pathlib
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
@@ -11,14 +13,13 @@ import joblib
 import pandas as pd
 import sparse
 import xarray as xr
-from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
-from tqdm.dask import TqdmCallback
 
 import extremeweatherbench.cases as cases
 import extremeweatherbench.derived as derived
 import extremeweatherbench.inputs as inputs
 import extremeweatherbench.metrics as metrics
+import extremeweatherbench.progress as progress_module
 import extremeweatherbench.sources as sources
 import extremeweatherbench.utils as utils
 
@@ -104,6 +105,7 @@ class ExtremeWeatherBench:
         self,
         n_jobs: Optional[int] = None,
         parallel_config: Optional[dict] = None,
+        progress: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
         """Runs the ExtremeWeatherBench evaluation workflow.
@@ -119,6 +121,7 @@ class ExtremeWeatherBench:
             parallel_config: Optional dictionary of joblib parallel configuration.
                 If provided, this takes precedence over n_jobs. If not provided and
                 n_jobs is specified, a default config with the loky backend is used.
+            progress: Whether to display progress bars. Defaults to True.
             **kwargs: Additional arguments to pass to compute_case_operator.
         Returns:
             A concatenated dataframe of the evaluation results.
@@ -133,6 +136,7 @@ class ExtremeWeatherBench:
             self.case_operators,
             cache_dir=self.cache_dir,
             parallel_config=parallel_config,
+            progress=progress,
             **kwargs,
         )
 
@@ -147,6 +151,7 @@ class ExtremeWeatherBench:
         self,
         n_jobs: Optional[int] = None,
         parallel_config: Optional[dict] = None,
+        progress: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
         """Runs the ExtremeWeatherBench evaluation workflow.
@@ -162,6 +167,7 @@ class ExtremeWeatherBench:
             parallel_config: Optional dictionary of joblib parallel configuration.
                 If provided, this takes precedence over n_jobs. If not provided and
                 n_jobs is specified, a default config with the loky backend is used.
+            progress: Whether to display progress bars. Defaults to True.
             **kwargs: Additional arguments to pass to compute_case_operator.
         Returns:
             A concatenated dataframe of the evaluation results.
@@ -175,6 +181,7 @@ class ExtremeWeatherBench:
             self.case_operators,
             cache_dir=self.cache_dir,
             parallel_config=parallel_config,
+            progress=progress,
             **kwargs,
         )
 
@@ -231,6 +238,7 @@ def _run_evaluation(
     case_operators: list["cases.CaseOperator"],
     cache_dir: Optional[pathlib.Path] = None,
     parallel_config: Optional[dict] = None,
+    progress: bool = True,
     **kwargs,
 ) -> list[pd.DataFrame]:
     """Run the case operators in parallel or serial.
@@ -239,27 +247,50 @@ def _run_evaluation(
         case_operators: List of case operators to run.
         cache_dir: Optional directory for caching (serial mode only).
         parallel_config: Optional dict of joblib parallel configuration.
+        progress: Whether to display progress bars. Defaults to True.
         **kwargs: Additional keyword arguments passed to case operators.
 
     Returns:
         List of result DataFrames.
     """
-    if parallel_config is not None:
-        with logging_redirect_tqdm():
+    with progress_module.captured_warnings(), logging_redirect_tqdm():
+        if parallel_config is not None:
             logger.info("Running case operators in parallel...")
             run_results = _run_parallel_evaluation(
                 case_operators,
                 cache_dir=cache_dir,
                 parallel_config=parallel_config,
+                progress=progress,
                 **kwargs,
             )
-    else:
-        logger.info("Running case operators in serial...")
-        run_results = []
-        for case_operator in tqdm(case_operators):
-            run_results.append(
-                compute_case_operator(case_operator, cache_dir, **kwargs)
+        else:
+            logger.info("Running case operators in serial...")
+            run_results = []
+            case_bar = progress_module.make_case_bar(
+                len(case_operators), disable=not progress
             )
+            task_bar = progress_module.make_dask_task_bar(disable=not progress)
+            with progress_module.registered_bar(case_bar, allow_phase_updates=True):
+                with progress_module.DaskTaskBar(task_bar):
+                    for case_operator in case_operators:
+                        step_bar = progress_module.make_case_step_bar(
+                            case_operator.case_metadata.case_id_number,
+                            _count_case_steps(case_operator, cache_dir),
+                            disable=not progress,
+                        )
+                        progress_module.register_step_bar(step_bar)
+                        try:
+                            run_results.append(
+                                compute_case_operator(
+                                    case_operator, cache_dir, **kwargs
+                                )
+                            )
+                        finally:
+                            progress_module.register_step_bar(None)
+                            step_bar.close()
+                        case_bar.update(1)
+            task_bar.close()
+            case_bar.close()
 
     return run_results
 
@@ -268,12 +299,16 @@ def _run_parallel_evaluation(
     case_operators: list["cases.CaseOperator"],
     parallel_config: dict,
     cache_dir: Optional[pathlib.Path] = None,
+    progress: bool = True,
     **kwargs,
 ) -> list[pd.DataFrame]:
     """Run the case operators in parallel.
 
     Args:
         case_operators: List of case operators to run.
+        parallel_config: Joblib parallel configuration dict.
+        cache_dir: Optional directory for caching (unused in parallel mode).
+        progress: Whether to display progress bars. Defaults to True.
         **kwargs: Additional arguments, must include 'parallel_config' dict.
 
     Returns:
@@ -303,22 +338,172 @@ def _run_parallel_evaluation(
                 "Install with: pip install dask[distributed]"
             )
 
+    parallel_tqdm_kwargs: dict[str, Any] = {"total_tasks": len(case_operators)}
+    if not progress:
+        parallel_tqdm_kwargs["disable_progressbar"] = True
+
+    manager = None
+    event_queue = None
+    renderer = None
+    log_queue = None
+    log_listener = None
+    if progress and progress_module.supports_nested_bars():
+        n_jobs = parallel_config.get("n_jobs")
+        # n_jobs may be negative (all-but-N cores) or None (backend
+        # default), so resolve it to a real, bounded slot count.
+        n_slots = joblib.effective_n_jobs(n_jobs) if n_jobs else 1
+        manager = multiprocessing.Manager()
+        event_queue = manager.Queue()
+        renderer = progress_module.WorkerSlotRenderer(n_slots=n_slots)
+        renderer.start(event_queue)
+        # A separate queue from event_queue: log records and progress
+        # events have different payloads and drain logic.
+        log_queue = manager.Queue()
+        log_listener = progress_module.LogQueueListener()
+        log_listener.start(log_queue)
+
+    def _close_worker_progress() -> None:
+        # Flush trailing log records before the bars they'd otherwise
+        # tear through close, then close the slot bars themselves.
+        # Passed to ParallelTqdm as pre_close so it runs before the
+        # case bar closes; also called as a safety net below in case
+        # ParallelTqdm's own finally never ran (idempotent either way).
+        if log_listener is not None:
+            log_listener.close()
+        if renderer is not None:
+            renderer.close()
+
     try:
         # TODO(198): return a generator and compute at a higher level
         with joblib.parallel_config(**parallel_config):
-            run_results = utils.ParallelTqdm(total_tasks=len(case_operators))(
+            run_results = utils.ParallelTqdm(
+                pre_close=_close_worker_progress, **parallel_tqdm_kwargs
+            )(
                 # None is the cache_dir, we can't cache in parallel mode
-                joblib.delayed(compute_case_operator)(
-                    case_operator, cache_dir=cache_dir, **kwargs
+                joblib.delayed(_compute_case_operator_with_progress)(
+                    case_operator,
+                    cache_dir=cache_dir,
+                    event_queue=event_queue,
+                    log_queue=log_queue,
+                    dispatch_id=dispatch_id,
+                    **kwargs,
                 )
-                for case_operator in case_operators
+                for dispatch_id, case_operator in enumerate(case_operators)
             )
         return run_results
     finally:
+        _close_worker_progress()
+        if manager is not None:
+            manager.shutdown()
         # Clean up the dask client if we created it
         if dask_client is not None:
             logger.info("Closing dask client")
             dask_client.close()
+
+
+def _plan_metric_evaluations(
+    case_operator: "cases.CaseOperator",
+) -> list[tuple["metrics.BaseMetric", Sequence["metrics.BaseMetric"], list[tuple]]]:
+    """Enumerate the metric evaluations a case operator will perform.
+
+    Depends only on metric and input metadata, never on the data, so the
+    result is available before any pipeline runs and can size a progress
+    bar.
+
+    Args:
+        case_operator: The case operator to plan evaluations for.
+
+    Returns:
+        One (metric, expanded_metrics, variable_pairs) tuple per metric,
+        in the same order the evaluation loop will consume them.
+    """
+    explicitly_claimed_forecast_vars = set()
+    explicitly_claimed_target_vars = set()
+    for metric in case_operator.metric_list:
+        if (metric.forecast_variable is not None) and (
+            metric.target_variable is not None
+        ):
+            explicitly_claimed_forecast_vars.update(
+                _maybe_expand_derived_variable_to_output_variables(
+                    metric.forecast_variable
+                )
+            )
+            explicitly_claimed_target_vars.update(
+                _maybe_expand_derived_variable_to_output_variables(
+                    metric.target_variable
+                )
+            )
+
+    plan = []
+    for metric in case_operator.metric_list:
+        metrics_to_evaluate = metric.maybe_expand_composite()
+        if metric.forecast_variable is not None and metric.target_variable is not None:
+            forecast_vars = _maybe_expand_derived_variable_to_output_variables(
+                metric.forecast_variable
+            )
+            target_vars = _maybe_expand_derived_variable_to_output_variables(
+                metric.target_variable
+            )
+            variable_pairs = list(zip(forecast_vars, target_vars))
+        else:
+            forecast_vars_expanded = []
+            for var in case_operator.forecast.variables:
+                forecast_vars_expanded.extend(
+                    _maybe_expand_derived_variable_to_output_variables(var)
+                )
+            target_vars_expanded = []
+            for var in case_operator.target.variables:
+                target_vars_expanded.extend(
+                    _maybe_expand_derived_variable_to_output_variables(var)
+                )
+            forecast_vars_available = [
+                v
+                for v in forecast_vars_expanded
+                if v not in explicitly_claimed_forecast_vars
+            ]
+            target_vars_available = [
+                v
+                for v in target_vars_expanded
+                if v not in explicitly_claimed_target_vars
+            ]
+            variable_pairs = list(zip(forecast_vars_available, target_vars_available))
+        plan.append((metric, metrics_to_evaluate, variable_pairs))
+    return plan
+
+
+def _count_metric_evaluations(case_operator: "cases.CaseOperator") -> int:
+    """Count the metric evaluations a case operator will perform.
+
+    Args:
+        case_operator: The case operator to count evaluations for.
+
+    Returns:
+        The number of individual metric evaluations.
+    """
+    return sum(
+        len(expanded) * len(pairs)
+        for _, expanded, pairs in _plan_metric_evaluations(case_operator)
+    )
+
+
+def _count_case_steps(
+    case_operator: "cases.CaseOperator",
+    cache_dir: Optional[pathlib.Path] = None,
+) -> int:
+    """Count the coarse steps a case will report progress for.
+
+    Two pipeline runs, two cache writes when caching is on, and one step
+    per metric evaluation. Mirrors the set_phase call sites.
+
+    Args:
+        case_operator: The case operator about to be computed.
+        cache_dir: The cache directory, if caching is enabled.
+
+    Returns:
+        The total number of steps.
+    """
+    cache_steps = 2 if cache_dir is not None else 0
+    return 2 + cache_steps + _count_metric_evaluations(case_operator)
 
 
 def compute_case_operator(
@@ -389,75 +574,9 @@ def compute_case_operator(
     )
     results = []
 
-    # Collect all explicitly specified variables across all metrics
-    # These variables are "claimed" and should not be used by metrics
-    # without specific variables
-    explicitly_claimed_forecast_vars = set()
-    explicitly_claimed_target_vars = set()
-
-    for metric in case_operator.metric_list:
-        # Determine which variable pairs to evaluate for this metric
-        if (metric.forecast_variable is not None) and (
-            metric.target_variable is not None
-        ):
-            # Expand and collect claimed variables
-            explicitly_claimed_forecast_vars.update(
-                _maybe_expand_derived_variable_to_output_variables(
-                    metric.forecast_variable
-                )
-            )
-            explicitly_claimed_target_vars.update(
-                _maybe_expand_derived_variable_to_output_variables(
-                    metric.target_variable
-                )
-            )
-
-    for metric in case_operator.metric_list:
-        # Expand composite metrics into individual metrics
-        # (returns [self] for non-composite metrics)
-        metrics_to_evaluate = metric.maybe_expand_composite()
-
-        # Determine which variable pairs to evaluate for this metric
-        if metric.forecast_variable is not None and metric.target_variable is not None:
-            # Expand DerivedVariable to output_variables if applicable
-            forecast_vars = _maybe_expand_derived_variable_to_output_variables(
-                metric.forecast_variable
-            )
-            target_vars = _maybe_expand_derived_variable_to_output_variables(
-                metric.target_variable
-            )
-
-            # Create pairs from expanded variables
-            variable_pairs = list(zip(forecast_vars, target_vars))
-        else:
-            # Use all InputBase variable pairs for this metric
-            # Expand any DerivedVariables in the InputBase variables
-            forecast_vars_expanded = []
-            for var in case_operator.forecast.variables:
-                forecast_vars_expanded.extend(
-                    _maybe_expand_derived_variable_to_output_variables(var)
-                )
-
-            target_vars_expanded = []
-            for var in case_operator.target.variables:
-                target_vars_expanded.extend(
-                    _maybe_expand_derived_variable_to_output_variables(var)
-                )
-
-            # Exclude variables that are explicitly claimed by other metrics
-            forecast_vars_available = [
-                v
-                for v in forecast_vars_expanded
-                if v not in explicitly_claimed_forecast_vars
-            ]
-            target_vars_available = [
-                v
-                for v in target_vars_expanded
-                if v not in explicitly_claimed_target_vars
-            ]
-
-            variable_pairs = list(zip(forecast_vars_available, target_vars_available))
-
+    for metric, metrics_to_evaluate, variable_pairs in _plan_metric_evaluations(
+        case_operator
+    ):
         # Evaluate the metric(s) for each variable pair
         for forecast_var, target_var in variable_pairs:
             # Prepare kwargs for metric evaluation (handles composite setup)
@@ -497,6 +616,72 @@ def compute_case_operator(
                 )
 
     return _safe_concat(results, ignore_index=True)
+
+
+def _compute_case_operator_with_progress(
+    case_operator: "cases.CaseOperator",
+    cache_dir: Optional[pathlib.Path] = None,
+    event_queue=None,
+    log_queue=None,
+    dispatch_id=None,
+    **kwargs,
+) -> pd.DataFrame:
+    """Compute a case operator, publishing progress to event_queue.
+
+    Runs inside a worker process. Falls back to plain computation when no
+    queue is supplied so serial callers are unaffected.
+
+    Args:
+        case_operator: The case operator to compute.
+        cache_dir: The directory to cache mid-flight outputs.
+        event_queue: Cross-process queue for progress events, or None.
+        log_queue: Cross-process queue for log records, or None. When
+            set, this process's log records and warnings are forwarded
+            there instead of going to this worker's own stderr.
+        dispatch_id: Unique key for this dispatch, assigned by the
+            caller via enumerate(). build_case_operators can emit
+            several CaseOperators sharing one case_id (one case, many
+            EvaluationObjects), so case_id alone can't key a slot.
+        **kwargs: Additional arguments for compute_case_operator.
+
+    Returns:
+        A pd.DataFrame of results from the case operator.
+    """
+    if event_queue is None:
+        return compute_case_operator(case_operator, cache_dir, **kwargs)
+
+    case_id = case_operator.case_metadata.case_id_number
+    slot_key = dispatch_id if dispatch_id is not None else case_id
+    target_name = getattr(case_operator.target, "name", None) or "target"
+    forecast_name = getattr(case_operator.forecast, "name", None) or "forecast"
+    # One case fans out into a dispatch per EvaluationObject, so the
+    # case id alone doesn't say which slot is which; the target and
+    # forecast names are what actually distinguish them.
+    label = f"case {case_id} | {target_name} | {forecast_name}"
+    sink = progress_module.QueueSink(event_queue)
+    progress_module.register_sink(
+        sink,
+        case_id=case_id,
+        total_steps=_count_case_steps(case_operator, cache_dir),
+        slot_key=slot_key,
+        label=label,
+    )
+    log_context = (
+        progress_module.forwarding_logs_to(log_queue)
+        if log_queue is not None
+        else contextlib.nullcontext()
+    )
+    try:
+        with log_context:
+            with progress_module.DaskTaskSink(sink, case_id):
+                return compute_case_operator(case_operator, cache_dir, **kwargs)
+    finally:
+        sink(
+            progress_module.ProgressEvent(
+                case_id=case_id, slot_key=slot_key, finished=True
+            )
+        )
+        progress_module.register_sink(None)
 
 
 def _extract_standard_metadata(
@@ -612,7 +797,14 @@ def _evaluate_metric_and_return_df(
     forecast_variable = derived._maybe_convert_variable_to_string(forecast_variable)
     target_variable = derived._maybe_convert_variable_to_string(target_variable)
 
-    logger.info("Computing metric %s... ", metric.name)
+    logger.info(
+        "Computing metric %s for case %s... ",
+        metric.name,
+        case_operator.case_metadata.case_id_number,
+    )
+    progress_module.set_phase(
+        f"case {case_operator.case_metadata.case_id_number} | {metric.name}"
+    )
 
     # Extract the appropriate data for the metric
     # Variables should already be present at this point in the pipeline
@@ -792,14 +984,14 @@ def _build_datasets(
         set(case_operator.target.variables) | filtered_target_vars
     )
 
-    logger.info("Running target pipeline... ")
-    with TqdmCallback(
-        desc=f"Running target pipeline for case "
-        f"{case_operator.case_metadata.case_id_number}"
-    ):
-        target_ds = run_pipeline(
-            case_operator.case_metadata, augmented_target, **kwargs
-        )
+    logger.info(
+        "Running target pipeline for case %s... ",
+        case_operator.case_metadata.case_id_number,
+    )
+    progress_module.set_phase(
+        f"case {case_operator.case_metadata.case_id_number} | target pipeline"
+    )
+    target_ds = run_pipeline(case_operator.case_metadata, augmented_target, **kwargs)
 
     # Pass target dataset to forecast pipeline only if needed
     # Check if any forecast variable requires target dataset
@@ -814,14 +1006,16 @@ def _build_datasets(
             "Passing target dataset to forecast pipeline (required by derived variable)"
         )
 
-    logger.info("Running forecast pipeline... ")
-    with TqdmCallback(
-        desc=f"Running forecast pipeline for case "
-        f"{case_operator.case_metadata.case_id_number}"
-    ):
-        forecast_ds = run_pipeline(
-            case_operator.case_metadata, augmented_forecast, **kwargs
-        )
+    logger.info(
+        "Running forecast pipeline for case %s... ",
+        case_operator.case_metadata.case_id_number,
+    )
+    progress_module.set_phase(
+        f"case {case_operator.case_metadata.case_id_number} | forecast pipeline"
+    )
+    forecast_ds = run_pipeline(
+        case_operator.case_metadata, augmented_forecast, **kwargs
+    )
 
     # Check if any dimension has zero length
     zero_length_dims = [dim for dim, size in forecast_ds.sizes.items() if size == 0]

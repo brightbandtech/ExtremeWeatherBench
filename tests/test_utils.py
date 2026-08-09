@@ -3,6 +3,7 @@
 import datetime
 import operator
 
+import joblib
 import numpy as np
 import pandas as pd
 import pytest
@@ -2064,3 +2065,67 @@ class TestIsValidLandfall:
         # This should return True because init_time IS in coords
         # (even though it's not a dimension)
         assert utils.is_valid_landfall(da) is True
+
+
+class TestParallelTqdmPreClose:
+    """Test ParallelTqdm's pre_close hook."""
+
+    def test_pre_close_runs_before_case_bar_closes(self, monkeypatch):
+        """pre_close must run before ParallelTqdm closes its own case bar."""
+        order = []
+
+        original_make_case_bar = utils.progress.make_case_bar
+
+        def tracking_make_case_bar(*args, **kwargs):
+            bar = original_make_case_bar(*args, **kwargs)
+            original_close = bar.close
+
+            def tracked_close(*a, **k):
+                order.append("case_bar")
+                return original_close(*a, **k)
+
+            bar.close = tracked_close
+            return bar
+
+        monkeypatch.setattr(utils.progress, "make_case_bar", tracking_make_case_bar)
+
+        def pre_close():
+            order.append("pre_close")
+
+        # n_jobs must be >1: joblib's n_jobs==1 path runs sequentially
+        # and never calls dispatch_one_batch, so the case bar (and thus
+        # this test) needs real batched dispatch to be meaningful.
+        parallel = utils.ParallelTqdm(
+            n_jobs=2,
+            backend="threading",
+            total_tasks=4,
+            disable_progressbar=True,
+            pre_close=pre_close,
+        )
+        parallel(joblib.delayed(lambda x: x)(i) for i in range(4))
+
+        assert order == ["pre_close", "case_bar"]
+
+    def test_pre_close_runs_even_without_dispatch(self):
+        """pre_close still runs when the case bar was never created."""
+        calls = []
+        parallel = utils.ParallelTqdm(
+            n_jobs=1,
+            backend="threading",
+            total_tasks=0,
+            disable_progressbar=True,
+            pre_close=lambda: calls.append(1),
+        )
+        parallel(iter([]))
+        assert calls == [1]
+
+    def test_pre_close_defaults_to_none_without_error(self):
+        """ParallelTqdm still works when pre_close isn't provided."""
+        parallel = utils.ParallelTqdm(
+            n_jobs=1,
+            backend="threading",
+            total_tasks=1,
+            disable_progressbar=True,
+        )
+        result = parallel([joblib.delayed(lambda x: x)(1)])
+        assert result == [1]
