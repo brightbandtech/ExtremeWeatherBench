@@ -1924,6 +1924,26 @@ class TestMaybeDensifyDataArray:
         assert result.shape == (3, 2, 2)
         assert list(result.dims) == ["time", "latitude", "longitude"]
 
+    def test_dataset_variable_stays_sparse_after_densifying_a_pulled_copy(self):
+        """Densifying a DataArray pulled from a Dataset must not densify the
+        Dataset's own copy, since both share the same underlying Variable."""
+        import sparse
+
+        coords = ([0, 1, 2], [0, 1, 0])
+        data = [1.0, 2.0, 3.0]
+        sparse_array = sparse.COO(coords, data, shape=(3, 2))
+        ds = xr.Dataset(
+            {"t": (["latitude", "longitude"], sparse_array)},
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+        )
+
+        result = utils.maybe_densify_dataarray(ds["t"])
+
+        assert isinstance(result.data, np.ndarray)
+        assert isinstance(ds["t"].data, sparse.COO), (
+            "densifying the pulled-out copy densified the dataset's own variable too"
+        )
+
 
 class TestCreateNanDataArray:
     """Tests for _create_nan_dataarray function."""

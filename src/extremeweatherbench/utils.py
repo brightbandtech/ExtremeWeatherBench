@@ -711,7 +711,10 @@ def maybe_densify_dataarray(da: xr.DataArray, max_size: float = 1e9) -> xr.DataA
         The densified xarray dataarray.
     """
     if isinstance(da.data, sparse.COO):
-        da.data = da.data.maybe_densify(max_size=max_size)
+        # Assigning to da.data would rewrite the Variable this DataArray shares
+        # with whatever it came from, so pulling a variable out of a dataset and
+        # densifying it turned the dataset dense too.
+        return da.copy(data=da.data.maybe_densify(max_size=max_size))
     return da
 
 
