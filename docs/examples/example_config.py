@@ -38,10 +38,10 @@ evaluation_objects = [
 
 # Load case data from the default events.yaml
 # Users can also define their own cases_dict structure
-cases_list = ewb.cases.load_cases()
+case_list = ewb.cases.load_cases()
 
 # Alternatively, users could define custom cases like this:
-# cases_list = [
+# case_list = [
 #         {
 #             "case_id_number": 1,
 #             "title": "Custom Heat Wave Case",
