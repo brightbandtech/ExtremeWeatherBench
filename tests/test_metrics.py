@@ -732,6 +732,37 @@ class TestMaximumMeanAbsoluteError:
             # at least test instantiation works
             assert isinstance(metric, metrics.MaximumMeanAbsoluteError)
 
+    def test_reduce_spatial_dims_is_honored(self, monkeypatch):
+        """A non-default reduce_spatial_dims must reach the spatial mean
+        reduction rather than being silently overridden by a hardcoded pair."""
+        times = pd.date_range("2020-01-01", periods=4, freq="h")
+        forecast = (
+            xr.DataArray(
+                np.arange(4, dtype=float),
+                dims=["valid_time"],
+                coords={"valid_time": times},
+            )
+            .expand_dims(["latitude", "longitude"])
+            .expand_dims(lead_time=[0])
+        )
+        target = xr.DataArray(
+            np.arange(4, dtype=float), dims=["valid_time"], coords={"valid_time": times}
+        ).expand_dims(["latitude", "longitude"])
+
+        seen_reduce_dims = []
+        original_reduce_dataarray = metrics.utils.reduce_dataarray
+
+        def spy(da, method, reduce_dims, **kwargs):
+            seen_reduce_dims.append(list(reduce_dims))
+            return original_reduce_dataarray(da, method, reduce_dims, **kwargs)
+
+        monkeypatch.setattr(metrics.utils, "reduce_dataarray", spy)
+
+        metric = metrics.MaximumMeanAbsoluteError(reduce_spatial_dims=["longitude"])
+        metric._compute_metric(forecast, target)
+
+        assert seen_reduce_dims == [["longitude"], ["longitude"]], seen_reduce_dims
+
 
 class TestMinimumMeanAbsoluteError:
     """Tests for the MinimumMeanAbsoluteError metric."""
