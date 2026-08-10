@@ -462,3 +462,32 @@ def sample_sparse_target_dataset():
             "target": make_sample_sparse_target_dataarray(),
         },
     )
+
+
+def make_cape_pressure_levels() -> np.ndarray:
+    """Pressure levels, in hPa, for the synthetic CAPE profiles."""
+    return np.array(
+        [
+            1000.0,
+            975,
+            950,
+            925,
+            900,
+            850,
+            800,
+            750,
+            700,
+            650,
+            600,
+            550,
+            500,
+            450,
+            400,
+            350,
+            300,
+            250,
+            200,
+            150,
+            100,
+        ]
+    )

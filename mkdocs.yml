@@ -11,6 +11,7 @@ nav:
   - Data: data.md
   - Data Preparation: data_prep.md
   - A Note on Parallelism: parallelism.md
+  - A Note on CAPE Accuracy: cape_accuracy.md
   - Case Studies:
       - Overview: events/case_studies.md
       - Atmospheric Rivers: events/atmospheric_rivers.md
