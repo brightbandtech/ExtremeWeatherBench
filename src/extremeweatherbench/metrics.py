@@ -1182,8 +1182,7 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
         Returns:
             MeanAbsoluteError of the maximum values.
         """
-        # Enforced spatial reduction for MaximumMeanAbsoluteError
-        reduce_spatial_dims = ["latitude", "longitude"]
+        reduce_spatial_dims = self.reduce_spatial_dims
         target_spatial_mean = utils.reduce_dataarray(
             target, method="mean", reduce_dims=reduce_spatial_dims, skipna=True
         )
