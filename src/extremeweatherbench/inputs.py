@@ -1,4 +1,5 @@
 import abc
+import copy
 import dataclasses
 import logging
 import warnings
@@ -58,6 +59,14 @@ IBTRACS_URI = (
     "https://www.ncei.noaa.gov/data/international-best-track-archive-for-"
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
 )
+
+#: Anonymous read options for the public CIRA/NODD S3 buckets that host the
+#: kerchunk-referenced forecast archives, which reject credentialed requests
+#: from users without an account.
+DEFAULT_KERCHUNK_STORAGE_OPTIONS: dict = {
+    "remote_protocol": "s3",
+    "remote_options": {"anon": True},
+}
 
 
 # ERA5 metadata variable mapping
@@ -450,10 +459,12 @@ class KerchunkForecast(ForecastBase):
 
     Extends ForecastBase for forecast data accessed via kerchunk references,
     enabling efficient access to cloud-optimized datasets.
+
+    Leaving storage_options as None selects anonymous access options suited
+    to the public CIRA/NODD S3 buckets these references typically point to.
     """
 
     chunks: Optional[Union[dict, str]] = "auto"
-    storage_options: dict = dataclasses.field(default_factory=dict)
 
     def _open_data_from_source(self) -> IncomingDataInput:
         return open_kerchunk_reference(
@@ -1051,7 +1062,7 @@ class IBTrACS(TargetBase):
 
 def open_kerchunk_reference(
     forecast_dir: str,
-    storage_options: dict = {"remote_protocol": "s3", "remote_options": {"anon": True}},
+    storage_options: Optional[dict] = None,
     chunks: Union[dict, str] = "auto",
 ) -> xr.Dataset:
     """Open a dataset from a kerchunked reference file in parquet or json format.
@@ -1062,12 +1073,15 @@ def open_kerchunk_reference(
 
     Args:
         forecast_dir: The path to the kerchunked reference file.
-        storage_options: The storage options to use.
+        storage_options: The storage options to use. If None, defaults to
+            anonymous access options suited to the public CIRA/NODD buckets.
         chunks: The chunks to use; defaults to "auto".
 
     Returns:
         The opened dataset.
     """
+    if storage_options is None:
+        storage_options = copy.deepcopy(DEFAULT_KERCHUNK_STORAGE_OPTIONS)
     if forecast_dir.endswith(".parq") or forecast_dir.endswith(".parquet"):
         kerchunk_ds = xr.open_dataset(
             forecast_dir,
@@ -1076,7 +1090,7 @@ def open_kerchunk_reference(
             chunks=chunks,
         )
     elif forecast_dir.endswith(".json"):
-        storage_options["fo"] = forecast_dir
+        storage_options = {**storage_options, "fo": forecast_dir}
         kerchunk_ds = xr.open_dataset(
             "reference://",
             engine="zarr",
