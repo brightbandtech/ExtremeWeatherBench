@@ -10,7 +10,7 @@ import pytest
 import sparse
 import xarray as xr
 
-from extremeweatherbench import inputs
+from extremeweatherbench import inputs, utils
 
 
 class TestInputBase:
@@ -1294,7 +1294,9 @@ class TestGHCN:
 
         # Should have no NaN values if no duplicates were dropped
         original_count = len(clean_data)
-        result_count = result.surface_air_temperature.count().item()
+        result_count = utils.maybe_densify_dataarray(
+            result.surface_air_temperature.count()
+        ).item()
         assert result_count == original_count
 
     def test_ghcn_custom_convert_to_dataset_single_duplicate(
@@ -1324,7 +1326,9 @@ class TestGHCN:
 
         # Should have dropped one duplicate, so count should equal original
         original_count = len(clean_data)
-        result_count = result.surface_air_temperature.count().item()
+        result_count = utils.maybe_densify_dataarray(
+            result.surface_air_temperature.count()
+        ).item()
         assert result_count == original_count
 
     def test_ghcn_custom_convert_to_dataset_many_duplicates(
@@ -1361,7 +1365,9 @@ class TestGHCN:
 
         # Should have dropped all duplicates, so count should equal original
         original_count = len(clean_data)
-        result_count = result.surface_air_temperature.count().item()
+        result_count = utils.maybe_densify_dataarray(
+            result.surface_air_temperature.count()
+        ).item()
         assert result_count == original_count
 
     def test_ghcn_custom_convert_to_dataset_exception_handling(self):
