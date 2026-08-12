@@ -1,10 +1,14 @@
 """Hypothesis property tests driving strategies.py through real EWB code."""
 
+import datetime
+
 import numpy as np
+import pandas as pd
 import pytest
+import xarray as xr
 from hypothesis import HealthCheck, assume, given, note, settings
 
-from extremeweatherbench import cases, evaluate, inputs, metrics, utils
+from extremeweatherbench import cases, evaluate, inputs, metrics, regions, utils
 
 from . import strategies
 
@@ -268,3 +272,89 @@ def test_compute_case_operator_no_overlap_is_empty(case):
     operator = _build_case_operator(case, metric)
     result_df = evaluate.compute_case_operator(operator)
     assert result_df.empty
+
+
+def _diurnal_temperature(valid_times, peak_hour=12.0, base=273.0, amplitude=10.0):
+    """24h-periodic temperature, peaking at peak_hour on every day."""
+    shape = np.asarray(valid_times).shape
+    idx = pd.DatetimeIndex(np.asarray(valid_times).ravel())
+    hours = idx.hour.to_numpy() + idx.minute.to_numpy() / 60.0
+    phase = 2 * np.pi * (hours - peak_hour) / 24.0
+    return (base + amplitude * np.cos(phase)).reshape(shape)
+
+
+@pytest.mark.xfail(
+    reason="fix/peak-metrics: forecast side reduces the max across inits "
+    "over valid_time instead of per init_time, so with a 72h init cadence "
+    "the tolerance window can hold only one off-peak forecast sample, "
+    "aliasing a perfect forecast into a non-zero error",
+    strict=False,
+)
+def test_maximum_mean_absolute_error_perfect_forecast_is_zero():
+    """A forecast identical to the target at every sampled time scores 0."""
+    lat = np.array([10.0, 20.0])
+    lon = np.array([100.0, 110.0])
+
+    target_time = pd.date_range("2021-06-20", periods=24 * 10, freq="1h")
+    target_grid = np.repeat(
+        _diurnal_temperature(target_time)[:, None, None], 4, axis=1
+    ).reshape(len(target_time), 2, 2)
+    target_ds = xr.Dataset(
+        {"2m_temperature": (["time", "latitude", "longitude"], target_grid)},
+        coords={"time": target_time, "latitude": lat, "longitude": lon},
+    )
+
+    init_time = pd.date_range("2021-06-20", periods=3, freq="72h")
+    lead_time = np.arange(0, 169, 6).astype("timedelta64[h]").astype("timedelta64[ns]")
+    valid_times = init_time.values[:, None] + lead_time[None, :]
+    forecast_grid = np.repeat(
+        _diurnal_temperature(valid_times)[:, :, None, None], 4, axis=2
+    ).reshape(len(init_time), len(lead_time), 2, 2)
+    forecast_ds = xr.Dataset(
+        {
+            "surface_air_temperature": (
+                ["init_time", "lead_time", "latitude", "longitude"],
+                forecast_grid,
+            )
+        },
+        coords={
+            "init_time": init_time,
+            "lead_time": lead_time,
+            "latitude": lat,
+            "longitude": lon,
+        },
+    )
+
+    case = cases.IndividualCase(
+        case_id_number=1,
+        title="diurnal perfect forecast",
+        start_date=datetime.datetime(2021, 6, 20),
+        end_date=datetime.datetime(2021, 6, 30),
+        location=regions.BoundingBoxRegion(
+            latitude_min=5.0,
+            latitude_max=25.0,
+            longitude_min=90.0,
+            longitude_max=120.0,
+        ),
+        event_type="synthetic",
+    )
+    operator = cases.CaseOperator(
+        case_metadata=case,
+        metric_list=[metrics.MaximumMeanAbsoluteError()],
+        target=strategies.InMemoryERA5(
+            ds=target_ds,
+            name="t",
+            variables=["2m_temperature"],
+            variable_mapping={"time": "valid_time"},
+        ),
+        forecast=inputs.XarrayForecast(
+            ds=forecast_ds,
+            name="f",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+        ),
+    )
+    result_df = evaluate.compute_case_operator(operator)
+    errors = result_df["value"].dropna().to_numpy()
+    assert errors.size > 0
+    np.testing.assert_allclose(errors, 0.0)

@@ -10,7 +10,7 @@ from hypothesis import strategies as st
 
 from extremeweatherbench import cases, inputs, regions
 
-INIT_RESOLUTIONS_HOURS = [1, 2, 3, 6, 12, 24, 48]
+INIT_RESOLUTIONS_HOURS = [1, 2, 3, 6, 12, 24, 48, 72]
 LEAD_RESOLUTIONS_HOURS = [1, 2, 3, 6, 12, 24]
 SPATIAL_RESOLUTIONS_DEGREES = [0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
 
