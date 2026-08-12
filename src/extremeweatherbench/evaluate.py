@@ -747,8 +747,9 @@ def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
     # metric that assesses something in an entire model run, such as the onset error of
     # an event. Lead_time will be present for a metric that assesses something at a
     # specific forecast hour, such as RMSE. If neither are present, the output is
-    # invalid. Both should not be present for one metric. Thus, one should always be
-    # missing, which is intended behavior.
+    # invalid, so a metric supplying only one of them is intended behavior. Peak metrics
+    # supply both, because they reduce over a run and then report against the lead time
+    # at which that run verified against the target's extreme.
     init_time_missing = "init_time" in missing_cols
     lead_time_missing = "lead_time" in missing_cols
 

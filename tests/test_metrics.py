@@ -964,6 +964,204 @@ class TestMaximumLowestMeanAbsoluteError:
             assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
 
 
+def _sparse_init_cadence_case(
+    peak_hour_utc: int = 0,
+    init_freq: str = "72h",
+    damping_scale_hours: float = 400.0,
+):
+    """Build a forecast/target pair with a WP-MIP style init cadence.
+
+    Initializations are 00Z only and spaced ``init_freq`` apart, with 6-hourly
+    lead times out to 240 h. The signal is a pure diurnal cycle whose amplitude
+    decays with lead time, so the forecast's peak error grows monotonically
+    with lead time and nothing else does. Because the initializations are
+    sparse, any single lead time is populated only once per ``init_freq``,
+    which is what makes a reduction over valid_time at fixed lead time
+    degenerate to an instantaneous snapshot.
+
+    Args:
+        peak_hour_utc: UTC hour at which the diurnal cycle peaks.
+        init_freq: Spacing between initializations.
+        damping_scale_hours: e-folding scale of the amplitude decay.
+
+    Returns:
+        A (forecast, target) DataArray pair.
+    """
+    inits = pd.date_range("2020-06-01", "2020-06-13", freq=init_freq)
+    lead_times = pd.timedelta_range("0h", "240h", freq="6h")
+    valid_times = pd.date_range("2020-06-08", "2020-06-14", freq="6h")
+    latitudes = np.array([30.0, 31.0])
+    longitudes = np.array([260.0, 261.0])
+
+    def temperature(valid_time, lead_hours):
+        amplitude = 5.0 * np.exp(-lead_hours / damping_scale_hours)
+        phase = 2 * np.pi * (valid_time.hour - peak_hour_utc) / 24
+        return 300.0 + amplitude * np.cos(phase)
+
+    init_set = set(inits)
+    forecast_values = np.full(
+        (len(lead_times), len(valid_times), len(latitudes), len(longitudes)), np.nan
+    )
+    for i, lead_time in enumerate(lead_times):
+        for j, valid_time in enumerate(valid_times):
+            if (valid_time - lead_time) in init_set:
+                forecast_values[i, j] = temperature(
+                    valid_time, lead_time / pd.Timedelta("1h")
+                )
+
+    forecast = xr.DataArray(
+        forecast_values,
+        dims=["lead_time", "valid_time", "latitude", "longitude"],
+        coords={
+            "lead_time": lead_times,
+            "valid_time": valid_times,
+            "latitude": latitudes,
+            "longitude": longitudes,
+        },
+    )
+    target = xr.DataArray(
+        np.stack(
+            [
+                np.full((len(latitudes), len(longitudes)), temperature(v, 0.0))
+                for v in valid_times
+            ]
+        ),
+        dims=["valid_time", "latitude", "longitude"],
+        coords={
+            "valid_time": valid_times,
+            "latitude": latitudes,
+            "longitude": longitudes,
+        },
+    )
+    return forecast, target
+
+
+class TestPeakMetricsWithSparseInitCadence:
+    """Regression tests for peak metrics under a sparse initialization cadence.
+
+    These lock in the per-initialization reduction. Reducing over valid_time at
+    a fixed lead time instead returns a single instantaneous value whose time of
+    day is ``lead_time mod 24 h``, which makes the metric measure the diurnal
+    cycle rather than forecast error.
+    """
+
+    @pytest.mark.parametrize(
+        "metric_class",
+        [metrics.MaximumMeanAbsoluteError, metrics.MaximumLowestMeanAbsoluteError],
+    )
+    def test_error_grows_monotonically_with_lead_time(self, metric_class):
+        """A forecast that only damps with lead time must score worse with lead."""
+        forecast, target = _sparse_init_cadence_case()
+
+        result = metric_class()._compute_metric(forecast, target)
+
+        values = result.sortby("lead_time").values
+        assert len(values) >= 3
+        assert np.all(np.isfinite(values))
+        assert np.all(np.diff(values) > 0), (
+            f"{metric_class.__name__} is not monotonic in lead time: {values}"
+        )
+
+    @pytest.mark.parametrize(
+        "metric_class",
+        [metrics.MaximumMeanAbsoluteError, metrics.MaximumLowestMeanAbsoluteError],
+    )
+    def test_one_value_per_initialization_at_the_derived_lead_time(self, metric_class):
+        """Each init contributes once, at the lead time of the target's extreme."""
+        forecast, target = _sparse_init_cadence_case()
+
+        result = metric_class()._compute_metric(forecast, target)
+
+        assert "init_time" in result.coords
+        init_times = pd.to_datetime(result.init_time.values)
+        assert len(set(init_times)) == len(init_times)
+        # Every init is 00Z and spaced 72 h apart, so the derived lead times
+        # inherit that spacing exactly.
+        lead_hours = result.sortby("lead_time").lead_time / np.timedelta64(1, "h")
+        assert np.all(np.diff(lead_hours.values) == 72)
+        assert np.all(lead_hours.values >= 0)
+
+    def test_maximum_mae_uses_the_forecast_peak_not_a_snapshot(self):
+        """The compared value is each run's window maximum, not one lead's value."""
+        forecast, target = _sparse_init_cadence_case()
+        metric = metrics.MaximumMeanAbsoluteError()
+
+        result = metric._compute_metric(forecast, target)
+
+        target_peak = target.mean(["latitude", "longitude"]).max().item()
+        forecast_by_init = forecast.mean(["latitude", "longitude"])
+        for lead_time, init_time, error in zip(
+            result.lead_time.values, result.init_time.values, result.values
+        ):
+            run = forecast_by_init.where(
+                forecast_by_init.valid_time - forecast_by_init.lead_time == init_time,
+                drop=True,
+            )
+            peak_time = init_time + lead_time
+            window = run.where(
+                (run.valid_time >= peak_time - np.timedelta64(12, "h"))
+                & (run.valid_time <= peak_time + np.timedelta64(12, "h"))
+            )
+            expected = np.nanmax(window.values)
+            assert error == pytest.approx(abs(expected - target_peak), abs=1e-9)
+
+    @pytest.mark.parametrize("peak_hour_utc", [0, 6, 12, 18])
+    def test_maximum_lowest_mae_does_not_depend_on_time_of_day(self, peak_hour_utc):
+        """The metric must not silently drop cases whose peak falls at 00Z or 18Z.
+
+        The previous grouping by UTC calendar day only yielded a complete day
+        for certain peak hours, which filtered cases by longitude.
+        """
+        forecast, target = _sparse_init_cadence_case(peak_hour_utc=peak_hour_utc)
+
+        result = metrics.MaximumLowestMeanAbsoluteError()._compute_metric(
+            forecast, target
+        )
+
+        assert result.sizes["lead_time"] >= 3
+        assert np.all(np.isfinite(result.values))
+
+    def test_denser_init_cadence_yields_the_same_errors(self):
+        """Scores must depend on the forecast, not on how often it is launched."""
+        sparse_forecast, target = _sparse_init_cadence_case(init_freq="72h")
+        dense_forecast, _ = _sparse_init_cadence_case(init_freq="24h")
+        metric = metrics.MaximumMeanAbsoluteError()
+
+        sparse_result = metric._compute_metric(sparse_forecast, target)
+        dense_result = metric._compute_metric(dense_forecast, target)
+
+        shared = np.intersect1d(sparse_result.lead_time, dense_result.lead_time)
+        assert len(shared) >= 3
+        np.testing.assert_allclose(
+            sparse_result.sel(lead_time=shared).values,
+            dense_result.sel(lead_time=shared).values,
+        )
+
+    def test_no_qualifying_initialization_yields_an_empty_result(self):
+        """A case no run covers scores nothing rather than raising."""
+        forecast, target = _sparse_init_cadence_case()
+        # Only lead 0 is populated, so no run spans a full day of the window.
+        forecast = forecast.where(forecast.lead_time == np.timedelta64(0, "h"))
+
+        result = metrics.MaximumLowestMeanAbsoluteError()._compute_metric(
+            forecast, target
+        )
+
+        assert result.sizes["lead_time"] == 0
+        assert "init_time" in result.coords
+        assert len(result.to_dataframe(name="value").reset_index()) == 0
+
+    def test_initializations_after_the_target_extreme_are_dropped(self):
+        """A run launched after the peak did not forecast it."""
+        forecast, target = _sparse_init_cadence_case()
+
+        result = metrics.MaximumMeanAbsoluteError()._compute_metric(forecast, target)
+
+        peak_times = result.init_time.values + result.lead_time.values
+        assert len(set(peak_times)) == 1
+        assert np.all(result.init_time.values <= peak_times[0])
+
+
 class TestDurationMeanError:
     """Tests for the DurationMeanError metric.
 
