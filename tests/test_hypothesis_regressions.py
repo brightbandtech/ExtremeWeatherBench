@@ -79,12 +79,7 @@ def test_minimum_mean_absolute_error_returns_nan_on_all_nan_target():
     assert bool(result.isnull().all())
 
 
-@pytest.mark.xfail(
-    reason="_calculate_event_duration builds a length-1 gap array against a "
-    "zero-length valid_time coordinate when passed empty input",
-    strict=False,
-)
-def test_duration_mean_error_crashes_on_empty_valid_time_axis():
+def test_duration_mean_error_returns_nan_on_empty_valid_time_axis():
     valid_time = pd.DatetimeIndex([], dtype="datetime64[ns]")
     lat = np.array([10.0, 20.0])
     lon = np.array([100.0, 110.0])
@@ -99,4 +94,5 @@ def test_duration_mean_error_crashes_on_empty_valid_time_axis():
         coords={"valid_time": valid_time, "latitude": lat, "longitude": lon},
     )
     metric = metrics.DurationMeanError(threshold_criteria=273.0)
-    metric.compute_metric(forecast, target)
+    result = metric.compute_metric(forecast, target)
+    assert bool(result.isnull().all())

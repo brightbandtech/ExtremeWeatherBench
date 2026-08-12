@@ -1454,10 +1454,13 @@ def _calculate_event_duration(
     Returns:
         DataArray with valid_time reduced out, values in hours.
     """
+    if mask.valid_time.size == 0:
+        return utils._create_nan_dataarray(preserve_dims)
     expected_gap = np.timedelta64(int(time_resolution_hours), "h")
     mask = mask.fillna(False).astype(bool)
     vt = mask.valid_time.values
-    gaps = np.concatenate([[False], (vt[1:] - vt[:-1]) == expected_gap])
+    gaps = np.zeros(vt.size, dtype=bool)
+    gaps[1:] = (vt[1:] - vt[:-1]) == expected_gap
     is_expected_gap = xr.DataArray(gaps, dims=["valid_time"], coords={"valid_time": vt})
     # When init_time is only a coordinate (not a dim) and lead_time is a dim,
     # consecutive timesteps within one forecast run follow the diagonal of the
