@@ -2,9 +2,11 @@
 
 import logging
 
+import dask.array as da
 import numpy as np
 import pandas as pd
 import pytest
+import sparse
 import xarray as xr
 
 from extremeweatherbench import outputs
@@ -238,3 +240,303 @@ class TestEnsureOutputSchema:
 )
 def test_metadata_coords_contains_expected_names(coord):
     assert coord in outputs.METADATA_COORDS
+
+
+def _result(dims="lead_time", values=(1.0, 2.0), coord_values=None, **overrides):
+    metadata = {**METADATA_KWARGS, **overrides}
+    if dims == "lead_time":
+        coord_values = list(coord_values) if coord_values is not None else [0, 6]
+        result = xr.DataArray(
+            data=list(values),
+            dims=["lead_time"],
+            coords={"lead_time": coord_values},
+        )
+    elif dims == "init_time":
+        coord_values = (
+            coord_values
+            if coord_values is not None
+            else pd.date_range("2021-06-20", periods=len(values), freq="D")
+        )
+        result = xr.DataArray(
+            data=list(values), dims=["init_time"], coords={"init_time": coord_values}
+        )
+    else:
+        raise ValueError(f"Unsupported dims kind: {dims}")
+    return outputs.annotate_metric_result(result, **metadata)
+
+
+class TestResultsToDataset:
+    """Test the flat-Dataset builder for a whole run's results."""
+
+    def test_empty_list_returns_empty_dataset(self):
+        ds = outputs.results_to_dataset([])
+        assert isinstance(ds, xr.Dataset)
+        assert len(ds.data_vars) == 0
+        assert len(ds.dims) == 0
+
+    def test_dims_include_metadata_dims_and_own_dims(self):
+        ds = outputs.results_to_dataset([_result()])
+        assert set(ds.dims) >= {
+            "case_id_number",
+            "metric",
+            "forecast_source",
+            "target_source",
+            "lead_time",
+        }
+        assert ds.sizes["case_id_number"] == 1
+        assert ds.sizes["metric"] == 1
+        assert ds.sizes["lead_time"] == 2
+
+    def test_target_and_forecast_variable_are_dropped(self):
+        ds = outputs.results_to_dataset([_result()])
+        assert "target_variable" not in ds.dims
+        assert "target_variable" not in ds.coords
+        assert "forecast_variable" not in ds.coords
+
+    def test_matching_variable_names_produce_single_named_data_var(self):
+        result = _result(
+            target_variable="2m_temperature", forecast_variable="2m_temperature"
+        )
+        ds = outputs.results_to_dataset([result])
+        assert list(ds.data_vars) == ["2m_temperature"]
+
+    def test_differing_variable_names_produce_merged_data_var_name(self):
+        result = _result(
+            target_variable="2m_temperature",
+            forecast_variable="surface_air_temperature",
+        )
+        ds = outputs.results_to_dataset([result])
+        assert list(ds.data_vars) == ["surface_air_temperature_vs_2m_temperature"]
+
+    def test_event_type_is_a_non_dim_coord_along_case_id_number(self):
+        result_1 = _result(case_id_number=1, event_type="heat_wave")
+        result_2 = _result(case_id_number=2, event_type="freeze")
+        ds = outputs.results_to_dataset([result_1, result_2])
+
+        assert "event_type" not in ds.dims
+        assert ds.coords["event_type"].dims == ("case_id_number",)
+        by_case = dict(
+            zip(ds.coords["case_id_number"].values, ds.coords["event_type"].values)
+        )
+        assert by_case == {1: "heat_wave", 2: "freeze"}
+
+    def test_two_metrics_on_one_variable_merge_along_metric_dim(self):
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        rmse = _result(
+            metric="RMSE", coord_values=(0, 6), values=(1.0, 2.0), **same_var
+        )
+        mae = _result(metric="MAE", coord_values=(6, 12), values=(3.0, 4.0), **same_var)
+        ds = outputs.results_to_dataset([rmse, mae])
+
+        assert ds.sizes["metric"] == 2
+        df = ds["2m_temperature"].to_dataframe(name="value").reset_index()
+        df = df.dropna(subset=["value"])
+
+        rmse_rows = df[df["metric"] == "RMSE"]
+        assert dict(zip(rmse_rows["lead_time"], rmse_rows["value"])) == {0: 1.0, 6: 2.0}
+        mae_rows = df[df["metric"] == "MAE"]
+        assert dict(zip(mae_rows["lead_time"], mae_rows["value"])) == {6: 3.0, 12: 4.0}
+
+    def test_lead_time_and_init_time_metrics_coexist_with_nan_padding(self):
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        lead_result = _result(
+            dims="lead_time", metric="RMSE", values=(1.0, 2.0), **same_var
+        )
+        init_result = _result(
+            dims="init_time", metric="OnsetError", values=(5.0, 6.0), **same_var
+        )
+        ds = outputs.results_to_dataset([lead_result, init_result])
+
+        assert "lead_time" in ds.dims
+        assert "init_time" in ds.dims
+
+        df = ds["2m_temperature"].to_dataframe(name="value").reset_index()
+        df = df.dropna(subset=["value"])
+        rmse_rows = df[df["metric"] == "RMSE"]
+        assert sorted(rmse_rows["value"]) == [1.0, 2.0]
+        assert sorted(rmse_rows["lead_time"]) == [0, 6]
+
+        onset_rows = df[df["metric"] == "OnsetError"]
+        assert sorted(onset_rows["value"]) == [5.0, 6.0]
+
+    def test_landfall_extra_coords_are_promoted_and_preserved_per_case(self):
+        def make(case_id, lat_val, lon_val):
+            init_times = pd.date_range("2021-06-20", periods=2, freq="D")
+            result = xr.DataArray(
+                data=[1.0, 2.0], dims=["init_time"], coords={"init_time": init_times}
+            )
+            result = result.assign_coords(
+                forecast_landfall_latitude=("init_time", [lat_val, lat_val + 1]),
+                forecast_landfall_longitude=("init_time", [lon_val, lon_val + 1]),
+            )
+            return outputs.annotate_metric_result(
+                result,
+                metric="LandfallDisplacement",
+                target_variable="surface_wind_speed",
+                forecast_variable="surface_wind_speed",
+                forecast_source="test_forecast",
+                target_source="test_target",
+                case_id_number=case_id,
+                event_type="tropical_cyclone",
+            )
+
+        result_1 = make(1, 10.0, -80.0)
+        result_2 = make(2, 50.0, -170.0)
+
+        ds = outputs.results_to_dataset([result_1, result_2])
+
+        assert "forecast_landfall_latitude" in ds.data_vars
+        assert "forecast_landfall_latitude" not in ds.coords
+
+        df = ds["forecast_landfall_latitude"].to_dataframe(name="value").reset_index()
+        df = df.dropna(subset=["value"])
+        case_1_vals = sorted(df[df["case_id_number"] == 1]["value"])
+        case_2_vals = sorted(df[df["case_id_number"] == 2]["value"])
+        assert case_1_vals == [10.0, 11.0]
+        assert case_2_vals == [50.0, 51.0]
+
+    def test_dataset_values_match_dataframe_values_for_each_result(self):
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        results = [
+            _result(
+                metric="RMSE",
+                case_id_number=1,
+                values=(1.0, 2.0),
+                coord_values=(0, 6),
+                **same_var,
+            ),
+            _result(
+                dims="init_time",
+                metric="OnsetError",
+                case_id_number=2,
+                values=(5.0, 6.0),
+                **same_var,
+            ),
+        ]
+        df = outputs.results_to_dataframe(results)
+        ds = outputs.results_to_dataset(results)
+
+        for result in results:
+            metadata = {
+                c: result.coords[c].item()
+                for c in (
+                    "metric",
+                    "forecast_source",
+                    "target_source",
+                    "case_id_number",
+                )
+            }
+            var_name = outputs._variable_name(
+                result.coords["forecast_variable"].item(),
+                result.coords["target_variable"].item(),
+            )
+            own_dim = result.dims[0]
+
+            for coord_value, value in zip(result.coords[own_dim].values, result.values):
+                selectors = dict(metadata)
+                selectors[own_dim] = coord_value
+                for other_dim in ("lead_time", "init_time"):
+                    if other_dim != own_dim and other_dim in ds.dims:
+                        selectors[other_dim] = outputs._sentinel_for_dtype(
+                            ds.coords[other_dim].dtype
+                        )
+                dataset_value = ds[var_name].sel(**selectors).compute().item()
+                assert dataset_value == pytest.approx(value)
+
+                df_row = df[
+                    (df["metric"] == metadata["metric"])
+                    & (df["case_id_number"] == metadata["case_id_number"])
+                    & (df[own_dim] == coord_value)
+                ]
+                assert df_row["value"].iloc[0] == pytest.approx(dataset_value)
+
+    def test_sparse_true_produces_sparse_backed_data_with_correct_values(self):
+        result_1 = _result(case_id_number=1, values=(1.0, 2.0))
+        result_2 = _result(case_id_number=2, values=(3.0, 4.0))
+        ds = outputs.results_to_dataset([result_1, result_2], sparse=True)
+
+        var = ds["surface_air_temperature_vs_2m_temperature"]
+        assert isinstance(var.data, sparse.COO)
+        assert np.isnan(var.data.fill_value)
+        assert np.nansum(var.data.todense()) == pytest.approx(10.0)
+
+    def test_result_is_dask_backed_by_default(self):
+        ds = outputs.results_to_dataset([_result(case_id_number=1)])
+        var = ds["surface_air_temperature_vs_2m_temperature"]
+        assert isinstance(var.data, da.Array)
+
+    def test_already_dask_backed_inputs_stay_dask_backed(self):
+        result = _result(case_id_number=1)
+        result = result.chunk()
+        ds = outputs.results_to_dataset([result])
+        var = ds["surface_air_temperature_vs_2m_temperature"]
+        assert isinstance(var.data, da.Array)
+
+    def test_warns_when_estimated_dense_size_exceeds_threshold(self, caplog):
+        latitudes = np.arange(2000)
+        longitudes = np.arange(2000)
+        data = np.zeros((len(latitudes), len(longitudes)))
+        result = xr.DataArray(
+            data=data,
+            dims=["latitude", "longitude"],
+            coords={"latitude": latitudes, "longitude": longitudes},
+        )
+        result = outputs.annotate_metric_result(result, **METADATA_KWARGS)
+
+        with caplog.at_level(logging.WARNING, logger="extremeweatherbench.outputs"):
+            outputs.results_to_dataset([result], sparse=False)
+
+        assert any("sparse=True" in r.getMessage() for r in caplog.records)
+
+    def test_no_dense_size_warning_for_small_results(self, caplog):
+        with caplog.at_level(logging.WARNING, logger="extremeweatherbench.outputs"):
+            outputs.results_to_dataset([_result()], sparse=False)
+
+        assert not any("sparse=True" in r.getMessage() for r in caplog.records)
+
+
+class TestWriteResults:
+    """Test write_results dispatching and on-disk round trips."""
+
+    def test_unknown_output_format_raises_value_error(self, tmp_path):
+        with pytest.raises(ValueError, match="csv"):
+            outputs.write_results(
+                [_result()], tmp_path / "out", output_format="parquet"
+            )
+
+    def test_csv_output_matches_dataframe_bytes(self, tmp_path):
+        results = [_result(case_id_number=1)]
+        expected_path = tmp_path / "expected.csv"
+        outputs.results_to_dataframe(results).to_csv(expected_path, index=False)
+
+        out_path = tmp_path / "out.csv"
+        outputs.write_results(results, out_path, output_format="csv")
+
+        assert out_path.read_bytes() == expected_path.read_bytes()
+
+    def test_netcdf_round_trip_preserves_values_and_coords(self, tmp_path):
+        results = [
+            _result(metric="RMSE", case_id_number=1, values=(1.0, 2.0)),
+            _result(
+                dims="init_time",
+                metric="OnsetError",
+                case_id_number=2,
+                values=(5.0, 6.0),
+            ),
+        ]
+        expected_ds = outputs.results_to_dataset(results).compute()
+
+        out_path = tmp_path / "out.nc"
+        outputs.write_results(results, out_path, output_format="netcdf")
+
+        actual = xr.open_dataset(out_path).compute()
+        xr.testing.assert_allclose(expected_ds, actual, check_dim_order=False)

@@ -225,6 +225,26 @@ def _annotated_result(value=1.0, lead_time=0, **metadata):
     return result.assign_coords(metadata)
 
 
+def _fully_annotated_result(value=1.0, lead_time=0, **metadata):
+    """Build an annotated result with every outputs.METADATA_COORDS field.
+
+    Real pipeline results always carry all of these (see
+    evaluate._extract_standard_metadata), which results_to_dataset relies
+    on; _annotated_result alone is too sparse for xarray-output tests.
+    """
+    full_metadata = {
+        "metric": "MockMetric",
+        "target_variable": "2m_temperature",
+        "forecast_variable": "2m_temperature",
+        "forecast_source": "test_forecast",
+        "target_source": "test_target",
+        "case_id_number": 1,
+        "event_type": "heat_wave",
+        **metadata,
+    }
+    return _annotated_result(value=value, lead_time=lead_time, **full_metadata)
+
+
 class TestOutputColumns:
     """Test the OUTPUT_COLUMNS constant."""
 
@@ -551,6 +571,119 @@ class TestExtremeWeatherBench:
             assert mock_compute_case_operator_results.call_count == 2
             assert len(result) == 2
             assert result["case_id_number"].tolist() == [1, 2]
+
+
+class TestOutputFormatWiring:
+    """Test the output_format kwarg on run_evaluation and the deprecated run."""
+
+    @mock.patch("extremeweatherbench.evaluate._run_evaluation")
+    def test_run_evaluation_output_format_pandas_returns_dataframe(
+        self,
+        mock_run_evaluation,
+        sample_cases_list,
+        sample_evaluation_object,
+        sample_case_operator,
+    ):
+        with mock.patch.object(
+            evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
+        ):
+            mock_run_evaluation.return_value = [
+                [_annotated_result(value=1.0, metric="MockMetric", case_id_number=1)]
+            ]
+            ewb = evaluate.ExtremeWeatherBench(
+                case_metadata=sample_cases_list,
+                evaluation_objects=[sample_evaluation_object],
+            )
+
+            result = ewb.run_evaluation(n_jobs=1, output_format="pandas")
+
+            assert isinstance(result, pd.DataFrame)
+
+    @mock.patch("extremeweatherbench.evaluate._run_evaluation")
+    def test_run_evaluation_output_format_xarray_returns_dataset(
+        self,
+        mock_run_evaluation,
+        sample_cases_list,
+        sample_evaluation_object,
+        sample_case_operator,
+    ):
+        with mock.patch.object(
+            evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
+        ):
+            mock_run_evaluation.return_value = [[_fully_annotated_result()]]
+            ewb = evaluate.ExtremeWeatherBench(
+                case_metadata=sample_cases_list,
+                evaluation_objects=[sample_evaluation_object],
+            )
+
+            result = ewb.run_evaluation(n_jobs=1, output_format="xarray")
+
+            assert isinstance(result, xr.Dataset)
+
+    @mock.patch("extremeweatherbench.evaluate._run_evaluation")
+    def test_run_evaluation_unknown_output_format_raises_value_error(
+        self,
+        mock_run_evaluation,
+        sample_cases_list,
+        sample_evaluation_object,
+        sample_case_operator,
+    ):
+        with mock.patch.object(
+            evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
+        ):
+            mock_run_evaluation.return_value = [
+                [_annotated_result(value=1.0, case_id_number=1)]
+            ]
+            ewb = evaluate.ExtremeWeatherBench(
+                case_metadata=sample_cases_list,
+                evaluation_objects=[sample_evaluation_object],
+            )
+
+            with pytest.raises(ValueError, match="pandas"):
+                ewb.run_evaluation(output_format="geojson")
+
+    @mock.patch("extremeweatherbench.evaluate._run_evaluation")
+    def test_run_deprecated_output_format_xarray_returns_dataset(
+        self,
+        mock_run_evaluation,
+        sample_cases_list,
+        sample_evaluation_object,
+        sample_case_operator,
+    ):
+        with mock.patch.object(
+            evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
+        ):
+            mock_run_evaluation.return_value = [[_fully_annotated_result()]]
+            ewb = evaluate.ExtremeWeatherBench(
+                case_metadata=sample_cases_list,
+                evaluation_objects=[sample_evaluation_object],
+            )
+
+            result = ewb.run(n_jobs=1, output_format="xarray")
+
+            assert isinstance(result, xr.Dataset)
+
+    @mock.patch("extremeweatherbench.evaluate._run_evaluation")
+    def test_run_deprecated_unknown_output_format_raises_value_error(
+        self,
+        mock_run_evaluation,
+        sample_cases_list,
+        sample_evaluation_object,
+        sample_case_operator,
+    ):
+        with mock.patch.object(
+            evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
+        ):
+            mock_run_evaluation.return_value = [
+                [_annotated_result(value=1.0, case_id_number=1)]
+            ]
+            ewb = evaluate.ExtremeWeatherBench(
+                case_metadata=sample_cases_list,
+                evaluation_objects=[sample_evaluation_object],
+            )
+
+            with pytest.raises(ValueError, match="pandas"):
+                ewb.run(output_format="geojson")
 
 
 class TestRunCaseOperators:
@@ -1660,6 +1793,67 @@ class TestComputeCaseOperator:
         result = evaluate._compute_case_operator_results(sample_case_operator)
 
         assert result == []
+
+
+class TestComputeCaseOperatorOutputFormat:
+    """Test the output_format kwarg on compute_case_operator."""
+
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
+    @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
+    @mock.patch("extremeweatherbench.evaluate._evaluate_metric")
+    def test_output_format_xarray_returns_dataset(
+        self,
+        mock_evaluate_metric,
+        mock_derive_variables,
+        mock_build_datasets,
+        sample_case_operator,
+        sample_forecast_dataset,
+        sample_target_dataset,
+    ):
+        mock_build_datasets.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+        mock_derive_variables.side_effect = lambda ds, variables, **kwargs: ds
+        mock_evaluate_metric.return_value = _fully_annotated_result()
+        sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+
+        result = evaluate.compute_case_operator(
+            sample_case_operator, output_format="xarray"
+        )
+
+        assert isinstance(result, xr.Dataset)
+
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
+    @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
+    @mock.patch("extremeweatherbench.evaluate._evaluate_metric")
+    def test_unknown_output_format_raises_value_error(
+        self,
+        mock_evaluate_metric,
+        mock_derive_variables,
+        mock_build_datasets,
+        sample_case_operator,
+        sample_forecast_dataset,
+        sample_target_dataset,
+    ):
+        mock_build_datasets.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+        mock_derive_variables.side_effect = lambda ds, variables, **kwargs: ds
+        mock_evaluate_metric.return_value = _annotated_result(
+            metric="MockMetric", case_id_number=1
+        )
+        sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+
+        with pytest.raises(ValueError, match="pandas"):
+            evaluate.compute_case_operator(sample_case_operator, output_format="csv")
 
 
 class TestPipelineFunctions:

@@ -97,8 +97,10 @@ class ExtremeWeatherBench:
         n_jobs: Optional[int] = None,
         parallel_config: Optional[dict] = None,
         progress: bool = True,
+        output_format: str = "pandas",
+        sparse: bool = False,
         **kwargs,
-    ) -> pd.DataFrame:
+    ) -> Union[pd.DataFrame, xr.Dataset]:
         """Runs the ExtremeWeatherBench evaluation workflow.
 
         This method will run the evaluation workflow in the order of the case operators,
@@ -113,12 +115,25 @@ class ExtremeWeatherBench:
                 If provided, this takes precedence over n_jobs. If not provided and
                 n_jobs is specified, a default config with the loky backend is used.
             progress: Whether to display progress bars. Defaults to True.
+            output_format: "pandas" for the long-form DataFrame, or "xarray"
+                for the flat Dataset from outputs.results_to_dataset.
+            sparse: Forwarded to outputs.results_to_dataset when
+                output_format is "xarray".
             **kwargs: Additional arguments to pass to compute_case_operator.
         Returns:
-            A concatenated dataframe of the evaluation results.
+            The evaluation results in the requested output_format.
+
+        Raises:
+            ValueError: If output_format is not "pandas" or "xarray".
         """
         logger.warning("The run method is deprecated. Use run_evaluation instead.")
         logger.info("Running ExtremeWeatherBench evaluations...")
+
+        if output_format not in ("pandas", "xarray"):
+            raise ValueError(
+                f"Unknown output_format '{output_format}'. Expected 'pandas' or "
+                "'xarray'."
+            )
 
         # Check for serial or parallel configuration
         parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
@@ -134,15 +149,17 @@ class ExtremeWeatherBench:
         flattened_results = [
             result for case_results in run_results for result in case_results
         ]
-        return outputs.results_to_dataframe(flattened_results)
+        return _convert_results(flattened_results, output_format, sparse=sparse)
 
     def run_evaluation(
         self,
         n_jobs: Optional[int] = None,
         parallel_config: Optional[dict] = None,
         progress: bool = True,
+        output_format: str = "pandas",
+        sparse: bool = False,
         **kwargs,
-    ) -> pd.DataFrame:
+    ) -> Union[pd.DataFrame, xr.Dataset]:
         """Runs the ExtremeWeatherBench evaluation workflow.
 
         This method will run the evaluation workflow in the order of the case operators,
@@ -157,11 +174,24 @@ class ExtremeWeatherBench:
                 If provided, this takes precedence over n_jobs. If not provided and
                 n_jobs is specified, a default config with the loky backend is used.
             progress: Whether to display progress bars. Defaults to True.
+            output_format: "pandas" for the long-form DataFrame, or "xarray"
+                for the flat Dataset from outputs.results_to_dataset.
+            sparse: Forwarded to outputs.results_to_dataset when
+                output_format is "xarray".
             **kwargs: Additional arguments to pass to compute_case_operator.
         Returns:
-            A concatenated dataframe of the evaluation results.
+            The evaluation results in the requested output_format.
+
+        Raises:
+            ValueError: If output_format is not "pandas" or "xarray".
         """
         logger.info("Running ExtremeWeatherBench evaluations...")
+
+        if output_format not in ("pandas", "xarray"):
+            raise ValueError(
+                f"Unknown output_format '{output_format}'. Expected 'pandas' or "
+                "'xarray'."
+            )
 
         # Check for serial or parallel configuration
         parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
@@ -177,7 +207,36 @@ class ExtremeWeatherBench:
         flattened_results = [
             result for case_results in run_results for result in case_results
         ]
-        return outputs.results_to_dataframe(flattened_results)
+        return _convert_results(flattened_results, output_format, sparse=sparse)
+
+
+def _convert_results(
+    results: list[xr.DataArray],
+    output_format: str,
+    sparse: bool = False,
+) -> Union[pd.DataFrame, xr.Dataset]:
+    """Convert a flat list of annotated metric results to output_format.
+
+    Args:
+        results: A flat list of annotated metric results.
+        output_format: "pandas" for the long-form DataFrame, or "xarray"
+            for the flat Dataset from outputs.results_to_dataset.
+        sparse: Forwarded to outputs.results_to_dataset when output_format
+            is "xarray".
+
+    Returns:
+        The results converted to the requested output_format.
+
+    Raises:
+        ValueError: If output_format is not "pandas" or "xarray".
+    """
+    if output_format == "pandas":
+        return outputs.results_to_dataframe(results)
+    if output_format == "xarray":
+        return outputs.results_to_dataset(results, sparse=sparse)
+    raise ValueError(
+        f"Unknown output_format '{output_format}'. Expected 'pandas' or 'xarray'."
+    )
 
 
 def _parallel_serial_config_check(
@@ -496,8 +555,9 @@ def _count_case_steps(
 def compute_case_operator(
     case_operator: "cases.CaseOperator",
     cache_dir: Optional[pathlib.Path] = None,
+    output_format: str = "pandas",
     **kwargs,
-) -> pd.DataFrame:
+) -> Union[pd.DataFrame, xr.Dataset]:
     """Compute the resulting evaluation of a case operator.
 
     This method will compute the results of a case operator. It validates
@@ -509,16 +569,19 @@ def compute_case_operator(
     Args:
         case_operator: The case operator to compute the results of.
         cache_dir: The directory to cache mid-flight outputs (serial mode).
+        output_format: "pandas" for the long-form DataFrame, or "xarray"
+            for the flat Dataset from outputs.results_to_dataset.
 
     Returns:
-        A pd.DataFrame of results from the case operator.
+        The case operator's results in the requested output_format.
 
     Raises:
         TypeError: If any metric is not properly instantiated (i.e. isn't an
             instance or child class of BaseMetric).
+        ValueError: If output_format is not "pandas" or "xarray".
     """
     results = _compute_case_operator_results(case_operator, cache_dir, **kwargs)
-    return outputs.results_to_dataframe(results)
+    return _convert_results(results, output_format)
 
 
 def _compute_case_operator_results(
