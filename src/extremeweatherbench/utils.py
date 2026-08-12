@@ -8,10 +8,11 @@ import operator
 import pathlib
 from typing import Any, Callable, Literal, Optional, Sequence, Union
 
-import cartopy.io.shapereader as shpreader
+import geopandas as gpd
 import numpy as np
 import numpy.typing as npt
 import pandas as pd  # type: ignore[import-untyped]
+import pooch
 import regionmask
 import shapely
 import sparse
@@ -23,6 +24,13 @@ from joblib import Parallel
 import extremeweatherbench.progress as progress
 
 logger = logging.getLogger(__name__)
+
+# Natural Earth vector data has been hosted on S3 since 2021; see
+# https://github.com/nvkelso/natural-earth-vector/issues/445
+NATURAL_EARTH_URL = (
+    "https://naturalearth.s3.amazonaws.com/{resolution}_{category}/"
+    "ne_{resolution}_{name}.zip"
+)
 
 operators = {
     ">": operator.gt,
@@ -781,6 +789,35 @@ def reduce_dataarray(
         raise TypeError(f"method must be str or callable, got {type(method)}")
 
 
+def load_natural_earth_geometries(
+    name: str,
+    resolution: Literal["10m", "50m", "110m"] = "50m",
+    category: str = "physical",
+) -> list[shapely.geometry.base.BaseGeometry]:
+    """Download and read a Natural Earth vector layer.
+
+    The zipped shapefile is cached on disk by pooch, so repeat calls within and
+    across sessions do not re-download it.
+
+    Args:
+        name: Natural Earth layer name, e.g. 'land', 'lakes', or 'ocean'.
+        resolution: Natural Earth resolution ('10m', '50m', or '110m').
+            Defaults to '50m'.
+        category: Natural Earth category. Defaults to 'physical'.
+
+    Returns:
+        The layer's geometries in EPSG:4326.
+    """
+    path = pooch.retrieve(
+        url=NATURAL_EARTH_URL.format(
+            resolution=resolution, category=category, name=name
+        ),
+        known_hash=None,
+        path=pooch.os_cache("extremeweatherbench"),
+    )
+    return list(gpd.read_file(f"zip://{path}").geometry)
+
+
 def load_land_geometry(
     resolution: Literal["10m", "50m", "110m"] = "50m",
 ) -> shapely.geometry.Polygon:
@@ -794,18 +831,12 @@ def load_land_geometry(
         The land geometry as a shapely Polygon with lakes and
         ocean-connected water bodies (bays, estuaries, seas) excluded.
     """
-    land = shpreader.natural_earth(
-        category="physical", name="land", resolution=resolution
-    )
-    land_geoms = list(shpreader.Reader(land).geometries())
+    land_geoms = load_natural_earth_geometries("land", resolution=resolution)
     land_union = shapely.ops.unary_union(land_geoms)
 
     # Exclude lakes to avoid false landfall detections
     try:
-        lakes = shpreader.natural_earth(
-            category="physical", name="lakes", resolution=resolution
-        )
-        lake_geoms = list(shpreader.Reader(lakes).geometries())
+        lake_geoms = load_natural_earth_geometries("lakes", resolution=resolution)
         if lake_geoms:
             lakes_union = shapely.ops.unary_union(lake_geoms)
             land_union = land_union.difference(lakes_union)
@@ -834,10 +865,7 @@ def load_ocean_geometry(
     Returns:
         The ocean geometry as a unified shapely Polygon.
     """
-    ocean = shpreader.natural_earth(
-        category="physical", name="ocean", resolution=resolution
-    )
-    ocean_geoms = list(shpreader.Reader(ocean).geometries())
+    ocean_geoms = load_natural_earth_geometries("ocean", resolution=resolution)
     return shapely.ops.unary_union(ocean_geoms)
 
 

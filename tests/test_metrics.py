@@ -2515,8 +2515,8 @@ class TestLandfallMetrics:
                 assert coord_name in result.coords, (
                     f"Missing metadata coord: {coord_name}"
                 )
-            assert abs(float(result.forecast_landfall_latitude) - 16.1) < 0.01
-            assert abs(float(result.target_landfall_latitude) - 16.0) < 0.01
+            assert abs(result.forecast_landfall_latitude.item() - 16.1) < 0.01
+            assert abs(result.target_landfall_latitude.item() - 16.0) < 0.01
 
     def test_first_approach_skips_init_with_late_track_start(self):
         """Verify approach='first' filters out init_times whose
@@ -2788,7 +2788,7 @@ class TestLandfallMetrics:
                 f"Displacement {result.values[0]:.1f} km should be small (FL vs FL)"
             )
             # Verify metadata uses the Florida target
-            assert abs(float(result.target_landfall_latitude) - 29.5) < 0.01
+            assert abs(result.target_landfall_latitude.item() - 29.5) < 0.01
 
     def test_multi_landfall_displacement_next_approach(self):
         """Verify approach='next' also uses first forecast landfall
@@ -4833,9 +4833,11 @@ class TestEarlySignal:
 
     @staticmethod
     def _resolve(result):
-        """Compute dask results; pass through numpy/sparse."""
+        """Compute dask results and densify sparse ones; pass through numpy."""
         if hasattr(result, "compute"):
-            return result.compute()
+            result = result.compute()
+        if isinstance(result.data, sparse.COO):
+            result = result.copy(data=result.data.todense())
         return result
 
     @pytest.mark.parametrize("backend", ["numpy", "dask", "sparse"])
