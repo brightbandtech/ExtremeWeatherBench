@@ -614,31 +614,41 @@ def subset_cases_to_region(
 
 def subset_results_to_region(
     region: RegionSubsetter,
-    results_df: pd.DataFrame,
+    results: Union[pd.DataFrame, xr.Dataset],
     case_list: "list[cases.IndividualCase]",
-) -> pd.DataFrame:
-    """Subset results DataFrame by region using case_id_number.
+) -> Union[pd.DataFrame, xr.Dataset]:
+    """Subset results by region using case_id_number.
 
     This is a convenience function that creates a RegionSubsetter and applies it to
-    the results DataFrame that is output from ExtremeWeatherBench.run().
+    the results output from ExtremeWeatherBench.run(), whether that is the
+    long-form DataFrame or the flat Dataset.
 
     Args:
         region: The region to subset to. Can be a Region object or a
             dictionary of bounds with keys "latitude_min", "latitude_max",
             "longitude_min", and "longitude_max".
-        results_df: DataFrame with results from ExtremeWeatherBench.run()
+        results: DataFrame or Dataset with results from
+            ExtremeWeatherBench.run()
         case_list: The original case list to determine which
             case_id_numbers correspond to cases in the region
 
     Returns:
-        Subset DataFrame containing only results for cases in the region
+        Subset results containing only data for cases in the region
     """
     # Get the case IDs that should be included
     subset_cases = region.subset_case_list(case_list)
     included_case_ids = {case.case_id_number for case in subset_cases}
 
+    if isinstance(results, xr.Dataset):
+        present_ids = [
+            case_id
+            for case_id in results["case_id_number"].values
+            if case_id in included_case_ids
+        ]
+        return results.sel(case_id_number=present_ids)
+
     # Filter the results DataFrame
-    return results_df[results_df["case_id_number"].isin(included_case_ids)]
+    return results[results["case_id_number"].isin(included_case_ids)]
 
 
 def _adjust_bounds_to_dataset_convention(

@@ -10,6 +10,13 @@ import pandas as pd
 import extremeweatherbench.cases as cases
 import extremeweatherbench.defaults as defaults
 import extremeweatherbench.evaluate as evaluate
+import extremeweatherbench.outputs as outputs
+
+_OUTPUT_FILENAMES = {
+    "csv": "evaluation_results.csv",
+    "netcdf": "evaluation_results.nc",
+    "zarr": "evaluation_results.zarr",
+}
 
 
 @click.command()
@@ -59,6 +66,17 @@ import extremeweatherbench.evaluate as evaluate
     is_flag=True,
     help="Disable all progress bars",
 )
+@click.option(
+    "--output-format",
+    type=click.Choice(["csv", "netcdf", "zarr"]),
+    default="csv",
+    help="Format for saving evaluation results (default: csv)",
+)
+@click.option(
+    "--sparse",
+    is_flag=True,
+    help="Store xarray results as sparse arrays (netcdf/zarr formats only)",
+)
 @click.pass_context
 def cli_runner(
     ctx: click.Context,
@@ -70,6 +88,8 @@ def cli_runner(
     parallel_config: Optional[dict],
     save_case_operators: Optional[str],
     no_progress: bool,
+    output_format: str,
+    sparse: bool,
 ):
     """ExtremeWeatherBench command line interface.
 
@@ -99,6 +119,10 @@ def cli_runner(
         save_case_operators: Save CaseOperator objects to a pickle file at this
             path.
         no_progress: Disable all progress bars.
+        output_format: Format for saving results: "csv", "netcdf", or "zarr"
+            (default: "csv").
+        sparse: Store xarray results as sparse arrays. Only valid with
+            --output-format netcdf or zarr.
     Examples:
         # Use default evaluation objects
         $ ewb --default
@@ -114,6 +138,12 @@ def cli_runner(
 
         # Use custom parallel configuration
         $ ewb --default --parallel-config '{"backend": "dask", "n_jobs": 4}'
+
+        # Save results as a NetCDF Dataset instead of a CSV
+        $ ewb --default --output-format netcdf
+
+        # Save results as a sparse zarr Dataset
+        $ ewb --default --output-format zarr --sparse
     """
     # Show help if no arguments provided
     if not default and not config_file:
@@ -129,6 +159,11 @@ def cli_runner(
 
     if default and config_file:
         raise click.UsageError("Cannot specify both --default and --config-file")
+
+    if sparse and output_format == "csv":
+        raise click.UsageError(
+            "--sparse is only valid with --output-format netcdf or zarr"
+        )
 
     # Load evaluation objects
     if default:
@@ -161,20 +196,31 @@ def cli_runner(
 
     # Run evaluation
     click.echo("Running evaluation...")
+    eval_output_format = "pandas" if output_format == "csv" else "xarray"
     results = ewb.run_evaluation(
         n_jobs=n_jobs,
         parallel_config=parallel_config,
         progress=not no_progress,
+        output_format=eval_output_format,
+        sparse=sparse,
     )
 
     # Save results
-    output_file = output_path / "evaluation_results.csv"
-    if isinstance(results, pd.DataFrame) and not results.empty:
-        results.to_csv(output_file, index=False)
-        click.echo(f"Results saved to {output_file}")
-        click.echo(f"Evaluated {len(results)} cases")
+    output_file = output_path / _OUTPUT_FILENAMES[output_format]
+    if isinstance(results, pd.DataFrame):
+        is_empty = results.empty
     else:
+        is_empty = not results.data_vars
+
+    if is_empty:
         click.echo("No results to save")
+    else:
+        outputs.write_results(results, output_file, output_format, sparse=sparse)
+        click.echo(f"Results saved to {output_file}")
+        if isinstance(results, pd.DataFrame):
+            click.echo(f"Evaluated {len(results)} cases")
+        else:
+            click.echo(f"Evaluated {results.sizes.get('case_id_number', 0)} cases")
 
 
 def _load_default_cases():
