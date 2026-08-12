@@ -1186,6 +1186,10 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
         target_spatial_mean = utils.reduce_dataarray(
             target, method="mean", reduce_dims=reduce_spatial_dims, skipna=True
         )
+        if target_spatial_mean.valid_time.size == 0 or bool(
+            target_spatial_mean.isnull().all()
+        ):
+            return utils._create_nan_dataarray(self.preserve_dims)
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
         maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
 
@@ -1268,6 +1272,10 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
         target_spatial_mean = utils.reduce_dataarray(
             target, method="mean", reduce_dims=self.reduce_spatial_dims, skipna=True
         )
+        if target_spatial_mean.valid_time.size == 0 or bool(
+            target_spatial_mean.isnull().all()
+        ):
+            return utils._create_nan_dataarray(self.preserve_dims)
         minimum_timestep = target_spatial_mean.idxmin("valid_time")
         minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
         forecast_spatial_mean = utils.reduce_dataarray(

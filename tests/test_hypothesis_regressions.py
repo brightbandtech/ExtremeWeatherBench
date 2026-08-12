@@ -65,26 +65,18 @@ def _build_forecast_target(target_values: np.ndarray) -> tuple:
     return forecast, target
 
 
-@pytest.mark.xfail(
-    reason="idxmax on an all-NaN target returns NaT, then .sel(valid_time=NaT) "
-    "raises instead of yielding NaN",
-    strict=False,
-)
-def test_maximum_mean_absolute_error_crashes_on_all_nan_target():
+def test_maximum_mean_absolute_error_returns_nan_on_all_nan_target():
     forecast, target = _build_forecast_target(np.full((3, 2, 2), np.nan))
     metric = metrics.MaximumMeanAbsoluteError()
-    metric.compute_metric(forecast, target)
+    result = metric.compute_metric(forecast, target)
+    assert bool(result.isnull().all())
 
 
-@pytest.mark.xfail(
-    reason="idxmin on an all-NaN target returns NaT, then .sel(valid_time=NaT) "
-    "raises instead of yielding NaN",
-    strict=False,
-)
-def test_minimum_mean_absolute_error_crashes_on_all_nan_target():
+def test_minimum_mean_absolute_error_returns_nan_on_all_nan_target():
     forecast, target = _build_forecast_target(np.full((3, 2, 2), np.nan))
     metric = metrics.MinimumMeanAbsoluteError()
-    metric.compute_metric(forecast, target)
+    result = metric.compute_metric(forecast, target)
+    assert bool(result.isnull().all())
 
 
 @pytest.mark.xfail(
