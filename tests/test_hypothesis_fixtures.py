@@ -56,17 +56,23 @@ def _forecast_missing_data_applied(case: strategies.ForecastTargetCase) -> bool:
     )
 
 
+def _lead_as_offset(lead) -> np.timedelta64:
+    """An integer lead_time means hours, matching the rest of the codebase."""
+    if isinstance(lead, np.timedelta64):
+        return lead
+    return np.timedelta64(int(lead), "h")
+
+
 @settings(suppress_health_check=[HealthCheck.filter_too_much])
 @given(strategies.forecast_target_case())
 def test_convert_init_time_to_valid_time_matches_init_plus_lead(case):
     """Every output valid_time equals init_time + lead_time."""
     _note_case(case)
-    assume(case.lead_dtype_is_timedelta)
     assume(case.coord_inconsistency_mode != "duplicate_init_time")
     assume(not _forecast_missing_data_applied(case))
     result = utils.convert_init_time_to_valid_time(case.forecast)
     for lead in case.forecast.lead_time.values:
-        expected = np.sort(case.forecast.init_time.values + lead)
+        expected = np.sort(case.forecast.init_time.values + _lead_as_offset(lead))
         da = result["surface_air_temperature"].sel(lead_time=lead)
         actual = np.sort(da.dropna("valid_time", how="all").valid_time.values)
         np.testing.assert_array_equal(actual, expected)
@@ -77,7 +83,6 @@ def test_convert_init_time_to_valid_time_matches_init_plus_lead(case):
 def test_convert_valid_time_to_init_time_roundtrip(case):
     """Converting to valid_time and back recovers the original init_times."""
     _note_case(case)
-    assume(case.lead_dtype_is_timedelta)
     assume(case.coord_inconsistency_mode != "duplicate_init_time")
     assume(not _forecast_missing_data_applied(case))
     valid_time_ds = utils.convert_init_time_to_valid_time(case.forecast)
@@ -113,7 +118,6 @@ def test_determine_temporal_resolution(case):
 def test_derive_indices_from_init_time_and_lead_time(case):
     """Every returned index pair maps to a valid time inside the case window."""
     _note_case(case)
-    assume(case.lead_dtype_is_timedelta)
     init_idx, lead_idx = utils.derive_indices_from_init_time_and_lead_time(
         case.forecast, case.case.start_date, case.case.end_date
     )
@@ -122,7 +126,7 @@ def test_derive_indices_from_init_time_and_lead_time(case):
     start = np.datetime64(case.case.start_date)
     end = np.datetime64(case.case.end_date)
     for i, j in zip(init_idx, lead_idx):
-        valid_time = init_time[i] + lead_time[j]
+        valid_time = init_time[i] + _lead_as_offset(lead_time[j])
         assert start <= valid_time <= end
 
 
@@ -131,7 +135,6 @@ def test_derive_indices_from_init_time_and_lead_time(case):
 def test_xarray_forecast_subset_data_to_case(case):
     """Output valid_times and lat/lon fall inside the case window and region."""
     _note_case(case)
-    assume(case.lead_dtype_is_timedelta)
     assume(case.coord_inconsistency_mode != "duplicate_init_time")
     forecast = inputs.XarrayForecast(
         ds=case.forecast, variables=[], variable_mapping={}
@@ -187,7 +190,6 @@ def test_zarr_target_subsetter(case):
 def test_align_forecast_to_target(case):
     """Aligned forecast lat/lon exactly equal target lat/lon; no new dims."""
     _note_case(case)
-    assume(case.lead_dtype_is_timedelta)
     # In production, XarrayForecast.subset_data_to_case dedups init_time
     # before this function ever sees the data; calling it directly here
     # skips that step, so duplicate_init_time is out of scope too.
@@ -221,22 +223,6 @@ METRIC_FACTORIES = {
 
 
 CONTINUOUS_METRICS = {"MeanAbsoluteError", "RootMeanSquaredError", "MeanError"}
-# Confirmed defect: idxmax/idxmin crash on a degenerate (all-NaN, or emptied
-# by alignment) target valid_time axis instead of returning NaN. Pinned in
-# tests/test_hypothesis_regressions.py.
-IDXMINMAX_METRICS = {"MaximumMeanAbsoluteError", "MinimumMeanAbsoluteError"}
-
-
-def _assume_pipeline_supported(case: strategies.ForecastTargetCase) -> None:
-    assume(case.lead_dtype_is_timedelta)
-    assume(
-        case.domain_kind != "antimeridian"
-        or case.forecast_longitude_convention == "0-360"
-    )
-    assume(
-        case.domain_kind != "antimeridian"
-        or case.target_longitude_convention == "0-360"
-    )
 
 
 @pytest.mark.parametrize("metric_name", list(METRIC_FACTORIES))
@@ -245,27 +231,9 @@ def _assume_pipeline_supported(case: strategies.ForecastTargetCase) -> None:
 def test_metric_result_is_well_formed(metric_name, case):
     """Result is a DataArray, preserve_dims survives, and it is never inf."""
     _note_case(case)
-    _assume_pipeline_supported(case)
-    target_is_all_nan = case.missing_data_mode == "all_nan" and (
-        case.missing_data_side in ("target", "both")
-    )
-    assume(metric_name not in IDXMINMAX_METRICS or not target_is_all_nan)
-    # Confirmed defect: dropping an init_time can leave the aligned data with
-    # a zero-length valid_time axis, which crashes DurationMeanError. Pinned
-    # in tests/test_hypothesis_regressions.py.
-    assume(
-        metric_name != "DurationMeanError"
-        or case.coord_inconsistency_mode != "drop_init_times"
-    )
     metric = METRIC_FACTORIES[metric_name]()
     operator = _build_case_operator(case, metric)
-    if metric_name in IDXMINMAX_METRICS:
-        try:
-            result_df = evaluate.compute_case_operator(operator)
-        except (KeyError, ValueError):
-            return
-    else:
-        result_df = evaluate.compute_case_operator(operator)
+    result_df = evaluate.compute_case_operator(operator)
     if result_df.empty:
         return
     assert not np.isinf(result_df["value"].to_numpy(dtype=float)).any()
@@ -282,7 +250,6 @@ def test_metric_result_is_well_formed(metric_name, case):
 def test_compute_case_operator_output_schema(case):
     """Output columns are exactly OUTPUT_COLUMNS, with numeric value."""
     _note_case(case)
-    _assume_pipeline_supported(case)
     metric = metrics.MeanAbsoluteError()
     operator = _build_case_operator(case, metric)
     result_df = evaluate.compute_case_operator(operator)
