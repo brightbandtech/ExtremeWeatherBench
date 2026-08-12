@@ -74,7 +74,9 @@ def make_sample_point_obs_df():
 
 def make_sample_forecast_dataset():
     init_time = pd.date_range("2021-06-20", periods=5)
-    lead_time = range(0, 241, 6)
+    lead_time = np.array([i for i in range(0, 241, 6)], dtype="timedelta64[h]").astype(
+        "timedelta64[ns]"
+    )
     data = np.random.RandomState(21897820).standard_normal(
         size=(len(init_time), 181, 360, len(lead_time)),
     )
@@ -106,7 +108,7 @@ def make_sample_forecast_dataset():
     dataset["surface_air_temperature"].loc[
         dict(
             init_time="2021-06-21 00:00",
-            lead_time=42,
+            lead_time=np.timedelta64(42, "h"),
             latitude=slice(40, 45),
             longitude=slice(100, 105),
         )
@@ -115,7 +117,7 @@ def make_sample_forecast_dataset():
     dataset["surface_air_temperature"].loc[
         dict(
             init_time="2021-06-20 00:00",
-            lead_time=42,
+            lead_time=np.timedelta64(42, "h"),
             latitude=slice(40, 45),
             longitude=slice(100, 105),
         )

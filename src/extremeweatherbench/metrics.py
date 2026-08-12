@@ -1470,7 +1470,7 @@ def _calculate_event_duration(
     # that the predecessor cell has the same init_time (vt - lead = const).
     # For daily targets aligned to a 6 h lead_time grid this is 24h/6h = 4.
     if "lead_time" in mask.dims and preserve_dims not in mask.dims:
-        lt_step = np.unique(np.diff(mask.lead_time.values))
+        lt_step = np.unique(np.diff(utils._lead_time_as_timedelta(mask.lead_time)))
         n_lead_steps = (
             max(1, int(expected_gap / lt_step[0]))
             if len(lt_step) == 1 and lt_step[0] > np.timedelta64(0)

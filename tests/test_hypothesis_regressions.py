@@ -2,18 +2,14 @@
 
 import numpy as np
 import pandas as pd
-import pytest
 import xarray as xr
 
 from extremeweatherbench import metrics, regions, utils
 from extremeweatherbench.sources import xarray_dataset
 
 
-@pytest.mark.xfail(
-    reason="int lead_time is added to init_time as nanoseconds, not hours",
-    strict=False,
-)
-def test_convert_init_time_to_valid_time_int_lead_time_is_misread():
+def test_convert_init_time_to_valid_time_coerces_int_lead_time_to_hours():
+    """Int-hours lead_time is added to init_time as hours, not nanoseconds."""
     init_time = pd.date_range("2021-06-20", periods=2, freq="6h")
     lead_time = np.array([0, 6, 12])
     ds = xr.Dataset(
@@ -27,7 +23,10 @@ def test_convert_init_time_to_valid_time_int_lead_time_is_misread():
     )
     result = utils.convert_init_time_to_valid_time(ds)
     lead_hours = pd.to_timedelta(lead_time, unit="h").to_numpy()
-    expected = np.sort((init_time.values[:, None] + lead_hours[None, :]).ravel())
+    # Overlapping init_time/lead_time combinations share a valid_time slot,
+    # so the result axis is the unique set of combined times, not all pairs.
+    combos = (init_time.values[:, None] + lead_hours[None, :]).ravel()
+    expected = np.sort(np.unique(combos))
     actual = np.sort(result.valid_time.values)
     np.testing.assert_array_equal(actual, expected)
 
