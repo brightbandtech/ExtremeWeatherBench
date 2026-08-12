@@ -109,26 +109,22 @@ def check_for_spatial_data(data: xr.Dataset, location: "regions.Region") -> bool
 
     if lat_dim is None or lon_dim is None:
         return False
-    coords = location.as_geopandas().total_bounds
-    # Get location bounds
-    lat_min, lat_max = coords[1], coords[3]
-    lon_min, lon_max = coords[0], coords[2]
-
-    # Check if reversing the latitude range still returns no data
-    if len(data[lat_dim].sel({lat_dim: slice(lat_min, lat_max)})) == 0:
-        if len(data[lat_dim].sel({lat_dim: slice(lat_max, lat_min)})) == 0:
-            # If reversing the latitude range still returns no data, return False
-            return False
-        else:
-            # If latitude has data, check longitude
-            data = data[[lat_dim, lon_dim]].sel(
-                {lat_dim: slice(lat_max, lat_min), lon_dim: slice(lon_min, lon_max)}
-            )
-    else:
-        # Check longitude if latitude > 0
-        data = data[[lat_dim, lon_dim]].sel(
-            {lat_dim: slice(lat_min, lat_max), lon_dim: slice(lon_min, lon_max)}
+    lat = data[lat_dim].values
+    lon = data[lon_dim].values % 360.0
+    # explode() splits antimeridian MultiPolygons into non-wrapping lobes,
+    # since their combined total_bounds would span the full globe.
+    bounds = location.as_geopandas().geometry.explode(index_parts=False).bounds
+    for lon_min, lat_min, lon_max, lat_max in bounds.itertuples(index=False):
+        if not ((lat >= lat_min) & (lat <= lat_max)).any():
+            continue
+        if lon_max - lon_min >= 360.0:
+            return True
+        lon_min, lon_max = lon_min % 360.0, lon_max % 360.0
+        lon_hit = (
+            (lon >= lon_min) & (lon <= lon_max)
+            if lon_min <= lon_max
+            else (lon >= lon_min) | (lon <= lon_max)
         )
-
-    # Check if any data remains after spatial filtering
-    return sum(data.sizes.values()) > 0
+        if lon_hit.any():
+            return True
+    return False

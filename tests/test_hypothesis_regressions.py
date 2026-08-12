@@ -32,12 +32,7 @@ def test_convert_init_time_to_valid_time_int_lead_time_is_misread():
     np.testing.assert_array_equal(actual, expected)
 
 
-@pytest.mark.xfail(
-    reason="check_for_spatial_data .sel() needs a monotonic longitude index, "
-    "which an antimeridian-crossing -180/180 axis is not",
-    strict=False,
-)
-def test_check_for_spatial_data_crashes_on_antimeridian_seam():
+def test_check_for_spatial_data_handles_antimeridian_seam():
     longitude = np.array([170.0, 175.0, -180.0, -175.0, -170.0])
     latitude = np.array([20.0, 30.0, 40.0])
     ds = xr.Dataset(
