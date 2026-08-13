@@ -126,7 +126,32 @@ that module.
 - `test_maximum_mean_absolute_error_perfect_forecast_is_zero` is the suite's
   first value-level oracle. Everything before it asserted only absence-of-crash
   and output well-formedness, which is structurally blind to a wrong-but-finite
-  answer. See the open findings below for what it pins.
+  answer. See the peak-metric finding below for what it pins.
+
+## Resolved on `fix/peak-metrics`
+
+### The peak metrics aliased the diurnal cycle at coarse init cadences
+
+`MaximumMeanAbsoluteError` took a true maximum on the target side, but on the
+forecast side reduced over a `tolerance_range_hours` window pooled across
+initializations rather than per initialization. At a 72-hour cadence that window
+can hold a single forecast sample, so the "maximum" it compared against was
+whichever lone snapshot happened to land in the window. Because every init is
+00Z, that snapshot's time of day is fixed by `lead_time mod 24 h`, which aliased
+the diurnal cycle straight into the reported error.
+
+The consequence was that a forecast *identical to the target* did not score
+zero. With a target peaking at 283 K at 12Z and a perfect forecast sampled every
+6 hours from 72-hourly 00Z inits, the per-lead errors were 20 K at lead 0, 10 K
+at lead 6, 0 K at lead 12 where the sampling happens to align, then 10 K and
+20 K again. `MinimumMeanAbsoluteError` had the same construction.
+
+`fix/peak-metrics` reduces over `lead_time` at fixed `init_time`, so each
+initialization contributes its own trajectory through the window and the
+reported lead is `peak_time - init_time`.
+`test_maximum_mean_absolute_error_perfect_forecast_is_zero` was written here as
+an `xfail` naming that branch as the resolving change; it now passes and the
+marker is gone.
 
 ## Open findings, not fixed here
 
@@ -144,24 +169,6 @@ Found by cross-checking the rewritten `check_for_spatial_data` against
 of this form, and in every one the new check was right and `mask` was wrong.
 Left alone because `regions.py` was outside the scope of these fixes, but it is
 a real defect and it is now the looser of the two code paths.
-
-### The peak metrics alias the diurnal cycle at coarse init cadences
-
-`MaximumMeanAbsoluteError` takes a true maximum on the target side, but on the
-forecast side reduces over a `tolerance_range_hours` window pooled across
-initializations rather than per initialization. At a 72-hour cadence that window
-can hold a single forecast sample, so the "maximum" it compares against is
-whichever lone snapshot happens to land in the window. Because every init is
-00Z, that snapshot's time of day is fixed by `lead_time mod 24 h`, which aliases
-the diurnal cycle straight into the reported error.
-
-The consequence is that a forecast *identical to the target* does not score
-zero. With a target peaking at 283 K at 12Z and a perfect forecast sampled every
-6 hours from 72-hourly 00Z inits, the per-lead errors are 20 K at lead 0, 10 K
-at lead 6, 0 K at lead 12 where the sampling happens to align, then 10 K and
-20 K again. `test_maximum_mean_absolute_error_perfect_forecast_is_zero` pins
-this as an `xfail` naming `fix/peak-metrics`, which reduces per initialization,
-as the resolving change. `MinimumMeanAbsoluteError` has the same construction.
 
 ### `DurationMeanError` requires an `init_time` coordinate to exist
 
@@ -221,6 +228,10 @@ own; every failure that appeared came later, from removing the narrowings.
 
 `HYPOTHESIS_PROFILE=ewb-sweep uv run pytest tests/test_hypothesis_fixtures.py`:
 `18 passed, 1 xfailed` at 300 examples each. `pre-commit run --all-files` clean.
+
+The numbers above are as of this branch. On `fix/peak-metrics`, which landed
+after it, the peak-metric oracle passes and its `xfail` is removed, leaving no
+`xfail` anywhere in the Hypothesis modules.
 
 Coverage widened as intended. `--hypothesis-show-statistics` reports 22 distinct
 rejection categories before the narrowings were removed and 8 after. The nine
