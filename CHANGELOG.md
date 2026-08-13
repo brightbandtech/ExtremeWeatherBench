@@ -10,8 +10,6 @@ GitHub's auto-generated release notes can list PRs that were already
 squash-merged into `main`, because `develop` still contains those original
 commits. Prefer this changelog when writing GitHub release notes.
 
-## [Unreleased]
-
 ## [1.1.0] - 2026-08-13
 
 ### Added
