@@ -301,6 +301,41 @@ def test_convert_init_time_to_valid_time():
     assert "init_time" not in result.dims or "valid_time" in result.dims
 
 
+def test_convert_init_time_to_valid_time_matches_outer_concat():
+    """Dense fixture must match concat of swapped leads with join='outer'."""
+    inits = pd.date_range("2020-01-01", periods=4, freq="12h")
+    leads = pd.to_timedelta([0, 6, 12, 18, 24], unit="h")
+    temp = np.arange(4 * 5 * 3 * 4, dtype=float).reshape(4, 5, 3, 4)
+    ds = xr.Dataset(
+        {
+            "temp": (
+                ["init_time", "lead_time", "latitude", "longitude"],
+                temp,
+            )
+        },
+        coords={
+            "init_time": inits,
+            "lead_time": leads,
+            "latitude": np.linspace(0, 10, 3),
+            "longitude": np.linspace(0, 20, 4),
+            "cycle": ("init_time", ["a", "b", "c", "d"]),
+        },
+    )
+    expected = ds.assign_coords(valid_time=ds.init_time + ds.lead_time)
+    expected = xr.concat(
+        [
+            expected.sel(lead_time=lead).swap_dims({"init_time": "valid_time"})
+            for lead in expected.lead_time
+        ],
+        "lead_time",
+        coords="different",
+        compat="equals",
+        join="outer",
+    )
+    result = utils.convert_init_time_to_valid_time(ds)
+    xr.testing.assert_equal(result, expected)
+
+
 def test_maybe_get_closest_timestamp_to_center_of_valid_times_single_output():
     """Test passthrough behavior with single output time."""
     # Create valid_time values (center will be middle value)
@@ -1004,6 +1039,7 @@ class TestConvertDayYearofDayToTime:
         assert len(result.valid_time) == 6
         # Should still be a DataArray
         assert isinstance(result, xr.DataArray)
+
 
     def test_dataarray_preserves_data_values(self):
         """Test that DataArray data values are preserved."""

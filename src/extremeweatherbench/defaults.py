@@ -88,6 +88,27 @@ def preprocess_cira_icechunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
+def _maybe_add_specific_humidity(ds: xr.Dataset) -> xr.Dataset:
+    """Add specific humidity from temperature and RH if it is missing.
+
+    Accepts original CIRA names (t, r, q) or mapped EWB names.
+    """
+    if "specific_humidity" in ds.variables or "q" in ds.variables:
+        return ds
+    air_temperature = (
+        ds["air_temperature"] if "air_temperature" in ds else ds["t"]
+    )
+    relative_humidity = (
+        ds["relative_humidity"] if "relative_humidity" in ds else ds["r"]
+    )
+    ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
+        air_temperature=air_temperature,
+        relative_humidity=relative_humidity / 100,
+        levels=ds["level"],
+    )
+    return ds
+
+
 def preprocess_cira_icechunk_ar_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """Preprocess CIRA icechunk data for atmospheric rivers.
 
@@ -97,14 +118,7 @@ def preprocess_cira_icechunk_ar_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     Returns:
         The renamed forecast dataset.
     """
-    if "q" not in ds.variables:
-        # Calculate specific humidity from relative humidity and air temperature
-        ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
-            air_temperature=ds["t"],
-            relative_humidity=ds["r"] / 100,  # Convert relative humidity to percentage
-            levels=ds["level"],
-        )
-    return ds
+    return _maybe_add_specific_humidity(ds)
 
 
 def preprocess_cira_icechunk_severe_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
@@ -116,14 +130,7 @@ def preprocess_cira_icechunk_severe_forecast_dataset(ds: xr.Dataset) -> xr.Datas
     Returns:
         The forecast dataset with specific humidity if not already calculated.
     """
-    if "q" not in ds.variables:
-        # Calculate specific humidity from relative humidity and air temperature
-        ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
-            air_temperature=ds["t"],
-            relative_humidity=ds["r"] / 100,  # Convert relative humidity to percentage
-            levels=ds["level"],
-        )
-    return ds
+    return _maybe_add_specific_humidity(ds)
 
 
 def preprocess_cira_kerchunk_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
@@ -188,14 +195,7 @@ def preprocess_cira_kerchunk_ar_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     ds["lead_time"] = np.array(
         [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
     ).astype("timedelta64[ns]")
-    if "q" not in ds.variables:
-        # Calculate specific humidity from relative humidity and air temperature
-        ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
-            air_temperature=ds["t"],
-            relative_humidity=ds["r"] / 100,  # Convert relative humidity to percentage
-            levels=ds["level"],
-        )
-    return ds
+    return _maybe_add_specific_humidity(ds)
 
 
 # Preprocess function for CIRA data using Brightband kerchunk parquets
@@ -213,14 +213,7 @@ def preprocess_cira_kerchunk_severe_forecast_dataset(ds: xr.Dataset) -> xr.Datas
     ds["lead_time"] = np.array(
         [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
     ).astype("timedelta64[ns]")
-    if "q" not in ds.variables:
-        # Calculate specific humidity from relative humidity and air temperature
-        ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
-            air_temperature=ds["t"],
-            relative_humidity=ds["r"] / 100,  # Convert relative humidity to percentage
-            levels=ds["level"],
-        )
-    return ds
+    return _maybe_add_specific_humidity(ds)
 
 
 # Preprocessing function for HRES data that includes geopotential thickness calculation

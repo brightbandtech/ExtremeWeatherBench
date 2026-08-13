@@ -1,11 +1,13 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
 import contextlib
+import contextvars
 import copy
 import dataclasses
 import logging
 import multiprocessing
 import pathlib
+from collections import OrderedDict
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 import dask.array as da
@@ -31,6 +33,11 @@ logger = logging.getLogger(__name__)
 
 # Re-exported for backwards compatibility.
 OUTPUT_COLUMNS = outputs.OUTPUT_COLUMNS
+
+# Process-local reuse of forecast/target datasets within one evaluation.
+_pipeline_cache_var: contextvars.ContextVar[Optional[dict[tuple, xr.Dataset]]] = (
+    contextvars.ContextVar("_pipeline_cache", default=None)
+)
 
 
 class ExtremeWeatherBench:
@@ -312,31 +319,37 @@ def _run_evaluation(
         else:
             logger.info("Running case operators in serial...")
             run_results = []
+            cache_token = _pipeline_cache_var.set({})
             case_bar = progress_module.make_case_bar(
                 len(case_operators), disable=not progress
             )
             task_bar = progress_module.make_dask_task_bar(disable=not progress)
-            with progress_module.registered_bar(case_bar, allow_phase_updates=True):
-                with progress_module.DaskTaskBar(task_bar):
-                    for case_operator in case_operators:
-                        step_bar = progress_module.make_case_step_bar(
-                            case_operator.case_metadata.case_id_number,
-                            _count_case_steps(case_operator, cache_dir),
-                            disable=not progress,
-                        )
-                        progress_module.register_step_bar(step_bar)
-                        try:
-                            run_results.append(
-                                _compute_case_operator_results(
-                                    case_operator, cache_dir, **kwargs
-                                )
+            try:
+                with progress_module.registered_bar(
+                    case_bar, allow_phase_updates=True
+                ):
+                    with progress_module.DaskTaskBar(task_bar):
+                        for case_operator in case_operators:
+                            step_bar = progress_module.make_case_step_bar(
+                                case_operator.case_metadata.case_id_number,
+                                _count_case_steps(case_operator, cache_dir),
+                                disable=not progress,
                             )
-                        finally:
-                            progress_module.register_step_bar(None)
-                            step_bar.close()
-                        case_bar.update(1)
-            task_bar.close()
-            case_bar.close()
+                            progress_module.register_step_bar(step_bar)
+                            try:
+                                run_results.append(
+                                    _compute_case_operator_results(
+                                        case_operator, cache_dir, **kwargs
+                                    )
+                                )
+                            finally:
+                                progress_module.register_step_bar(None)
+                                step_bar.close()
+                            case_bar.update(1)
+            finally:
+                task_bar.close()
+                case_bar.close()
+                _pipeline_cache_var.reset(cache_token)
 
     return run_results
 
@@ -421,22 +434,25 @@ def _run_parallel_evaluation(
 
     try:
         # TODO(198): return a generator and compute at a higher level
+        # Group operators that share a case and forecast so one worker can
+        # reuse the forecast dataset (PPH + LSR on the same HRES object).
+        groups = _group_operators_sharing_forecast(case_operators)
+        parallel_tqdm_kwargs["total_tasks"] = len(groups)
         with joblib.parallel_config(**parallel_config):
-            run_results = utils.ParallelTqdm(
+            nested_results = utils.ParallelTqdm(
                 pre_close=_close_worker_progress, **parallel_tqdm_kwargs
             )(
-                # None is the cache_dir, we can't cache in parallel mode
-                joblib.delayed(_compute_case_operator_with_progress)(
-                    case_operator,
+                joblib.delayed(_compute_operator_group_with_progress)(
+                    group,
                     cache_dir=cache_dir,
                     event_queue=event_queue,
                     log_queue=log_queue,
-                    dispatch_id=dispatch_id,
+                    dispatch_id=group[0][0],
                     **kwargs,
                 )
-                for dispatch_id, case_operator in enumerate(case_operators)
+                for group in groups
             )
-        return run_results
+        return _ungroup_operator_results(nested_results, len(case_operators))
     finally:
         _close_worker_progress()
         if manager is not None:
@@ -445,6 +461,134 @@ def _run_parallel_evaluation(
         if dask_client is not None:
             logger.info("Closing dask client")
             dask_client.close()
+
+
+def _group_operators_sharing_forecast(
+    case_operators: list["cases.CaseOperator"],
+) -> list[list[tuple[int, "cases.CaseOperator"]]]:
+    """Group operators that share a case and forecast source.
+
+    PPH and LSR for the same case can reuse one forecast pipeline this way.
+    """
+    groups: OrderedDict[
+        tuple, list[tuple[int, "cases.CaseOperator"]]
+    ] = OrderedDict()
+    for i, op in enumerate(case_operators):
+        key = (
+            op.case_metadata.case_id_number,
+            getattr(op.forecast, "name", None),
+            str(getattr(op.forecast, "source", "")),
+        )
+        groups.setdefault(key, []).append((i, op))
+    return list(groups.values())
+
+
+def _ungroup_operator_results(
+    nested_results: list, n_operators: int
+) -> list[list[xr.DataArray]]:
+    """Restore original operator order from grouped parallel results.
+
+    Grouped jobs return a list of (index, result) pairs. Tests that mock
+    ParallelTqdm with a flat list are returned unchanged.
+    """
+    if not nested_results:
+        return nested_results
+    first = nested_results[0]
+    if not (
+        isinstance(first, (list, tuple))
+        and first
+        and isinstance(first[0], tuple)
+        and len(first[0]) == 2
+        and isinstance(first[0][0], int)
+    ):
+        return nested_results
+    run_results: list[list[xr.DataArray]] = [[] for _ in range(n_operators)]
+    for group_results in nested_results:
+        for orig_i, res in group_results:
+            run_results[orig_i] = res
+    return run_results
+
+
+def _variable_cache_token(var: Any) -> str:
+    """Stable cache token for a pipeline variable."""
+    if isinstance(var, str):
+        return var
+    return f"{type(var).__name__}:{getattr(var, 'name', '')}"
+
+
+def _pipeline_cache_key(
+    case_metadata: "cases.IndividualCase",
+    input_data: "inputs.InputBase",
+) -> tuple:
+    """Key for reusing a pipeline dataset within one evaluation run."""
+    var_key = tuple(sorted(_variable_cache_token(v) for v in input_data.variables))
+    return (
+        case_metadata.case_id_number,
+        type(input_data).__name__,
+        getattr(input_data, "name", None),
+        str(getattr(input_data, "source", "")),
+        var_key,
+    )
+
+
+def _run_pipeline_maybe_cached(
+    case_metadata: "cases.IndividualCase",
+    input_data: "inputs.InputBase",
+    pipeline_cache: Optional[dict[tuple, xr.Dataset]],
+    extra_key: tuple = (),
+    **kwargs,
+) -> xr.Dataset:
+    """Run an input pipeline, reusing a dataset when the cache hits."""
+    if pipeline_cache is None:
+        return run_pipeline(case_metadata, input_data, **kwargs)
+    key = _pipeline_cache_key(case_metadata, input_data) + extra_key
+    cached = pipeline_cache.get(key)
+    if cached is not None:
+        logger.debug(
+            "Reusing cached %s dataset for case %s",
+            getattr(input_data, "name", type(input_data).__name__),
+            case_metadata.case_id_number,
+        )
+        return cached
+    ds = run_pipeline(case_metadata, input_data, **kwargs)
+    pipeline_cache[key] = ds
+    return ds
+
+
+def _compute_operator_group_with_progress(
+    indexed_ops: list[tuple[int, "cases.CaseOperator"]],
+    cache_dir: Optional[pathlib.Path] = None,
+    event_queue=None,
+    log_queue=None,
+    dispatch_id=None,
+    **kwargs,
+) -> list[tuple[int, list[xr.DataArray]]]:
+    """Run operators that share a forecast in one worker.
+
+    A process-local pipeline cache lets the second operator skip a second
+    forecast derive (for example CBSS for PPH then LSR).
+    """
+    kwargs = dict(kwargs)
+    token = _pipeline_cache_var.set({})
+    try:
+        results: list[tuple[int, list[xr.DataArray]]] = []
+        for orig_i, op in indexed_ops:
+            results.append(
+                (
+                    orig_i,
+                    _compute_case_operator_with_progress(
+                        op,
+                        cache_dir=cache_dir,
+                        event_queue=event_queue,
+                        log_queue=log_queue,
+                        dispatch_id=orig_i,
+                        **kwargs,
+                    ),
+                )
+            )
+        return results
+    finally:
+        _pipeline_cache_var.reset(token)
 
 
 def _plan_metric_evaluations(
@@ -647,6 +791,10 @@ def _compute_case_operator_results(
         cache_dir=cache_dir,
         name=f"{case_operator.case_metadata.case_id_number}_{case_operator.target.name}",
     )
+    # Compute once so each metric does not rebuild the same dask graph.
+    if cache_dir is None:
+        aligned_forecast_ds = aligned_forecast_ds.compute()
+        aligned_target_ds = aligned_target_ds.compute()
     logger.info(
         "Datasets built for case %s.", case_operator.case_metadata.case_id_number
     )
@@ -1023,7 +1171,13 @@ def _build_datasets(
     progress_module.set_phase(
         f"case {case_operator.case_metadata.case_id_number} | target pipeline"
     )
-    target_ds = run_pipeline(case_operator.case_metadata, augmented_target, **kwargs)
+    pipeline_cache = _pipeline_cache_var.get()
+    target_ds = _run_pipeline_maybe_cached(
+        case_operator.case_metadata,
+        augmented_target,
+        pipeline_cache,
+        **kwargs,
+    )
 
     # Pass target dataset to forecast pipeline only if needed
     # Check if any forecast variable requires target dataset
@@ -1045,8 +1199,13 @@ def _build_datasets(
     progress_module.set_phase(
         f"case {case_operator.case_metadata.case_id_number} | forecast pipeline"
     )
-    forecast_ds = run_pipeline(
-        case_operator.case_metadata, augmented_forecast, **kwargs
+    forecast_extra = (augmented_target.name,) if needs_target else ()
+    forecast_ds = _run_pipeline_maybe_cached(
+        case_operator.case_metadata,
+        augmented_forecast,
+        pipeline_cache,
+        extra_key=forecast_extra,
+        **kwargs,
     )
 
     # Check if any dimension has zero length
@@ -1093,10 +1252,14 @@ def run_pipeline(
     Returns:
         The processed input data as an xarray dataset.
     """
-    # Open data and process through pipeline steps
-    data = input_data.open_and_maybe_preprocess_data_from_source().pipe(
-        lambda ds: input_data.maybe_map_variable_names(ds)
-    )
+    # Gridded: map names, subset case, preprocess, then subset variables so
+    # preprocess can add fields such as geopotential thickness. Tabular
+    # sources such as IBTrACS need original column names inside preprocess.
+    data = input_data._open_data_from_source()
+    is_gridded = isinstance(data, (xr.Dataset, xr.DataArray))
+    if not is_gridded:
+        data = input_data.preprocess(data)
+    data = input_data.maybe_map_variable_names(data)
 
     # Get the appropriate source module for the data type
     source_module = sources.get_backend_module(type(data))
@@ -1108,25 +1271,34 @@ def run_pipeline(
         case_metadata,
         source_module=source_module,
     ):
-        valid_data = (
-            inputs.maybe_subset_variables(
+        # Gridded: time/space subset and preprocess before variable subset
+        # so preprocess can create fields such as geopotential thickness.
+        to_subset = data
+        if not is_gridded:
+            to_subset = inputs.maybe_subset_variables(
                 data,
                 variables=input_data.variables,
                 source_module=source_module,
             )
-            .pipe(
+        valid_data = (
+            to_subset.pipe(
                 lambda ds: input_data.subset_data_to_case(ds, case_metadata, **kwargs)
             )
             .pipe(input_data.maybe_convert_to_dataset)
             .pipe(input_data.add_source_to_dataset_attrs)
-            .pipe(
-                lambda ds: derived.maybe_derive_variables(
-                    ds,
-                    variables=input_data.variables,
-                    case_metadata=case_metadata,
-                    **kwargs,
-                )
+        )
+        if is_gridded:
+            valid_data = input_data.preprocess(valid_data)
+            valid_data = inputs.maybe_subset_variables(
+                valid_data,
+                variables=input_data.variables,
+                source_module=source_module,
             )
+        valid_data = derived.maybe_derive_variables(
+            valid_data,
+            variables=input_data.variables,
+            case_metadata=case_metadata,
+            **kwargs,
         )
         return valid_data
     else:

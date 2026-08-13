@@ -237,3 +237,34 @@ class TestCiraFcnv2PreprocessFunctions:
         heatwave_preprocess = defaults.cira_fcnv2_heatwave_forecast.preprocess
         freeze_preprocess = defaults.cira_fcnv2_freeze_forecast.preprocess
         assert heatwave_preprocess == freeze_preprocess
+
+
+class TestMaybeAddSpecificHumidity:
+    """Tests for humidity preprocess after variable mapping."""
+
+    def _column_ds(self, temp_name, rh_name):
+        return xr.Dataset(
+            {
+                temp_name: (["level"], np.array([280.0, 270.0])),
+                rh_name: (["level"], np.array([50.0, 40.0])),
+            },
+            coords={"level": [1000.0, 850.0]},
+        )
+
+    def test_mapped_names(self):
+        ds = self._column_ds("air_temperature", "relative_humidity")
+        result = defaults._maybe_add_specific_humidity(ds)
+        assert "specific_humidity" in result.data_vars
+
+    def test_original_cira_names(self):
+        ds = self._column_ds("t", "r")
+        result = defaults._maybe_add_specific_humidity(ds)
+        assert "specific_humidity" in result.data_vars
+
+    def test_skips_when_specific_humidity_present(self):
+        ds = self._column_ds("air_temperature", "relative_humidity")
+        ds["specific_humidity"] = (["level"], np.array([0.01, 0.02]))
+        result = defaults._maybe_add_specific_humidity(ds)
+        np.testing.assert_array_equal(
+            result["specific_humidity"].values, [0.01, 0.02]
+        )

@@ -84,11 +84,13 @@ def mock_target_base():
         coords={"time": time_coords}, attrs={"source": "mock_target"}
     )
 
+    mock_target._open_data_from_source.return_value = mock_dataset
     mock_target.open_and_maybe_preprocess_data_from_source.return_value = mock_dataset
     mock_target.maybe_map_variable_names.return_value = mock_dataset
     mock_target.subset_data_to_case.return_value = mock_dataset
     mock_target.maybe_convert_to_dataset.return_value = mock_dataset
     mock_target.add_source_to_dataset_attrs.return_value = mock_dataset
+    mock_target.preprocess.return_value = mock_dataset
     mock_target.maybe_align_forecast_to_target.return_value = (
         mock_dataset,
         mock_dataset,
@@ -111,11 +113,13 @@ def mock_forecast_base():
         attrs={"source": "mock_forecast"},
     )
 
+    mock_forecast._open_data_from_source.return_value = mock_dataset
     mock_forecast.open_and_maybe_preprocess_data_from_source.return_value = mock_dataset
     mock_forecast.maybe_map_variable_names.return_value = mock_dataset
     mock_forecast.subset_data_to_case.return_value = mock_dataset
     mock_forecast.maybe_convert_to_dataset.return_value = mock_dataset
     mock_forecast.add_source_to_dataset_attrs.return_value = mock_dataset
+    mock_forecast.preprocess.return_value = mock_dataset
     return mock_forecast
 
 
@@ -1233,7 +1237,16 @@ class TestRunParallel:
         CaseOperators that share a case_id (one case, several
         EvaluationObjects), so the slot key can't be case_id itself.
         """
-        case_operators = [sample_case_operator, sample_case_operator]
+        forecast2 = mock.Mock()
+        forecast2.name = "other_forecast"
+        forecast2.source = "other_source"
+        op2 = cases.CaseOperator(
+            case_metadata=sample_case_operator.case_metadata,
+            metric_list=sample_case_operator.metric_list,
+            target=sample_case_operator.target,
+            forecast=forecast2,
+        )
+        case_operators = [sample_case_operator, op2]
         mock_tqdm.return_value = case_operators
         mock_delayed_func = mock.Mock()
         mock_delayed.return_value = mock_delayed_func
@@ -1878,12 +1891,48 @@ class TestPipelineFunctions:
             assert forecast_ds.attrs["name"] == "forecast_source"
             assert target_ds.attrs["name"] == "target_source"
 
+    def test_build_datasets_reuses_cached_forecast(self, sample_case_operator):
+        """A shared pipeline cache should skip a second forecast derive."""
+        with mock.patch(
+            "extremeweatherbench.evaluate.run_pipeline"
+        ) as mock_run_pipeline:
+            mock_forecast_ds = xr.Dataset(
+                coords={"valid_time": [1, 2, 3]}, attrs={"name": "forecast_source"}
+            )
+            mock_target_ds = xr.Dataset(
+                coords={"time": [1, 2, 3]}, attrs={"name": "target_source"}
+            )
+            other_target_ds = xr.Dataset(
+                coords={"time": [1, 2, 3]}, attrs={"name": "other_target"}
+            )
+            mock_run_pipeline.side_effect = [
+                mock_target_ds,
+                mock_forecast_ds,
+                other_target_ds,
+            ]
+            cache: dict = {}
+            token = evaluate._pipeline_cache_var.set(cache)
+            try:
+                evaluate._build_datasets(sample_case_operator)
+                original_name = sample_case_operator.target.name
+                sample_case_operator.target.name = "other_target"
+                try:
+                    evaluate._build_datasets(sample_case_operator)
+                finally:
+                    sample_case_operator.target.name = original_name
+            finally:
+                evaluate._pipeline_cache_var.reset(token)
+            # Two targets + one forecast; the second forecast is reused.
+            assert mock_run_pipeline.call_count == 3
+
     def test_build_datasets_zero_length_dimensions(self, sample_case_operator):
         """Test _build_datasets when forecast has zero-length dimensions."""
         # Set up the mock to return a dataset that will trigger the warning
         # by having no valid times in the date range
         empty_dataset = xr.Dataset()
-        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset  # noqa: E501
+        sample_case_operator.forecast._open_data_from_source.return_value = (
+            empty_dataset
+        )
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             empty_dataset
         )
@@ -1911,7 +1960,9 @@ class TestPipelineFunctions:
         zero-length dimensions."""
         # Set up the mock to return a dataset that will trigger the warning
         empty_dataset = xr.Dataset()
-        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset  # noqa: E501
+        sample_case_operator.forecast._open_data_from_source.return_value = (
+            empty_dataset
+        )
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             empty_dataset
         )
@@ -1936,7 +1987,9 @@ class TestPipelineFunctions:
         """Test _build_datasets when forecast has multiple zero-length dimensions."""
         # Set up the mock to return a dataset that will trigger the warning
         empty_dataset = xr.Dataset()
-        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset  # noqa: E501
+        sample_case_operator.forecast._open_data_from_source.return_value = (
+            empty_dataset
+        )
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             empty_dataset
         )
@@ -1999,7 +2052,9 @@ class TestPipelineFunctions:
     ):
         """Test run_pipeline function for forecast data."""
         # Mock the pipeline methods
-        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = sample_forecast_dataset  # noqa: E501
+        sample_case_operator.forecast._open_data_from_source.return_value = (
+            sample_forecast_dataset
+        )
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
@@ -2013,6 +2068,7 @@ class TestPipelineFunctions:
         sample_case_operator.forecast.add_source_to_dataset_attrs.return_value = (
             sample_forecast_dataset
         )
+        sample_case_operator.forecast.preprocess.return_value = sample_forecast_dataset
         mock_derived.return_value = sample_forecast_dataset
 
         result = evaluate.run_pipeline(
@@ -2020,7 +2076,7 @@ class TestPipelineFunctions:
         )
 
         assert isinstance(result, xr.Dataset)
-        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.assert_called_once()  # noqa: E501
+        sample_case_operator.forecast._open_data_from_source.assert_called_once()
         sample_case_operator.forecast.maybe_map_variable_names.assert_called_once()
         mock_maybe_subset_variables.assert_called_once()
         # The method is called with data as first arg, case_metadata as second arg
@@ -2029,6 +2085,13 @@ class TestPipelineFunctions:
         assert call_args[0][1] == sample_case_operator.case_metadata
         sample_case_operator.forecast.maybe_convert_to_dataset.assert_called_once()
         sample_case_operator.forecast.add_source_to_dataset_attrs.assert_called_once()
+        sample_case_operator.forecast.preprocess.assert_called_once()
+        method_names = [
+            name for name, *_ in sample_case_operator.forecast.method_calls
+        ]
+        assert method_names.index("subset_data_to_case") < method_names.index(
+            "preprocess"
+        )
 
     @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
     @mock.patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
@@ -2041,7 +2104,9 @@ class TestPipelineFunctions:
     ):
         """Test run_pipeline function for target data."""
         # Mock the pipeline methods
-        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset  # noqa: E501
+        sample_case_operator.target._open_data_from_source.return_value = (
+            sample_target_dataset
+        )
         sample_case_operator.target.maybe_map_variable_names.return_value = (
             sample_target_dataset
         )
@@ -2055,6 +2120,7 @@ class TestPipelineFunctions:
         sample_case_operator.target.add_source_to_dataset_attrs.return_value = (
             sample_target_dataset
         )
+        sample_case_operator.target.preprocess.return_value = sample_target_dataset
         mock_derived.return_value = sample_target_dataset
 
         result = evaluate.run_pipeline(
@@ -2062,7 +2128,12 @@ class TestPipelineFunctions:
         )
 
         assert isinstance(result, xr.Dataset)
-        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.assert_called_once()  # noqa: E501
+        sample_case_operator.target._open_data_from_source.assert_called_once()
+        sample_case_operator.target.preprocess.assert_called_once()
+        method_names = [name for name, *_ in sample_case_operator.target.method_calls]
+        assert method_names.index("subset_data_to_case") < method_names.index(
+            "preprocess"
+        )
 
     def test_run_pipeline_invalid_source(self, sample_case_operator):
         """Test run_pipeline function with invalid input source."""
@@ -2117,6 +2188,36 @@ class TestPipelineFunctions:
         # Should still be lazy
         first_var = list(result.data_vars)[0]
         assert hasattr(result.data_vars[first_var].data, "chunks")
+
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
+    @mock.patch("extremeweatherbench.evaluate._evaluate_metric")
+    def test_aligned_datasets_computed_without_cache(
+        self,
+        mock_evaluate_metric,
+        mock_build_datasets,
+        sample_case_operator,
+        sample_forecast_dataset,
+        sample_target_dataset,
+    ):
+        """Aligned data is computed once when cache_dir is None."""
+        lazy_forecast = sample_forecast_dataset.chunk()
+        lazy_target = sample_target_dataset.chunk()
+        mock_build_datasets.return_value = (lazy_forecast, lazy_target)
+        sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
+            lazy_forecast,
+            lazy_target,
+        )
+        mock_evaluate_metric.return_value = _annotated_result()
+
+        evaluate._compute_case_operator_results(sample_case_operator)
+
+        assert mock_evaluate_metric.called
+        forecast_ds = mock_evaluate_metric.call_args.kwargs["forecast_ds"]
+        target_ds = mock_evaluate_metric.call_args.kwargs["target_ds"]
+        first_fc = list(forecast_ds.data_vars)[0]
+        first_tg = list(target_ds.data_vars)[0]
+        assert not hasattr(forecast_ds[first_fc].data, "chunks")
+        assert not hasattr(target_ds[first_tg].data, "chunks")
 
 
 class TestMetricEvaluation:
@@ -2300,7 +2401,7 @@ class TestErrorHandling:
     def test_run_pipeline_missing_method(self, sample_case_operator):
         """Test run_pipeline when a required method is missing."""
         # Remove a required method
-        del sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source
+        del sample_case_operator.forecast._open_data_from_source
 
         with pytest.raises(AttributeError):
             evaluate.run_pipeline(
@@ -2512,7 +2613,7 @@ class TestIntegration:
         )
 
         # Mock the pipeline methods to return our test datasets
-        sample_evaluation_object.forecast.open_and_maybe_preprocess_data_from_source.return_value = (  # noqa: E501
+        sample_evaluation_object.forecast._open_data_from_source.return_value = (
             sample_forecast_dataset
         )
         sample_evaluation_object.forecast.maybe_map_variable_names.return_value = (
@@ -2528,8 +2629,13 @@ class TestIntegration:
         sample_evaluation_object.forecast.add_source_to_dataset_attrs.return_value = (
             sample_forecast_dataset
         )
+        sample_evaluation_object.forecast.preprocess.return_value = (
+            sample_forecast_dataset
+        )
 
-        sample_evaluation_object.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset  # noqa: E501
+        sample_evaluation_object.target._open_data_from_source.return_value = (
+            sample_target_dataset
+        )
         sample_evaluation_object.target.maybe_map_variable_names.return_value = (
             sample_target_dataset
         )
@@ -2542,6 +2648,7 @@ class TestIntegration:
         sample_evaluation_object.target.add_source_to_dataset_attrs.return_value = (
             sample_target_dataset
         )
+        sample_evaluation_object.target.preprocess.return_value = sample_target_dataset
 
         # Mock the metric evaluation to return a proper annotated result
         mock_result = _annotated_result(
@@ -2626,13 +2733,12 @@ class TestIntegration:
         # Setup pipeline mocks
         mock_maybe_subset_variables.return_value = sample_forecast_dataset
         for obj in [eval_obj.target, eval_obj.forecast]:
-            obj.open_and_maybe_preprocess_data_from_source.return_value = (
-                sample_forecast_dataset
-            )
+            obj._open_data_from_source.return_value = sample_forecast_dataset
             obj.maybe_map_variable_names.return_value = sample_forecast_dataset
             obj.subset_data_to_case.return_value = sample_forecast_dataset
             obj.maybe_convert_to_dataset.return_value = sample_forecast_dataset
             obj.add_source_to_dataset_attrs.return_value = sample_forecast_dataset
+            obj.preprocess.return_value = sample_forecast_dataset
 
         eval_obj.target.maybe_align_forecast_to_target.return_value = (
             sample_forecast_dataset,

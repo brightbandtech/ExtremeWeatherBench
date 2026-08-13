@@ -1057,6 +1057,68 @@ class TestERA5:
         assert len(aligned_target.time) > 0
         assert len(aligned_forecast.valid_time) > 0
 
+    def test_align_skips_interp_when_lat_lon_match(self):
+        """Skip spatial interp when forecast and target grids already match."""
+        times = pd.date_range("2021-06-20", periods=4, freq="6h")
+        lat = np.linspace(40, 50, 5)
+        lon = np.linspace(100, 110, 6)
+        data = np.ones((4, 5, 6))
+        target = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["valid_time", "latitude", "longitude"],
+                    data,
+                )
+            },
+            coords={"valid_time": times, "latitude": lat, "longitude": lon},
+        )
+        forecast = target.copy(deep=True)
+        with mock.patch.object(xr.Dataset, "interp") as mock_interp:
+            aligned_fc, aligned_tg = inputs.align_forecast_to_target(
+                forecast, target
+            )
+            mock_interp.assert_not_called()
+        np.testing.assert_array_equal(
+            aligned_fc.latitude.values, aligned_tg.latitude.values
+        )
+
+    def test_align_interps_when_lat_lon_differ(self):
+        """Mismatched lat/lon still interpolates forecast onto the target."""
+        times = pd.date_range("2021-06-20", periods=4, freq="6h")
+        target = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["valid_time", "latitude", "longitude"],
+                    np.ones((4, 5, 6)),
+                )
+            },
+            coords={
+                "valid_time": times,
+                "latitude": np.linspace(40, 50, 5),
+                "longitude": np.linspace(100, 110, 6),
+            },
+        )
+        forecast = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["valid_time", "latitude", "longitude"],
+                    np.ones((4, 4, 5)),
+                )
+            },
+            coords={
+                "valid_time": times,
+                "latitude": np.linspace(40, 50, 4),
+                "longitude": np.linspace(100, 110, 5),
+            },
+        )
+        aligned_fc, aligned_tg = inputs.align_forecast_to_target(forecast, target)
+        np.testing.assert_array_equal(
+            aligned_fc.latitude.values, aligned_tg.latitude.values
+        )
+        np.testing.assert_array_equal(
+            aligned_fc.longitude.values, aligned_tg.longitude.values
+        )
+
     def test_era5_maybe_align_forecast_to_target_different_grid(
         self, sample_era5_dataset
     ):
@@ -1490,6 +1552,7 @@ class TestLSR:
 
         mock_read_parquet.assert_called_once_with("test.parquet", storage_options={})
         assert result.equals(sample_lsr_dataframe)
+
 
     def test_lsr_subset_data_to_case(self, sample_lsr_dataframe):
         """Test LSR subset_data_to_case."""
