@@ -349,6 +349,13 @@ def determine_temporal_resolution(
     return np.min(num_timesteps).astype(float)
 
 
+def _lead_time_as_timedelta(lead_time: xr.DataArray) -> xr.DataArray:
+    """Coerce an integer-hours lead_time to timedelta64."""
+    if np.issubdtype(lead_time.dtype, np.timedelta64):
+        return lead_time
+    return lead_time.copy(data=pd.to_timedelta(lead_time.values, unit="h"))
+
+
 def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
     """Convert the init_time coordinate to a valid_time coordinate.
 
@@ -358,9 +365,10 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
     Returns:
         The dataset with a valid_time coordinate.
     """
+    lead_time = _lead_time_as_timedelta(ds.lead_time)
     valid_time = xr.DataArray(
         ds.init_time, coords={"init_time": ds.init_time}
-    ) + xr.DataArray(ds.lead_time, coords={"lead_time": ds.lead_time})
+    ) + xr.DataArray(lead_time, coords={"lead_time": ds.lead_time})
     ds = ds.assign_coords(valid_time=valid_time)
     return xr.concat(
         [
@@ -383,9 +391,10 @@ def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:
     Returns:
         The dataarray with an init_time dimension.
     """
+    lead_time = _lead_time_as_timedelta(da.lead_time)
     init_time = xr.DataArray(
         da.valid_time, coords={"valid_time": da.valid_time}
-    ) - xr.DataArray(da.lead_time, coords={"lead_time": da.lead_time})
+    ) - xr.DataArray(lead_time, coords={"lead_time": da.lead_time})
     da = da.assign_coords(init_time=init_time)
     return xr.concat(
         [
