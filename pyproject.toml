@@ -89,6 +89,7 @@ dev = [
     "types-tqdm>=4.67.0.20250809",
     "python-semantic-release>=10.3.0",
     "twine>=5.1.1",
+    "hypothesis>=6.165.3",
 ]
 docs = [
     "zensical>=0.0.38",
