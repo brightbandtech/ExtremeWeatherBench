@@ -256,6 +256,14 @@ def test_expected_timesteps_per_day():
     assert utils.expected_timesteps_per_day(single) == 1
 
 
+def test_expected_timesteps_per_day_accepts_integer_hour_lead_times():
+    """Integer lead times mean hours, the convention used across the codebase."""
+    da = xr.DataArray(
+        np.zeros(9), dims=["lead_time"], coords={"lead_time": np.arange(0, 54, 6)}
+    )
+    assert utils.expected_timesteps_per_day(da) == 4
+
+
 def _sparse_init_forecast(init_freq="72h"):
     """Forecast on a (lead_time, valid_time) grid with 00Z-only inits."""
     inits = set(pd.date_range("2020-06-01", "2020-06-13", freq=init_freq))

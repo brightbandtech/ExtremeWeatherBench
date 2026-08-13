@@ -329,7 +329,8 @@ def expected_timesteps_per_day(forecast: xr.DataArray) -> int:
     Returns:
         The number of lead times spanning 24 hours, at least 1.
     """
-    steps = np.abs(np.diff(forecast.lead_time.values)) / np.timedelta64(1, "h")
+    lead_time = _lead_time_as_timedelta(forecast.lead_time)
+    steps = np.abs(np.diff(lead_time.values)) / np.timedelta64(1, "h")
     steps = steps[steps > 0]
     if steps.size == 0:
         return 1
