@@ -1,6 +1,8 @@
 """Tests for the outputs module."""
 
+import datetime
 import logging
+from unittest import mock
 
 import dask.array as da
 import numpy as np
@@ -9,7 +11,7 @@ import pytest
 import sparse
 import xarray as xr
 
-from extremeweatherbench import outputs
+from extremeweatherbench import cases, evaluate, inputs, metrics, outputs, regions
 
 METADATA_KWARGS = {
     "metric": "RMSE",
@@ -502,6 +504,355 @@ class TestResultsToDataset:
             outputs.results_to_dataset([_result()], sparse=False)
 
         assert not any("sparse=True" in r.getMessage() for r in caplog.records)
+
+
+class TestDropEmptySlices:
+    """Test the drop_empty_slices helper for collapsing padding placeholders."""
+
+    def test_lead_time_selection_collapses_init_time_placeholder(self):
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        lead_result = _result(
+            dims="lead_time", metric="RMSE", values=(1.0, 2.0), **same_var
+        )
+        init_result = _result(
+            dims="init_time", metric="OnsetError", values=(5.0, 6.0), **same_var
+        )
+        ds = outputs.results_to_dataset([lead_result, init_result])
+        selection = ds["2m_temperature"].sel(
+            metric="RMSE",
+            case_id_number=1,
+            forecast_source="test_forecast",
+            target_source="test_target",
+        )
+
+        collapsed = outputs.drop_empty_slices(selection)
+
+        assert collapsed.dims == ("lead_time",)
+        assert collapsed.sizes["lead_time"] == 2
+        np.testing.assert_array_equal(collapsed.compute().values, [1.0, 2.0])
+
+    def test_init_time_selection_collapses_lead_time_placeholder(self):
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        lead_result = _result(
+            dims="lead_time", metric="RMSE", values=(1.0, 2.0), **same_var
+        )
+        init_result = _result(
+            dims="init_time", metric="OnsetError", values=(5.0, 6.0), **same_var
+        )
+        ds = outputs.results_to_dataset([lead_result, init_result])
+        selection = ds["2m_temperature"].sel(
+            metric="OnsetError",
+            case_id_number=1,
+            forecast_source="test_forecast",
+            target_source="test_target",
+        )
+
+        collapsed = outputs.drop_empty_slices(selection)
+
+        assert collapsed.dims == ("init_time",)
+        assert collapsed.sizes["init_time"] == 2
+        np.testing.assert_array_equal(collapsed.compute().values, [5.0, 6.0])
+
+    def test_is_close_to_a_no_op_on_the_full_unselected_cube(self):
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        lead_result = _result(dims="lead_time", metric="RMSE", **same_var)
+        init_result = _result(dims="init_time", metric="OnsetError", **same_var)
+        ds = outputs.results_to_dataset([lead_result, init_result])
+
+        collapsed = outputs.drop_empty_slices(ds)
+
+        assert dict(collapsed.sizes) == dict(ds.sizes)
+
+    def test_works_on_a_dataset_not_just_a_dataarray(self):
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        lead_result = _result(
+            dims="lead_time", metric="RMSE", values=(1.0, 2.0), **same_var
+        )
+        init_result = _result(
+            dims="init_time", metric="OnsetError", values=(5.0, 6.0), **same_var
+        )
+        ds = outputs.results_to_dataset([lead_result, init_result])
+        selection = ds.sel(
+            metric="RMSE",
+            case_id_number=1,
+            forecast_source="test_forecast",
+            target_source="test_target",
+        )
+
+        collapsed = outputs.drop_empty_slices(selection)
+
+        assert isinstance(collapsed, xr.Dataset)
+        assert set(collapsed.dims) == {"lead_time"}
+
+    def test_works_on_dask_backed_input(self):
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        lead_result = _result(
+            dims="lead_time", metric="RMSE", values=(1.0, 2.0), **same_var
+        )
+        init_result = _result(
+            dims="init_time", metric="OnsetError", values=(5.0, 6.0), **same_var
+        )
+        ds = outputs.results_to_dataset([lead_result, init_result])
+        selection = ds["2m_temperature"].sel(
+            metric="RMSE",
+            case_id_number=1,
+            forecast_source="test_forecast",
+            target_source="test_target",
+        )
+        assert isinstance(selection.data, da.Array)
+
+        collapsed = outputs.drop_empty_slices(selection)
+
+        assert isinstance(collapsed.data, da.Array)
+        np.testing.assert_array_equal(collapsed.compute().values, [1.0, 2.0])
+
+    def test_works_on_dense_numpy_backed_input(self):
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        lead_result = _result(
+            dims="lead_time", metric="RMSE", values=(1.0, 2.0), **same_var
+        )
+        init_result = _result(
+            dims="init_time", metric="OnsetError", values=(5.0, 6.0), **same_var
+        )
+        ds = outputs.results_to_dataset([lead_result, init_result]).compute()
+        selection = ds["2m_temperature"].sel(
+            metric="RMSE",
+            case_id_number=1,
+            forecast_source="test_forecast",
+            target_source="test_target",
+        )
+
+        collapsed = outputs.drop_empty_slices(selection)
+
+        assert collapsed.dims == ("lead_time",)
+        np.testing.assert_array_equal(collapsed.values, [1.0, 2.0])
+
+    def test_real_valued_placeholder_only_labels_are_not_dropped(self):
+        result = _result(dims="lead_time", metric="RMSE", case_id_number=1)
+        ds = outputs.results_to_dataset([result])
+        selection = ds["surface_air_temperature_vs_2m_temperature"].sel(
+            metric="RMSE", case_id_number=1
+        )
+
+        collapsed = outputs.drop_empty_slices(selection)
+
+        assert "forecast_source" in collapsed.dims
+        assert "target_source" in collapsed.dims
+        assert collapsed.sizes["forecast_source"] == 1
+        assert collapsed.sizes["target_source"] == 1
+
+
+def _build_real_metric_case_operator(
+    case_id_number: int, event_type: str
+) -> "cases.CaseOperator":
+    """Build a CaseOperator around real, small, in-memory forecast/target data.
+
+    Uses real RootMeanSquaredError (lead_time-preserving) and MeanError
+    with preserve_dims="init_time" (init_time-preserving) metrics, so the
+    output-conversion path is exercised by real metric output rather than
+    hand-built annotated arrays. Only _build_datasets is bypassed, since
+    the input-loading pipeline is not what this test targets.
+    """
+    init_time = pd.date_range("2021-06-20", periods=3, freq="D")
+    lead_time = np.array([0, 6, 12, 18])
+    latitude = np.array([40.0, 41.0])
+    longitude = np.array([-100.0, -99.0])
+    shape = (len(init_time), len(lead_time), len(latitude), len(longitude))
+    rng = np.random.default_rng(case_id_number)
+
+    forecast_ds = xr.Dataset(
+        {
+            "surface_air_temperature": (
+                ["init_time", "lead_time", "latitude", "longitude"],
+                rng.random(shape) + 273.0,
+            )
+        },
+        coords={
+            "init_time": init_time,
+            "lead_time": lead_time,
+            "latitude": latitude,
+            "longitude": longitude,
+        },
+    )
+    target_ds = xr.Dataset(
+        {
+            "2m_temperature": (
+                ["init_time", "lead_time", "latitude", "longitude"],
+                rng.random(shape) + 273.0,
+            )
+        },
+        coords=forecast_ds.coords,
+    )
+
+    mock_target = mock.Mock(spec=inputs.TargetBase)
+    mock_target.name = "test_target"
+    mock_target.variables = ["2m_temperature"]
+    mock_target.maybe_align_forecast_to_target.return_value = (
+        forecast_ds,
+        target_ds,
+    )
+
+    mock_forecast = mock.Mock(spec=inputs.ForecastBase)
+    mock_forecast.name = "test_forecast"
+    mock_forecast.variables = ["surface_air_temperature"]
+
+    metric_list = [
+        metrics.RootMeanSquaredError(
+            forecast_variable="surface_air_temperature",
+            target_variable="2m_temperature",
+        ),
+        metrics.MeanError(
+            preserve_dims="init_time",
+            forecast_variable="surface_air_temperature",
+            target_variable="2m_temperature",
+        ),
+    ]
+
+    case_metadata = cases.IndividualCase(
+        case_id_number=case_id_number,
+        title=f"Case {case_id_number}",
+        start_date=datetime.datetime(2021, 6, 20),
+        end_date=datetime.datetime(2021, 6, 25),
+        location=regions.CenteredRegion(
+            latitude=45.0, longitude=-120.0, bounding_box_degrees=5.0
+        ),
+        event_type=event_type,
+    )
+    return cases.CaseOperator(
+        case_metadata=case_metadata,
+        metric_list=metric_list,
+        target=mock_target,
+        forecast=mock_forecast,
+    )
+
+
+class TestXarrayOutputEndToEnd:
+    """Run a real evaluation with real metrics, checking pandas/xarray agree.
+
+    _build_datasets is bypassed with pre-built, small, in-memory forecast
+    and target data (no network access); everything downstream, including
+    metric computation, is real.
+    """
+
+    @pytest.fixture
+    def results(self):
+        case_operators = [
+            _build_real_metric_case_operator(1, "heat_wave"),
+            _build_real_metric_case_operator(2, "freeze"),
+        ]
+        all_results = []
+        for case_operator in case_operators:
+            forecast_ds, target_ds = (
+                case_operator.target.maybe_align_forecast_to_target.return_value
+            )
+            with mock.patch(
+                "extremeweatherbench.evaluate._build_datasets",
+                return_value=(forecast_ds, target_ds),
+            ):
+                all_results.extend(
+                    evaluate._compute_case_operator_results(case_operator)
+                )
+        return all_results
+
+    def test_dims_data_variable_and_event_type_coord(self, results):
+        ds = outputs.results_to_dataset(results)
+        var_name = "surface_air_temperature_vs_2m_temperature"
+
+        assert list(ds.data_vars) == [var_name]
+        assert set(ds.dims) == {
+            "case_id_number",
+            "metric",
+            "forecast_source",
+            "target_source",
+            "lead_time",
+            "init_time",
+        }
+        assert "event_type" not in ds.dims
+        assert ds.coords["event_type"].dims == ("case_id_number",)
+        by_case = dict(
+            zip(ds.coords["case_id_number"].values, ds.coords["event_type"].values)
+        )
+        assert by_case == {1: "heat_wave", 2: "freeze"}
+
+    def test_dataset_and_dataframe_agree_on_every_value(self, results):
+        df = outputs.results_to_dataframe(results)
+        ds = outputs.results_to_dataset(results)
+        var_name = "surface_air_temperature_vs_2m_temperature"
+        computed = ds[var_name].compute()
+
+        non_missing = int(computed.notnull().sum())
+        assert non_missing == len(df)
+
+        for _, row in df.iterrows():
+            selectors = {
+                "metric": row["metric"],
+                "case_id_number": row["case_id_number"],
+                "forecast_source": row["forecast_source"],
+                "target_source": row["target_source"],
+            }
+            for dim in ("lead_time", "init_time"):
+                selectors[dim] = (
+                    outputs._sentinel_for_dtype(ds.coords[dim].dtype)
+                    if pd.isna(row[dim])
+                    else row[dim]
+                )
+            value = ds[var_name].sel(**selectors).compute().item()
+            assert value == pytest.approx(row["value"])
+
+    def test_drop_empty_slices_collapses_each_metric_selection(self, results):
+        df = outputs.results_to_dataframe(results)
+        ds = outputs.results_to_dataset(results)
+        var_name = "surface_air_temperature_vs_2m_temperature"
+
+        rmse_selection = ds[var_name].sel(
+            metric="RootMeanSquaredError",
+            case_id_number=1,
+            forecast_source="test_forecast",
+            target_source="test_target",
+        )
+        clean_rmse = outputs.drop_empty_slices(rmse_selection)
+        assert clean_rmse.dims == ("lead_time",)
+        expected_rmse = (
+            df[(df["metric"] == "RootMeanSquaredError") & (df["case_id_number"] == 1)]
+            .sort_values("lead_time")["value"]
+            .to_numpy(dtype=float)
+        )
+        actual_rmse = clean_rmse.compute().sortby("lead_time").values
+        np.testing.assert_allclose(actual_rmse, expected_rmse)
+
+        me_selection = ds[var_name].sel(
+            metric="MeanError",
+            case_id_number=2,
+            forecast_source="test_forecast",
+            target_source="test_target",
+        )
+        clean_me = outputs.drop_empty_slices(me_selection)
+        assert clean_me.dims == ("init_time",)
+        expected_me = (
+            df[(df["metric"] == "MeanError") & (df["case_id_number"] == 2)]
+            .sort_values("init_time")["value"]
+            .to_numpy(dtype=float)
+        )
+        actual_me = clean_me.compute().sortby("init_time").values
+        np.testing.assert_allclose(actual_me, expected_me)
 
 
 class TestWriteResults:

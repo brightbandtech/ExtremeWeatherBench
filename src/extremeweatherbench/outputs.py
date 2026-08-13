@@ -336,6 +336,53 @@ def results_to_dataset(results: list[xr.DataArray], sparse: bool = False) -> xr.
     return xr.merge(datasets, join="outer", compat="no_conflicts")
 
 
+def _label_has_data(obj: Union[xr.Dataset, xr.DataArray], dim: str) -> xr.DataArray:
+    """Find which labels along dim have at least one non-NaN value."""
+    other_dims = [d for d in obj.dims if d != dim]
+    reduced = obj.notnull().any(other_dims) if other_dims else obj.notnull()
+    if isinstance(reduced, xr.Dataset):
+        reduced = reduced.to_array().any("variable")
+    return reduced
+
+
+def drop_empty_slices(
+    obj: Union[xr.Dataset, xr.DataArray],
+) -> Union[xr.Dataset, xr.DataArray]:
+    """Collapse the placeholder padding results_to_dataset introduces.
+
+    Meant to be called after selecting down to a single metric (and,
+    typically, a single case), not on the full run's cube: there, every
+    dim mixes real and placeholder labels, so nothing is all-NaN and
+    this is close to a no-op.
+
+    For each dim, drops labels that are entirely NaN, then drops any
+    dim left with only a single null (placeholder) label. Applied to
+    an RMSE selection, this removes the untouched init_time labels and
+    then the now-single-label placeholder init_time dim, leaving a
+    clean series over lead_time; a DurationMeanError selection
+    collapses symmetrically to a clean series over init_time.
+
+    Args:
+        obj: A Dataset or DataArray, typically a selection out of
+            results_to_dataset's output.
+
+    Returns:
+        The same type as obj, with empty slices and placeholder-only
+        dims dropped.
+    """
+    result = obj
+    for dim in list(result.dims):
+        has_data = _label_has_data(result, dim)
+        result = result.isel({dim: has_data.compute().values})
+
+    placeholder_dims = [
+        dim
+        for dim in result.dims
+        if result.sizes[dim] == 1 and pd.isnull(result[dim].values[0])
+    ]
+    return result.squeeze(placeholder_dims, drop=True)
+
+
 def write_results(
     results: Union[list[xr.DataArray], pd.DataFrame, xr.Dataset],
     path: Union[str, pathlib.Path],
