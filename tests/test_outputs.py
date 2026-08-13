@@ -11,7 +11,15 @@ import pytest
 import sparse
 import xarray as xr
 
-from extremeweatherbench import cases, evaluate, inputs, metrics, outputs, regions
+from extremeweatherbench import (
+    cases,
+    evaluate,
+    inputs,
+    metrics,
+    outputs,
+    regions,
+    utils,
+)
 
 METADATA_KWARGS = {
     "metric": "RMSE",
@@ -471,6 +479,27 @@ class TestResultsToDataset:
         assert np.isnan(var.data.fill_value)
         assert np.nansum(var.data.todense()) == pytest.approx(10.0)
 
+    def test_sparse_true_works_when_results_have_mixed_dims(self):
+        """Regression test: mixing lead_time- and init_time-preserving
+        metrics on the same variable used to raise AttributeError from
+        sparse 0.19.1 lacking a module-level transpose (see xr.merge's
+        compat="no_conflicts" fillna combine path)."""
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        lead_result = _result(
+            dims="lead_time", metric="RMSE", values=(1.0, 2.0), **same_var
+        )
+        init_result = _result(
+            dims="init_time", metric="OnsetError", values=(5.0, 6.0), **same_var
+        )
+        ds = outputs.results_to_dataset([lead_result, init_result], sparse=True)
+
+        var = ds["2m_temperature"]
+        assert isinstance(var.data, sparse.COO)
+        assert np.nansum(var.data.todense()) == pytest.approx(14.0)
+
     def test_result_is_dask_backed_by_default(self):
         ds = outputs.results_to_dataset([_result(case_id_number=1)])
         var = ds["surface_air_temperature_vs_2m_temperature"]
@@ -504,6 +533,183 @@ class TestResultsToDataset:
             outputs.results_to_dataset([_result()], sparse=False)
 
         assert not any("sparse=True" in r.getMessage() for r in caplog.records)
+
+
+def _landfall_result(case_id, lat, lon, valid_time, **overrides):
+    init_times = pd.date_range("2021-06-20", periods=2, freq="D")
+    result = xr.DataArray(
+        data=[1.0, 2.0], dims=["init_time"], coords={"init_time": init_times}
+    )
+    result = result.assign_coords(
+        forecast_landfall_latitude=("init_time", [lat, lat + 1]),
+        forecast_landfall_longitude=("init_time", [lon, lon + 1]),
+        forecast_landfall_valid_time=(
+            "init_time",
+            pd.to_datetime([valid_time, valid_time]),
+        ),
+    )
+    metadata = {
+        "metric": "LandfallDisplacement",
+        "target_variable": "surface_wind_speed",
+        "forecast_variable": "surface_wind_speed",
+        "forecast_source": "test_forecast",
+        "target_source": "test_target",
+        "case_id_number": case_id,
+        "event_type": "tropical_cyclone",
+        **overrides,
+    }
+    return outputs.annotate_metric_result(result, **metadata)
+
+
+class TestResultsToDatasetSparseDenseEquivalence:
+    """sparse=True densified must equal sparse=False's Dataset exactly."""
+
+    def _assert_equivalent(self, results):
+        dense = outputs.results_to_dataset(results).compute()
+        sparse_ds = outputs.results_to_dataset(results, sparse=True)
+        densified = sparse_ds.map(utils.maybe_densify_dataarray).compute()
+        xr.testing.assert_identical(densified, dense)
+
+    def test_empty_list(self):
+        self._assert_equivalent([])
+
+    def test_single_result(self):
+        self._assert_equivalent([_result(case_id_number=1)])
+
+    def test_same_dims_two_metrics_on_one_variable(self):
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        self._assert_equivalent(
+            [
+                _result(
+                    metric="RMSE", coord_values=(0, 6), values=(1.0, 2.0), **same_var
+                ),
+                _result(
+                    metric="MAE", coord_values=(6, 12), values=(3.0, 4.0), **same_var
+                ),
+            ]
+        )
+
+    def test_mixed_dims_lead_time_and_init_time(self):
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        self._assert_equivalent(
+            [
+                _result(dims="lead_time", metric="RMSE", values=(1.0, 2.0), **same_var),
+                _result(
+                    dims="init_time",
+                    metric="OnsetError",
+                    values=(5.0, 6.0),
+                    **same_var,
+                ),
+            ]
+        )
+
+    def test_mixed_dims_across_multiple_cases(self):
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        self._assert_equivalent(
+            [
+                _result(
+                    metric="RMSE",
+                    case_id_number=1,
+                    values=(1.0, 2.0),
+                    coord_values=(0, 6),
+                    **same_var,
+                ),
+                _result(
+                    dims="init_time",
+                    metric="OnsetError",
+                    case_id_number=2,
+                    values=(5.0, 6.0),
+                    **same_var,
+                ),
+            ]
+        )
+
+    def test_spatial_dims(self):
+        latitudes = np.array([10.0, 11.0])
+        longitudes = np.array([-80.0, -79.0])
+        result = xr.DataArray(
+            data=np.arange(4, dtype=float).reshape(2, 2),
+            dims=["latitude", "longitude"],
+            coords={"latitude": latitudes, "longitude": longitudes},
+        )
+        result = outputs.annotate_metric_result(result, **METADATA_KWARGS)
+        self._assert_equivalent([result])
+
+    def test_multiple_variable_pairs(self):
+        result_1 = _result(
+            target_variable="2m_temperature",
+            forecast_variable="2m_temperature",
+            metric="RMSE",
+            case_id_number=1,
+        )
+        result_2 = _result(
+            target_variable="10m_wind_speed",
+            forecast_variable="10m_wind_speed",
+            metric="MAE",
+            case_id_number=1,
+        )
+        self._assert_equivalent([result_1, result_2])
+
+    def test_landfall_extra_vars_with_mixed_dims(self):
+        landfall = _landfall_result(1, 10.0, -80.0, "2021-06-20T12:00")
+        rmse = outputs.annotate_metric_result(
+            xr.DataArray([1.0, 2.0], dims="lead_time", coords={"lead_time": [0, 6]}),
+            metric="RMSE",
+            target_variable="surface_wind_speed",
+            forecast_variable="surface_wind_speed",
+            forecast_source="test_forecast",
+            target_source="test_target",
+            case_id_number=1,
+            event_type="tropical_cyclone",
+        )
+        self._assert_equivalent([landfall, rmse])
+
+
+class TestResultsToDatasetSparseLandfallExtras:
+    """The landfall metadata includes datetime dtypes; verify they sparsify."""
+
+    def test_float_and_datetime_extras_are_sparse_backed(self):
+        landfall = _landfall_result(1, 10.0, -80.0, "2021-06-20T12:00")
+        rmse = outputs.annotate_metric_result(
+            xr.DataArray([1.0, 2.0], dims="lead_time", coords={"lead_time": [0, 6]}),
+            metric="RMSE",
+            target_variable="surface_wind_speed",
+            forecast_variable="surface_wind_speed",
+            forecast_source="test_forecast",
+            target_source="test_target",
+            case_id_number=1,
+            event_type="tropical_cyclone",
+        )
+        ds = outputs.results_to_dataset([landfall, rmse], sparse=True)
+
+        lat_var = ds["forecast_landfall_latitude"]
+        assert isinstance(lat_var.data, sparse.COO)
+        assert np.isnan(lat_var.data.fill_value)
+
+        valid_time_var = ds["forecast_landfall_valid_time"]
+        assert isinstance(valid_time_var.data, sparse.COO)
+        assert pd.isnull(valid_time_var.data.fill_value)
+        assert valid_time_var.data.nnz == 2
+
+    def test_event_type_stays_dense_under_sparse_true(self):
+        result_1 = _result(case_id_number=1, event_type="heat_wave")
+        result_2 = _result(case_id_number=2, event_type="freeze")
+        ds = outputs.results_to_dataset([result_1, result_2], sparse=True)
+
+        assert not isinstance(ds.coords["event_type"].data, sparse.COO)
+        by_case = dict(
+            zip(ds.coords["case_id_number"].values, ds.coords["event_type"].values)
+        )
+        assert by_case == {1: "heat_wave", 2: "freeze"}
 
 
 class TestDropEmptySlices:
@@ -658,6 +864,54 @@ class TestDropEmptySlices:
         assert "target_source" in collapsed.dims
         assert collapsed.sizes["forecast_source"] == 1
         assert collapsed.sizes["target_source"] == 1
+
+    def test_raises_on_sparse_backed_input_without_densifying_first(self):
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        lead_result = _result(
+            dims="lead_time", metric="RMSE", values=(1.0, 2.0), **same_var
+        )
+        init_result = _result(
+            dims="init_time", metric="OnsetError", values=(5.0, 6.0), **same_var
+        )
+        ds = outputs.results_to_dataset([lead_result, init_result], sparse=True)
+        selection = ds["2m_temperature"].sel(
+            metric="RMSE",
+            case_id_number=1,
+            forecast_source="test_forecast",
+            target_source="test_target",
+        )
+        assert isinstance(selection.data, sparse.COO)
+
+        with pytest.raises(RuntimeError, match="Cannot convert a sparse array"):
+            outputs.drop_empty_slices(selection)
+
+    def test_works_on_sparse_backed_input_once_densified(self):
+        same_var = {
+            "target_variable": "2m_temperature",
+            "forecast_variable": "2m_temperature",
+        }
+        lead_result = _result(
+            dims="lead_time", metric="RMSE", values=(1.0, 2.0), **same_var
+        )
+        init_result = _result(
+            dims="init_time", metric="OnsetError", values=(5.0, 6.0), **same_var
+        )
+        ds = outputs.results_to_dataset([lead_result, init_result], sparse=True)
+        selection = ds["2m_temperature"].sel(
+            metric="RMSE",
+            case_id_number=1,
+            forecast_source="test_forecast",
+            target_source="test_target",
+        )
+        densified = utils.maybe_densify_dataarray(selection)
+
+        collapsed = outputs.drop_empty_slices(densified)
+
+        assert collapsed.dims == ("lead_time",)
+        np.testing.assert_array_equal(collapsed.values, [1.0, 2.0])
 
 
 def _build_real_metric_case_operator(
