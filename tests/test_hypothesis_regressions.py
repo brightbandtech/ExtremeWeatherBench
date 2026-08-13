@@ -2,18 +2,14 @@
 
 import numpy as np
 import pandas as pd
-import pytest
 import xarray as xr
 
 from extremeweatherbench import metrics, regions, utils
 from extremeweatherbench.sources import xarray_dataset
 
 
-@pytest.mark.xfail(
-    reason="int lead_time is added to init_time as nanoseconds, not hours",
-    strict=False,
-)
-def test_convert_init_time_to_valid_time_int_lead_time_is_misread():
+def test_convert_init_time_to_valid_time_coerces_int_lead_time_to_hours():
+    """Int-hours lead_time is added to init_time as hours, not nanoseconds."""
     init_time = pd.date_range("2021-06-20", periods=2, freq="6h")
     lead_time = np.array([0, 6, 12])
     ds = xr.Dataset(
@@ -27,17 +23,15 @@ def test_convert_init_time_to_valid_time_int_lead_time_is_misread():
     )
     result = utils.convert_init_time_to_valid_time(ds)
     lead_hours = pd.to_timedelta(lead_time, unit="h").to_numpy()
-    expected = np.sort((init_time.values[:, None] + lead_hours[None, :]).ravel())
+    # Overlapping init_time/lead_time combinations share a valid_time slot,
+    # so the result axis is the unique set of combined times, not all pairs.
+    combos = (init_time.values[:, None] + lead_hours[None, :]).ravel()
+    expected = np.sort(np.unique(combos))
     actual = np.sort(result.valid_time.values)
     np.testing.assert_array_equal(actual, expected)
 
 
-@pytest.mark.xfail(
-    reason="check_for_spatial_data .sel() needs a monotonic longitude index, "
-    "which an antimeridian-crossing -180/180 axis is not",
-    strict=False,
-)
-def test_check_for_spatial_data_crashes_on_antimeridian_seam():
+def test_check_for_spatial_data_handles_antimeridian_seam():
     longitude = np.array([170.0, 175.0, -180.0, -175.0, -170.0])
     latitude = np.array([20.0, 30.0, 40.0])
     ds = xr.Dataset(
@@ -70,34 +64,21 @@ def _build_forecast_target(target_values: np.ndarray) -> tuple:
     return forecast, target
 
 
-@pytest.mark.xfail(
-    reason="idxmax on an all-NaN target returns NaT, then .sel(valid_time=NaT) "
-    "raises instead of yielding NaN",
-    strict=False,
-)
-def test_maximum_mean_absolute_error_crashes_on_all_nan_target():
+def test_maximum_mean_absolute_error_returns_nan_on_all_nan_target():
     forecast, target = _build_forecast_target(np.full((3, 2, 2), np.nan))
     metric = metrics.MaximumMeanAbsoluteError()
-    metric.compute_metric(forecast, target)
+    result = metric.compute_metric(forecast, target)
+    assert bool(result.isnull().all())
 
 
-@pytest.mark.xfail(
-    reason="idxmin on an all-NaN target returns NaT, then .sel(valid_time=NaT) "
-    "raises instead of yielding NaN",
-    strict=False,
-)
-def test_minimum_mean_absolute_error_crashes_on_all_nan_target():
+def test_minimum_mean_absolute_error_returns_nan_on_all_nan_target():
     forecast, target = _build_forecast_target(np.full((3, 2, 2), np.nan))
     metric = metrics.MinimumMeanAbsoluteError()
-    metric.compute_metric(forecast, target)
+    result = metric.compute_metric(forecast, target)
+    assert bool(result.isnull().all())
 
 
-@pytest.mark.xfail(
-    reason="_calculate_event_duration builds a length-1 gap array against a "
-    "zero-length valid_time coordinate when passed empty input",
-    strict=False,
-)
-def test_duration_mean_error_crashes_on_empty_valid_time_axis():
+def test_duration_mean_error_returns_nan_on_empty_valid_time_axis():
     valid_time = pd.DatetimeIndex([], dtype="datetime64[ns]")
     lat = np.array([10.0, 20.0])
     lon = np.array([100.0, 110.0])
@@ -112,4 +93,5 @@ def test_duration_mean_error_crashes_on_empty_valid_time_axis():
         coords={"valid_time": valid_time, "latitude": lat, "longitude": lon},
     )
     metric = metrics.DurationMeanError(threshold_criteria=273.0)
-    metric.compute_metric(forecast, target)
+    result = metric.compute_metric(forecast, target)
+    assert bool(result.isnull().all())

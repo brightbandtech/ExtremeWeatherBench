@@ -1186,6 +1186,10 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
         target_spatial_mean = utils.reduce_dataarray(
             target, method="mean", reduce_dims=reduce_spatial_dims, skipna=True
         )
+        if target_spatial_mean.valid_time.size == 0 or bool(
+            target_spatial_mean.isnull().all()
+        ):
+            return utils._create_nan_dataarray(self.preserve_dims)
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
         maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
 
@@ -1268,6 +1272,10 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
         target_spatial_mean = utils.reduce_dataarray(
             target, method="mean", reduce_dims=self.reduce_spatial_dims, skipna=True
         )
+        if target_spatial_mean.valid_time.size == 0 or bool(
+            target_spatial_mean.isnull().all()
+        ):
+            return utils._create_nan_dataarray(self.preserve_dims)
         minimum_timestep = target_spatial_mean.idxmin("valid_time")
         minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
         forecast_spatial_mean = utils.reduce_dataarray(
@@ -1446,10 +1454,13 @@ def _calculate_event_duration(
     Returns:
         DataArray with valid_time reduced out, values in hours.
     """
+    if mask.valid_time.size == 0:
+        return utils._create_nan_dataarray(preserve_dims)
     expected_gap = np.timedelta64(int(time_resolution_hours), "h")
     mask = mask.fillna(False).astype(bool)
     vt = mask.valid_time.values
-    gaps = np.concatenate([[False], (vt[1:] - vt[:-1]) == expected_gap])
+    gaps = np.zeros(vt.size, dtype=bool)
+    gaps[1:] = (vt[1:] - vt[:-1]) == expected_gap
     is_expected_gap = xr.DataArray(gaps, dims=["valid_time"], coords={"valid_time": vt})
     # When init_time is only a coordinate (not a dim) and lead_time is a dim,
     # consecutive timesteps within one forecast run follow the diagonal of the
@@ -1459,7 +1470,7 @@ def _calculate_event_duration(
     # that the predecessor cell has the same init_time (vt - lead = const).
     # For daily targets aligned to a 6 h lead_time grid this is 24h/6h = 4.
     if "lead_time" in mask.dims and preserve_dims not in mask.dims:
-        lt_step = np.unique(np.diff(mask.lead_time.values))
+        lt_step = np.unique(np.diff(utils._lead_time_as_timedelta(mask.lead_time)))
         n_lead_steps = (
             max(1, int(expected_gap / lt_step[0]))
             if len(lt_step) == 1 and lt_step[0] > np.timedelta64(0)
