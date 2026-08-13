@@ -283,13 +283,6 @@ def _diurnal_temperature(valid_times, peak_hour=12.0, base=273.0, amplitude=10.0
     return (base + amplitude * np.cos(phase)).reshape(shape)
 
 
-@pytest.mark.xfail(
-    reason="fix/peak-metrics: forecast side reduces the max across inits "
-    "over valid_time instead of per init_time, so with a 72h init cadence "
-    "the tolerance window can hold only one off-peak forecast sample, "
-    "aliasing a perfect forecast into a non-zero error",
-    strict=False,
-)
 def test_maximum_mean_absolute_error_perfect_forecast_is_zero():
     """A forecast identical to the target at every sampled time scores 0."""
     lat = np.array([10.0, 20.0])

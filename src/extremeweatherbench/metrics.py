@@ -1136,9 +1136,9 @@ class EarlySignal(BaseMetric):
 class MaximumMeanAbsoluteError(MeanAbsoluteError):
     """Compute MAE between forecast and target maximum values.
 
-    Extends MeanAbsoluteError to filter forecast to a time window around the
-    target's maximum using tolerance_range_hours. Useful for evaluating peak
-    value timing and magnitude.
+    For each initialization, the forecast maximum is taken over that
+    run's lead times inside tolerance_range_hours of the target's
+    maximum. Useful for evaluating peak value timing and magnitude.
     """
 
     def __init__(
@@ -1175,6 +1175,12 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
     ) -> xr.DataArray:
         """Compute MaximumMeanAbsoluteError.
 
+        The forecast maximum is taken over each initialization's own lead times
+        inside the tolerance window, so every value compared to the target is a
+        genuine maximum over the forecast's diurnal cycle. Results are indexed
+        by the lead time of the target's maximum relative to each
+        initialization.
+
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
@@ -1200,19 +1206,12 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
         forecast_spatial_mean = utils.reduce_dataarray(
             forecast, method="mean", reduce_dims=reduce_spatial_dims, skipna=True
         )
-        filtered_max_forecast = forecast_spatial_mean.where(
-            (
-                forecast_spatial_mean.valid_time
-                >= maximum_timestep.data
-                - np.timedelta64(self.tolerance_range_hours // 2, "h")
-            )
-            & (
-                forecast_spatial_mean.valid_time
-                <= maximum_timestep.data
-                + np.timedelta64(self.tolerance_range_hours // 2, "h")
-            ),
-            drop=True,
-        ).max("valid_time")
+        filtered_max_forecast = utils.reduce_forecast_over_window_per_init(
+            forecast_spatial_mean,
+            center_time=maximum_timestep,
+            tolerance_range_hours=self.tolerance_range_hours,
+            method="max",
+        )
         return super()._compute_metric(
             forecast=filtered_max_forecast,
             target=maximum_value,
@@ -1223,9 +1222,9 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
 class MinimumMeanAbsoluteError(MeanAbsoluteError):
     """Compute MAE between forecast and target minimum values.
 
-    Extends MeanAbsoluteError to filter forecast to a time window around the
-    target's minimum using tolerance_range_hours. Useful for evaluating
-    minimum value timing and magnitude.
+    For each initialization, the forecast minimum is taken over that
+    run's lead times inside tolerance_range_hours of the target's
+    minimum. Useful for evaluating minimum value timing and magnitude.
     """
 
     def __init__(
@@ -1262,6 +1261,10 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
     ) -> Any:
         """Compute MinimumMeanAbsoluteError.
 
+        As with MaximumMeanAbsoluteError, the forecast minimum is taken over
+        each initialization's own lead times inside the tolerance window rather
+        than across initializations at fixed lead time.
+
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
@@ -1285,19 +1288,12 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
         minimum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
             minimum_timestep, target.valid_time
         )
-        filtered_min_forecast = forecast_spatial_mean.where(
-            (
-                forecast_spatial_mean.valid_time
-                >= minimum_timestep.data
-                - np.timedelta64(self.tolerance_range_hours // 2, "h")
-            )
-            & (
-                forecast_spatial_mean.valid_time
-                <= minimum_timestep.data
-                + np.timedelta64(self.tolerance_range_hours // 2, "h")
-            ),
-            drop=True,
-        ).min("valid_time")
+        filtered_min_forecast = utils.reduce_forecast_over_window_per_init(
+            forecast_spatial_mean,
+            center_time=minimum_timestep,
+            tolerance_range_hours=self.tolerance_range_hours,
+            method="min",
+        )
         return super()._compute_metric(
             forecast=filtered_min_forecast,
             target=minimum_value,
@@ -1306,11 +1302,11 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
 
 
 class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
-    """Compute MAE of maximum aggregated minimum values for heatwaves.
+    """Compute MAE of the warmest daily minimum for heatwaves.
 
-    Extends MeanAbsoluteError for heatwave evaluation by aggregating daily
-    minimum values and computing MAE between the warmest nighttime (daily
-    minimum) temperature in target and forecast.
+    The target contributes the warmest complete daily minimum. Each
+    forecast initialization contributes its lowest value inside the
+    tolerance window, scored only if that run covers a full day.
     """
 
     def __init__(
@@ -1342,6 +1338,12 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
         **kwargs: Any,
     ) -> Any:
         """Compute MaximumLowestMeanAbsoluteError.
+
+        The target contributes the warmest of its daily minima. Each forecast
+        initialization contributes the lowest value it predicts inside the
+        tolerance window centered on that time, which spans one diurnal
+        minimum, so both sides answer the same question. An initialization is
+        only scored if it covers a full day inside the window.
 
         Args:
             forecast: The forecast DataArray.
@@ -1381,32 +1383,18 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
                 max_min_target_datetime, target.valid_time
             )
         )
-        subset_forecast = (
-            forecast.where(
-                (
-                    forecast.valid_time
-                    >= (
-                        max_min_target_datetime.data
-                        - np.timedelta64(self.tolerance_range_hours // 2, "h")
-                    )
-                )
-                & (
-                    forecast.valid_time
-                    <= (
-                        max_min_target_datetime.data
-                        + np.timedelta64(self.tolerance_range_hours // 2, "h")
-                    )
-                ),
-                drop=True,
-            )
-            .groupby("valid_time.dayofyear")
-            .map(
-                utils.min_if_all_timesteps_present_forecast,
-                time_resolution_hours=utils.determine_temporal_resolution(forecast),
-            )
-            .min("dayofyear")
+        # Carry the time the target's warmest minimum occurred into the output,
+        # matching the other peak metrics.
+        max_min_target_value = max_min_target_value.assign_coords(
+            valid_time=np.asarray(max_min_target_datetime.values).reshape(-1)[0]
         )
-
+        subset_forecast = utils.reduce_forecast_over_window_per_init(
+            forecast,
+            center_time=max_min_target_datetime,
+            tolerance_range_hours=self.tolerance_range_hours,
+            method="min",
+            required_timesteps=utils.expected_timesteps_per_day(forecast),
+        )
         return super()._compute_metric(
             forecast=subset_forecast,
             target=max_min_target_value,
