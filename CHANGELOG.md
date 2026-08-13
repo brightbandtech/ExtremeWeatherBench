@@ -12,8 +12,7 @@ commits. Prefer this changelog when writing GitHub release notes.
 
 ## [Unreleased]
 
-Intended for **1.1.0**. Rename this section to `[1.1.0] - YYYY-MM-DD`
-when the GitHub release is tagged.
+## [1.1.0] - 2026-08-13
 
 ### Added
 
@@ -220,7 +219,8 @@ Automated git comparison with 0.2.0 is unreliable after a
 
 Initial tagged preview.
 
-[unreleased]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.0.2.post1...HEAD
+[unreleased]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.0.2.post1...v1.1.0
 [1.0.2.post1]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.0.2...v1.0.2.post1
 [1.0.2]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.0.0...v1.0.1
