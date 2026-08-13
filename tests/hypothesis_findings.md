@@ -214,24 +214,23 @@ it for the empty case. Not filed as part of this work.
 
 ## Verification
 
-Full suite `1137 passed, 1 xfailed`
-(`uv run pytest -q --ignore=tests/test_golden.py`), against a base of
-`1130 passed, 5 xfailed`. All five original xfails became real assertions, two
-`check_for_spatial_data` tests were added for the prime-meridian shape, and the
-single remaining xfail is the new peak-metric oracle, which is waiting on
-`fix/peak-metrics`.
+On the parent of `fix/peak-metrics`, the full suite was `1137 passed, 1
+xfailed` (`uv run pytest -q --ignore=tests/test_golden.py`), against a
+base of `1130 passed, 5 xfailed`. All five original xfails became real
+assertions, two `check_for_spatial_data` tests were added for the
+prime-meridian shape, and the remaining xfail was the peak-metric
+oracle, resolved on this branch (see above). No `xfail` remains in the
+Hypothesis modules.
 
 Applying the coercion alone, before any fixture change, left the suite at
 `1130 passed, 5 xfailed`, unchanged. Nothing in the suite had encoded the
 nanosecond misreading as an expectation, so the fix had no blast radius of its
 own; every failure that appeared came later, from removing the narrowings.
 
-`HYPOTHESIS_PROFILE=ewb-sweep uv run pytest tests/test_hypothesis_fixtures.py`:
-`18 passed, 1 xfailed` at 300 examples each. `pre-commit run --all-files` clean.
-
-The numbers above are as of this branch. On `fix/peak-metrics`, which landed
-after it, the peak-metric oracle passes and its `xfail` is removed, leaving no
-`xfail` anywhere in the Hypothesis modules.
+`HYPOTHESIS_PROFILE=ewb-sweep uv run pytest tests/test_hypothesis_fixtures.py`
+was `18 passed, 1 xfailed` at 300 examples each on the parent branch;
+the xfail was the same peak-metric oracle. `pre-commit run --all-files`
+clean.
 
 Coverage widened as intended. `--hypothesis-show-statistics` reports 22 distinct
 rejection categories before the narrowings were removed and 8 after. The nine
