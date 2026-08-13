@@ -1136,9 +1136,9 @@ class EarlySignal(BaseMetric):
 class MaximumMeanAbsoluteError(MeanAbsoluteError):
     """Compute MAE between forecast and target maximum values.
 
-    Extends MeanAbsoluteError to filter forecast to a time window around the
-    target's maximum using tolerance_range_hours. Useful for evaluating peak
-    value timing and magnitude.
+    For each initialization, the forecast maximum is taken over that
+    run's lead times inside tolerance_range_hours of the target's
+    maximum. Useful for evaluating peak value timing and magnitude.
     """
 
     def __init__(
@@ -1222,9 +1222,9 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
 class MinimumMeanAbsoluteError(MeanAbsoluteError):
     """Compute MAE between forecast and target minimum values.
 
-    Extends MeanAbsoluteError to filter forecast to a time window around the
-    target's minimum using tolerance_range_hours. Useful for evaluating
-    minimum value timing and magnitude.
+    For each initialization, the forecast minimum is taken over that
+    run's lead times inside tolerance_range_hours of the target's
+    minimum. Useful for evaluating minimum value timing and magnitude.
     """
 
     def __init__(
@@ -1302,11 +1302,11 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
 
 
 class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
-    """Compute MAE of maximum aggregated minimum values for heatwaves.
+    """Compute MAE of the warmest daily minimum for heatwaves.
 
-    Extends MeanAbsoluteError for heatwave evaluation by aggregating daily
-    minimum values and computing MAE between the warmest nighttime (daily
-    minimum) temperature in target and forecast.
+    The target contributes the warmest complete daily minimum. Each
+    forecast initialization contributes its lowest value inside the
+    tolerance window, scored only if that run covers a full day.
     """
 
     def __init__(
