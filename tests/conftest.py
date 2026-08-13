@@ -1,3 +1,4 @@
+import os
 import pathlib
 import tempfile
 
@@ -7,6 +8,7 @@ import pytest
 import sparse
 import xarray as xr
 from click import testing
+from hypothesis import HealthCheck, settings
 
 from extremeweatherbench import calc
 
@@ -462,6 +464,18 @@ def sample_sparse_target_dataset():
             "target": make_sample_sparse_target_dataarray(),
         },
     )
+
+
+settings.register_profile(
+    "ewb", max_examples=25, deadline=None, suppress_health_check=[HealthCheck.too_slow]
+)
+settings.register_profile(
+    "ewb-sweep",
+    max_examples=300,
+    deadline=None,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ewb"))
 
 
 def make_cape_pressure_levels() -> np.ndarray:
