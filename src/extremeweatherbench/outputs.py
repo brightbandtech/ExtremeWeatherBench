@@ -80,8 +80,9 @@ def _ensure_output_schema(df: pd.DataFrame) -> pd.DataFrame:
     # metric that assesses something in an entire model run, such as the onset error of
     # an event. Lead_time will be present for a metric that assesses something at a
     # specific forecast hour, such as RMSE. If neither are present, the output is
-    # invalid. Both should not be present for one metric. Thus, one should always be
-    # missing, which is intended behavior.
+    # invalid, so a metric supplying only one of them is intended behavior. Peak metrics
+    # supply both, because they reduce over a run and then report against the lead time
+    # at which that run verified against the target's extreme.
     init_time_missing = "init_time" in missing_cols
     lead_time_missing = "lead_time" in missing_cols
 
@@ -283,16 +284,112 @@ def _maybe_chunk(ds: xr.Dataset) -> xr.Dataset:
     return ds.chunk()
 
 
-def _sparsify(ds: xr.Dataset) -> xr.Dataset:
-    """Back each floating-point data variable with sparse.COO, fill=NaN."""
+def _sparsifiable(dtype: np.dtype) -> bool:
+    """Whether sparse.COO can hold dtype with a well-defined fill value."""
+    return (
+        np.issubdtype(dtype, np.floating)
+        or np.issubdtype(dtype, np.datetime64)
+        or np.issubdtype(dtype, np.timedelta64)
+    )
 
-    def _to_sparse(variable: xr.DataArray) -> xr.DataArray:
-        if not np.issubdtype(variable.dtype, np.floating):
-            return variable
-        dense = np.asarray(variable.data)
-        return variable.copy(data=sparse.COO.from_numpy(dense, fill_value=np.nan))
 
-    return ds.map(_to_sparse)
+def _collect_data_var_info(
+    datasets: list[xr.Dataset],
+) -> dict[str, tuple[tuple[str, ...], np.dtype]]:
+    """First-seen dims and dtype for every data variable across all slabs."""
+    info: dict[str, tuple[tuple[str, ...], np.dtype]] = {}
+    for ds in datasets:
+        for name, variable in ds.data_vars.items():
+            if name not in info:
+                info[name] = (variable.dims, variable.dtype)
+    return info
+
+
+def _positions_in_union(index: pd.Index, values: np.ndarray) -> np.ndarray:
+    """Map values onto integer positions in index, resolving null padding.
+
+    get_indexer can't match a null placeholder (NaT/NaN) by value, so an
+    unmatched query is pointed at index's own (unique) null entry.
+    """
+    positions = index.get_indexer(values)
+    unmatched = positions == -1
+    if unmatched.any():
+        positions[unmatched] = np.flatnonzero(index.isna())[0]
+    return positions
+
+
+def _scatter_variable(
+    dims: tuple[str, ...],
+    dtype: np.dtype,
+    name: str,
+    datasets: list[xr.Dataset],
+    dim_index: dict[str, pd.Index],
+) -> Union[sparse.COO, np.ndarray]:
+    """Scatter one data variable's values from every slab that has it.
+
+    Positions are resolved per slab, per dim, straight into the run-wide
+    union index, so this never needs xr.merge's fillna-based combine.
+    """
+    shape = tuple(len(dim_index[d]) for d in dims)
+    fill_value = _sentinel_for_dtype(dtype)
+
+    coord_rows: list[list[np.ndarray]] = [[] for _ in dims]
+    value_chunks: list[np.ndarray] = []
+    for ds in datasets:
+        if name not in ds.data_vars:
+            continue
+        variable = ds.data_vars[name]
+        positions = {
+            d: _positions_in_union(dim_index[d], ds.indexes[d].values)
+            for d in variable.dims
+        }
+        grids = np.meshgrid(*(positions[d] for d in variable.dims), indexing="ij")
+        for row, d in zip(coord_rows, dims):
+            row.append(grids[variable.dims.index(d)].ravel())
+        value_chunks.append(np.asarray(variable.data).ravel())
+
+    coords = np.array([np.concatenate(row) for row in coord_rows], dtype=np.intp)
+    values = np.concatenate(value_chunks)
+
+    if _sparsifiable(dtype):
+        return sparse.COO(
+            coords=coords, data=values, shape=shape, fill_value=fill_value
+        )
+    dense = np.full(shape, fill_value, dtype=object)
+    dense[tuple(coords)] = values
+    return dense
+
+
+def _scatter_to_sparse_dataset(datasets: list[xr.Dataset]) -> xr.Dataset:
+    """Combine padded slabs into one Dataset without going through xr.merge.
+
+    xr.merge's compat="no_conflicts" combines same-named variables via
+    fillna, which broadcasts through duck_array_ops.transpose whenever two
+    slabs disagree on that variable's dim order -- exactly the case where a
+    variable shows up from metrics that preserve different dims. sparse
+    0.19.1 has no module-level transpose, so that combine crashes for any
+    sparse-backed variable. Scattering each variable's values directly into
+    its own array, in the run's outer-joined dim order, avoids it.
+
+    Non-sparsifiable data variables (anything but floating/datetime64/
+    timedelta64) are merged the ordinary way instead, since they're never
+    sparse-backed and so can't trip the same bug.
+    """
+    var_info = _collect_data_var_info(datasets)
+    sparsifiable = {n for n, (_, dt) in var_info.items() if _sparsifiable(dt)}
+
+    dense_slabs = [ds.drop_vars(sparsifiable, errors="ignore") for ds in datasets]
+    dense_ds = xr.merge(dense_slabs, join="outer", compat="no_conflicts")
+
+    dim_index = {dim: dense_ds.indexes[dim] for dim in dense_ds.dims}
+    scattered = {
+        name: (dims, _scatter_variable(dims, dtype, name, datasets, dim_index))
+        for name, (dims, dtype) in var_info.items()
+        if name in sparsifiable
+    }
+    return xr.Dataset(
+        data_vars={**dense_ds.data_vars, **scattered}, coords=dense_ds.coords
+    )
 
 
 def results_to_dataset(results: list[xr.DataArray], sparse: bool = False) -> xr.Dataset:
@@ -321,18 +418,17 @@ def results_to_dataset(results: list[xr.DataArray], sparse: bool = False) -> xr.
     datasets = [_result_to_padded_dataset(r, own_dim_dtypes) for r in results]
 
     if sparse:
-        datasets = [_sparsify(ds) for ds in datasets]
-    else:
-        dense_size = _estimate_dense_size(datasets)
-        if dense_size > _DENSE_SIZE_WARNING_THRESHOLD:
-            logger.warning(
-                "Densifying this run's results would require an estimated "
-                "%d elements per data variable. Pass sparse=True to avoid "
-                "materializing the padded hypercube.",
-                dense_size,
-            )
-        datasets = [_maybe_chunk(ds) for ds in datasets]
+        return _scatter_to_sparse_dataset(datasets)
 
+    dense_size = _estimate_dense_size(datasets)
+    if dense_size > _DENSE_SIZE_WARNING_THRESHOLD:
+        logger.warning(
+            "Densifying this run's results would require an estimated "
+            "%d elements per data variable. Pass sparse=True to avoid "
+            "materializing the padded hypercube.",
+            dense_size,
+        )
+    datasets = [_maybe_chunk(ds) for ds in datasets]
     return xr.merge(datasets, join="outer", compat="no_conflicts")
 
 
@@ -361,6 +457,11 @@ def drop_empty_slices(
     then the now-single-label placeholder init_time dim, leaving a
     clean series over lead_time; a DurationMeanError selection
     collapses symmetrically to a clean series over init_time.
+
+    Does not work on sparse.COO-backed input (from results_to_dataset's
+    sparse=True): indexing with a boolean mask ends up calling .values,
+    which sparse.COO refuses to densify implicitly. Densify first with
+    utils.maybe_densify_dataarray if obj may be sparse-backed.
 
     Args:
         obj: A Dataset or DataArray, typically a selection out of

@@ -282,19 +282,36 @@ For unaggregated spatial results (e.g. a metric that preserves
 `latitude`/`longitude` per case), the dense, padded hypercube can
 become unmanageably large: every case ends up padding out to the union
 of every other case's spatial grid. Pass `sparse=True` to back the
-Dataset's data variables with `sparse.COO` arrays instead of
-densifying them:
+Dataset's floating-point and datetime/timedelta data variables with
+`sparse.COO` arrays instead of densifying them:
 
 ```python
 outputs = runner.run_evaluation(output_format="xarray", sparse=True)
 ```
 
+This also covers a run whose metrics preserve different dimensions on
+the same variable (e.g. `RootMeanSquaredError`'s `lead_time` alongside
+`DurationMeanError`'s `init_time`): `results_to_dataset` builds each
+sparse data variable directly, without materializing the padded
+hypercube or routing `sparse.COO` arrays through `xr.merge`.
+
+Data variables that aren't floating-point, datetime64, or timedelta64
+can't be given a well-defined `sparse.COO` fill value, so they stay
+densely backed even under `sparse=True`. In practice this only
+matters for non-dim coords promoted to data variables by metrics like
+landfall displacement: `forecast_landfall_latitude`/`_longitude`/
+`_valid_time` and the `target_landfall_*` equivalents are float or
+datetime64 and do sparsify (with a `NaN`/`NaT` fill, respectively);
+anything with an incompatible dtype would not.
+
 `results_to_dataset` also logs a warning (without requiring
 `sparse=True`) when the estimated dense element count for a run passes
-a threshold, as a hint to reach for it. The limitation: `sparse.COO`
+a threshold, as a hint to reach for it. The limitations: `sparse.COO`
 isn't a netCDF/zarr-representable format, so writing a sparse Dataset
-to disk densifies it first; `sparse=True` only helps while the Dataset
-stays in memory.
+to disk densifies it first (`sparse=True` only helps while the Dataset
+stays in memory), and `drop_empty_slices` can't operate directly on
+`sparse.COO`-backed input -- densify a selection first, e.g. with
+`utils.maybe_densify_dataarray`, before calling it.
 
 ### Saving results
 
