@@ -1556,6 +1556,11 @@ class DurationMeanError(MeanError):
         if isinstance(threshold_criteria, xr.DataArray):
             # Climatology case, convert from dayofyear/hour to valid_time.
             # Note that unintended behavior may occur if the case spans multiple years.
+            days = np.intersect1d(
+                forecast.valid_time.dt.dayofyear, threshold_criteria.dayofyear
+            )
+            if days.size:
+                threshold_criteria = threshold_criteria.sel(dayofyear=days)
             threshold_criteria = utils.convert_day_yearofday_to_time(
                 threshold_criteria, forecast.valid_time.dt.year.values[0]
             )

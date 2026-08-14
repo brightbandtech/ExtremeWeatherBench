@@ -1193,6 +1193,15 @@ class TestConvertDayYearofDayToTime:
         # Should still be a DataArray
         assert isinstance(result, xr.DataArray)
 
+    def test_non_january_dayofyear(self):
+        """Times come from dayofyear and hour, not a Jan 1 date_range."""
+        ds = xr.Dataset(
+            {"temperature": (["dayofyear", "hour"], [[1.0], [2.0]])},
+            coords={"dayofyear": [171, 172], "hour": [0]},
+        )
+        result = utils.convert_day_yearofday_to_time(ds, year=2021)
+        assert result.valid_time.values[0] == np.datetime64("2021-06-20")
+        assert result.valid_time.values[1] == np.datetime64("2021-06-21")
 
     def test_dataarray_preserves_data_values(self):
         """Test that DataArray data values are preserved."""
