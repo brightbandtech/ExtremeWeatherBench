@@ -1,6 +1,7 @@
 """Tests for evaluate module."""
 
 import contextlib
+import dataclasses
 import datetime
 import logging
 import pathlib
@@ -76,6 +77,7 @@ def mock_target_base():
     """Create a mock TargetBase object."""
     mock_target = mock.Mock(spec=inputs.TargetBase)
     mock_target.name = "MockTarget"
+    mock_target.source = "mock://target"
     mock_target.variables = ["2m_temperature"]
 
     # Create a dataset with time coordinate for valid_times check
@@ -85,7 +87,6 @@ def mock_target_base():
     )
 
     mock_target._open_data_from_source.return_value = mock_dataset
-    mock_target.open_and_maybe_preprocess_data_from_source.return_value = mock_dataset
     mock_target.maybe_map_variable_names.return_value = mock_dataset
     mock_target.subset_data_to_case.return_value = mock_dataset
     mock_target.maybe_convert_to_dataset.return_value = mock_dataset
@@ -103,6 +104,7 @@ def mock_forecast_base():
     """Create a mock ForecastBase object."""
     mock_forecast = mock.Mock(spec=inputs.ForecastBase)
     mock_forecast.name = "MockForecast"
+    mock_forecast.source = "mock://forecast"
     mock_forecast.variables = ["surface_air_temperature"]
 
     # Create a dataset with init_time coordinate for valid_times check
@@ -114,7 +116,6 @@ def mock_forecast_base():
     )
 
     mock_forecast._open_data_from_source.return_value = mock_dataset
-    mock_forecast.open_and_maybe_preprocess_data_from_source.return_value = mock_dataset
     mock_forecast.maybe_map_variable_names.return_value = mock_dataset
     mock_forecast.subset_data_to_case.return_value = mock_dataset
     mock_forecast.maybe_convert_to_dataset.return_value = mock_dataset
@@ -647,7 +648,7 @@ class TestOutputFormatWiring:
                 ewb.run_evaluation(output_format="geojson")
 
     @mock.patch("extremeweatherbench.evaluate._run_evaluation")
-    def test_run_deprecated_output_format_xarray_returns_dataset(
+    def test_run_deprecated_delegates_to_run_evaluation(
         self,
         mock_run_evaluation,
         sample_cases_list,
@@ -666,28 +667,6 @@ class TestOutputFormatWiring:
             result = ewb.run(n_jobs=1, output_format="xarray")
 
             assert isinstance(result, xr.Dataset)
-
-    @mock.patch("extremeweatherbench.evaluate._run_evaluation")
-    def test_run_deprecated_unknown_output_format_raises_value_error(
-        self,
-        mock_run_evaluation,
-        sample_cases_list,
-        sample_evaluation_object,
-        sample_case_operator,
-    ):
-        with mock.patch.object(
-            evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
-        ):
-            mock_run_evaluation.return_value = [
-                [_annotated_result(value=1.0, case_id_number=1)]
-            ]
-            ewb = evaluate.ExtremeWeatherBench(
-                case_metadata=sample_cases_list,
-                evaluation_objects=[sample_evaluation_object],
-            )
-
-            with pytest.raises(ValueError, match="pandas"):
-                ewb.run(output_format="geojson")
 
 
 class TestRunCaseOperators:
@@ -902,6 +881,89 @@ class TestRunSerial:
         assert result == []
 
 
+class TestGroupOperatorsSharingForecast:
+    """Test forecast-reuse grouping and named index types."""
+
+    def test_shared_forecast_is_one_group(self, sample_case_operator):
+        """PPH- and LSR-like operators that share a forecast form one group."""
+        op2 = dataclasses.replace(
+            sample_case_operator,
+            target=mock.Mock(spec=inputs.TargetBase),
+        )
+        sample_case_operator.forecast.name = "HRES"
+        sample_case_operator.forecast.source = "hres://x"
+        op2.forecast.name = "HRES"
+        op2.forecast.source = "hres://x"
+        groups = evaluate._group_operators_sharing_forecast(
+            [sample_case_operator, op2]
+        )
+        assert len(groups) == 1
+        assert [item.index for item in groups[0]] == [0, 1]
+        assert all(
+            isinstance(item, evaluate.IndexedOperator) for item in groups[0]
+        )
+        assert groups[0][0].operator is sample_case_operator
+        assert groups[0][1].operator is op2
+
+    def test_different_forecasts_are_separate_groups(self, sample_case_operator):
+        """Operators with different forecast identities stay in two groups."""
+        other_forecast = mock.Mock(spec=inputs.ForecastBase)
+        other_forecast.name = "other"
+        other_forecast.source = "other://x"
+        sample_case_operator.forecast.name = "HRES"
+        sample_case_operator.forecast.source = "hres://x"
+        op2 = dataclasses.replace(sample_case_operator, forecast=other_forecast)
+        groups = evaluate._group_operators_sharing_forecast(
+            [sample_case_operator, op2]
+        )
+        assert len(groups) == 2
+        assert [item.index for item in groups[0]] == [0]
+        assert [item.index for item in groups[1]] == [1]
+
+    def test_interleaved_operators_keep_original_indices(
+        self, sample_case_operator
+    ):
+        """Non-adjacent shared-forecast operators keep their input indices."""
+        shared = sample_case_operator.forecast
+        shared.name = "HRES"
+        shared.source = "hres://x"
+        other = mock.Mock(spec=inputs.ForecastBase)
+        other.name = "other"
+        other.source = "other://x"
+        op_b = dataclasses.replace(sample_case_operator, forecast=other)
+        op_c = dataclasses.replace(sample_case_operator)
+        groups = evaluate._group_operators_sharing_forecast(
+            [sample_case_operator, op_b, op_c]
+        )
+        assert [item.index for item in groups[0]] == [0, 2]
+        assert [item.index for item in groups[1]] == [1]
+        assert groups[0][0].operator is sample_case_operator
+        assert groups[0][1].operator is op_c
+
+    def test_scatter_restores_input_order(self, sample_case_operator):
+        """Parent-side indices scatter group-order results back to slots."""
+        da0 = xr.DataArray([0.0])
+        da1 = xr.DataArray([1.0])
+        da2 = xr.DataArray([2.0])
+        other = mock.Mock(spec=inputs.ForecastBase)
+        other.name = "other"
+        other.source = "other://x"
+        op_b = dataclasses.replace(sample_case_operator, forecast=other)
+        op_c = dataclasses.replace(sample_case_operator)
+        groups = [
+            [
+                evaluate.IndexedOperator(index=0, operator=sample_case_operator),
+                evaluate.IndexedOperator(index=2, operator=op_c),
+            ],
+            [evaluate.IndexedOperator(index=1, operator=op_b)],
+        ]
+        nested = [[[da0], [da2]], [[da1]]]
+        restored = evaluate._scatter_group_results(groups, nested, 3)
+        assert restored[0][0] is da0
+        assert restored[1][0] is da1
+        assert restored[2][0] is da2
+
+
 class TestRunParallel:
     """Test the _run_parallel_evaluation function."""
 
@@ -920,7 +982,7 @@ class TestRunParallel:
         mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
         mock_result = [pd.DataFrame({"value": [1.0], "case_id_number": [1]})]
-        mock_parallel_instance.return_value = mock_result
+        mock_parallel_instance.return_value = [mock_result]
 
         result = evaluate._run_parallel_evaluation(
             [sample_case_operator],
@@ -949,7 +1011,7 @@ class TestRunParallel:
         mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
         mock_result = [pd.DataFrame({"value": [1.0]})]
-        mock_parallel_instance.return_value = mock_result
+        mock_parallel_instance.return_value = [mock_result]
 
         with mock.patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
             result = evaluate._run_parallel_evaluation(
@@ -978,7 +1040,7 @@ class TestRunParallel:
         mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
         mock_result = [pd.DataFrame({"value": [1.0]})]
-        mock_parallel_instance.return_value = mock_result
+        mock_parallel_instance.return_value = [mock_result]
 
         # Create a context manager mock
         mock_context = mock.MagicMock()
@@ -1023,7 +1085,7 @@ class TestRunParallel:
             pd.DataFrame({"value": [1.0], "case_id_number": [1]}),
             pd.DataFrame({"value": [2.0], "case_id_number": [2]}),
         ]
-        mock_parallel_instance.return_value = mock_result
+        mock_parallel_instance.return_value = [[row] for row in mock_result]
 
         result = evaluate._run_parallel_evaluation(
             case_operators, parallel_config={"backend": "threading", "n_jobs": 4}
@@ -1047,7 +1109,7 @@ class TestRunParallel:
         mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
         mock_result = [pd.DataFrame({"value": [1.0]})]
-        mock_parallel_instance.return_value = mock_result
+        mock_parallel_instance.return_value = [mock_result]
 
         result = evaluate._run_parallel_evaluation(
             [sample_case_operator],
@@ -1103,7 +1165,7 @@ class TestRunParallel:
         mock_delayed.return_value = mock.Mock()
         mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
-        mock_parallel_instance.return_value = [pd.DataFrame({"value": [1.0]})]
+        mock_parallel_instance.return_value = [[pd.DataFrame({"value": [1.0]})]]
 
         evaluate._run_parallel_evaluation(
             [sample_case_operator],
@@ -1135,7 +1197,7 @@ class TestRunParallel:
         mock_delayed.return_value = mock.Mock()
         mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
-        mock_parallel_instance.return_value = [pd.DataFrame({"value": [1.0]})]
+        mock_parallel_instance.return_value = [[pd.DataFrame({"value": [1.0]})]]
         mock_manager.return_value.Queue.return_value = mock.Mock()
 
         evaluate._run_parallel_evaluation(
@@ -1173,7 +1235,7 @@ class TestRunParallel:
         mock_delayed.return_value = mock.Mock()
         mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
-        mock_parallel_instance.return_value = [pd.DataFrame({"value": [1.0]})]
+        mock_parallel_instance.return_value = [[pd.DataFrame({"value": [1.0]})]]
 
         evaluate._run_parallel_evaluation(
             [sample_case_operator],
@@ -1208,7 +1270,7 @@ class TestRunParallel:
         mock_delayed.return_value = mock.Mock()
         mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
-        mock_parallel_instance.return_value = [pd.DataFrame({"value": [1.0]})]
+        mock_parallel_instance.return_value = [[pd.DataFrame({"value": [1.0]})]]
         event_queue = mock.Mock(name="event_queue")
         log_queue = mock.Mock(name="log_queue")
         mock_manager.return_value.Queue.side_effect = [event_queue, log_queue]
@@ -1252,7 +1314,7 @@ class TestRunParallel:
         mock_delayed.return_value = mock_delayed_func
         mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
-        mock_parallel_instance.return_value = [pd.DataFrame(), pd.DataFrame()]
+        mock_parallel_instance.return_value = [[[]], [[]]]
 
         evaluate._run_parallel_evaluation(
             case_operators, parallel_config={"backend": "threading", "n_jobs": 2}
@@ -1260,10 +1322,12 @@ class TestRunParallel:
 
         generator_arg = mock_parallel_instance.call_args[0][0]
         list(generator_arg)
-        dispatch_ids = [
-            call.kwargs["dispatch_id"] for call in mock_delayed_func.call_args_list
+        indices = [
+            item.index
+            for call in mock_delayed_func.call_args_list
+            for item in call.args[0]
         ]
-        assert dispatch_ids == [0, 1]
+        assert indices == [0, 1]
 
     @mock.patch("extremeweatherbench.evaluate.multiprocessing.Manager")
     @mock.patch("extremeweatherbench.evaluate.progress_module.LogQueueListener")
@@ -1294,7 +1358,7 @@ class TestRunParallel:
         mock_delayed.return_value = mock.Mock()
         mock_parallel_instance = mock.Mock()
         mock_parallel_class.return_value = mock_parallel_instance
-        mock_parallel_instance.return_value = [pd.DataFrame({"value": [1.0]})]
+        mock_parallel_instance.return_value = [[pd.DataFrame({"value": [1.0]})]]
 
         order = []
         mock_renderer_class.return_value.close.side_effect = lambda: order.append(
@@ -1342,7 +1406,7 @@ class TestRunParallel:
         with mock.patch("extremeweatherbench.utils.ParallelTqdm") as mock_parallel:
             mock_parallel_instance = mock.Mock()
             mock_parallel.return_value = mock_parallel_instance
-            mock_parallel_instance.return_value = [pd.DataFrame({"test": [1]})]
+            mock_parallel_instance.return_value = [[pd.DataFrame({"test": [1]})]]
 
             with mock.patch("joblib.parallel_config"):
                 result = evaluate._run_parallel_evaluation(
@@ -1371,7 +1435,7 @@ class TestRunParallel:
         with mock.patch("extremeweatherbench.utils.ParallelTqdm") as mock_parallel:
             mock_parallel_instance = mock.Mock()
             mock_parallel.return_value = mock_parallel_instance
-            mock_parallel_instance.return_value = [pd.DataFrame({"test": [1]})]
+            mock_parallel_instance.return_value = [[pd.DataFrame({"test": [1]})]]
 
             with mock.patch("joblib.parallel_config"):
                 result = evaluate._run_parallel_evaluation(
@@ -1652,6 +1716,8 @@ class TestComputeCaseOperator:
                 # Called twice: once for forecast, once for target
                 assert mock_compute_cache.call_count == 2
                 assert isinstance(result, pd.DataFrame)
+                case_id = sample_case_operator.case_metadata.case_id_number
+                assert (cache_dir / f"case_{case_id}_results.pkl").exists()
 
     @mock.patch("extremeweatherbench.evaluate._build_datasets")
     def test_compute_case_operator_multiple_metrics(
@@ -2720,12 +2786,14 @@ class TestIntegration:
         # Mock target and forecast with variables that match our datasets
         eval_obj.target = mock.Mock(spec=inputs.TargetBase)
         eval_obj.target.name = "MultiTarget"
+        eval_obj.target.source = "mock://target"
         eval_obj.target.variables = [
             "2m_temperature"
         ]  # Only include variables that exist
 
         eval_obj.forecast = mock.Mock(spec=inputs.ForecastBase)
         eval_obj.forecast.name = "MultiForecast"
+        eval_obj.forecast.source = "mock://forecast"
         eval_obj.forecast.variables = [
             "surface_air_temperature"
         ]  # Only include variables that exist
@@ -2881,7 +2949,9 @@ class TestIntegration:
         ) as mock_parallel_class:
             mock_parallel_instance = mock.Mock()
             mock_parallel_class.return_value = mock_parallel_instance
-            mock_parallel_instance.return_value = mock_results
+            mock_parallel_instance.return_value = [
+                [row] for row in mock_results
+            ]
 
             start_time = time.time()
             parallel_result = evaluate._run_parallel_evaluation(
@@ -2944,7 +3014,9 @@ class TestIntegration:
                 ) as mock_parallel_class:
                     mock_parallel_instance = mock.Mock()
                     mock_parallel_class.return_value = mock_parallel_instance
-                    mock_parallel_instance.return_value = mock_results
+                    mock_parallel_instance.return_value = [
+                        [row] for row in mock_results
+                    ]
 
                     # Add parallel_config to kwargs
                     kwargs = config.get("kwargs", {})
@@ -3008,7 +3080,7 @@ class TestIntegration:
                     mock_parallel_instance = mock.Mock()
                     mock_parallel_class.return_value = mock_parallel_instance
                     mock_parallel_instance.return_value = [
-                        [_annotated_result(value=1.0)]
+                        [[_annotated_result(value=1.0)]]
                     ]
 
                     # Reset captured kwargs
@@ -3090,7 +3162,9 @@ class TestIntegration:
         ) as mock_parallel_class:
             mock_parallel_instance = mock.Mock()
             mock_parallel_class.return_value = mock_parallel_instance
-            mock_parallel_instance.return_value = mock_results
+            mock_parallel_instance.return_value = [
+                [row] for row in mock_results
+            ]
 
             parallel_results = evaluate._run_parallel_evaluation(
                 case_operators, parallel_config={"backend": "threading", "n_jobs": 4}
