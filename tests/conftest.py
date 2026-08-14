@@ -1,3 +1,4 @@
+import os
 import pathlib
 import tempfile
 
@@ -7,6 +8,7 @@ import pytest
 import sparse
 import xarray as xr
 from click import testing
+from hypothesis import HealthCheck, settings
 
 from extremeweatherbench import calc
 
@@ -72,7 +74,9 @@ def make_sample_point_obs_df():
 
 def make_sample_forecast_dataset():
     init_time = pd.date_range("2021-06-20", periods=5)
-    lead_time = range(0, 241, 6)
+    lead_time = np.array([i for i in range(0, 241, 6)], dtype="timedelta64[h]").astype(
+        "timedelta64[ns]"
+    )
     data = np.random.RandomState(21897820).standard_normal(
         size=(len(init_time), 181, 360, len(lead_time)),
     )
@@ -104,7 +108,7 @@ def make_sample_forecast_dataset():
     dataset["surface_air_temperature"].loc[
         dict(
             init_time="2021-06-21 00:00",
-            lead_time=42,
+            lead_time=np.timedelta64(42, "h"),
             latitude=slice(40, 45),
             longitude=slice(100, 105),
         )
@@ -113,7 +117,7 @@ def make_sample_forecast_dataset():
     dataset["surface_air_temperature"].loc[
         dict(
             init_time="2021-06-20 00:00",
-            lead_time=42,
+            lead_time=np.timedelta64(42, "h"),
             latitude=slice(40, 45),
             longitude=slice(100, 105),
         )
@@ -462,6 +466,18 @@ def sample_sparse_target_dataset():
             "target": make_sample_sparse_target_dataarray(),
         },
     )
+
+
+settings.register_profile(
+    "ewb", max_examples=25, deadline=None, suppress_health_check=[HealthCheck.too_slow]
+)
+settings.register_profile(
+    "ewb-sweep",
+    max_examples=300,
+    deadline=None,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ewb"))
 
 
 def make_cape_pressure_levels() -> np.ndarray:

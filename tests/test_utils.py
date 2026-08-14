@@ -196,6 +196,159 @@ def test_min_if_all_timesteps_present_forecast():
     assert np.all(np.isnan(result_incomplete.values))
 
 
+def test_min_if_all_timesteps_present_rejects_nan_padded_day():
+    """A day padded out with NaNs is incomplete even if the coordinate is full."""
+    da = xr.DataArray([1.0, np.nan, np.nan, np.nan], dims=["time"])
+
+    result = utils.min_if_all_timesteps_present(da, 6)
+
+    assert np.isnan(result.values)
+
+
+def test_min_if_all_timesteps_present_forecast_counts_values_per_lead():
+    """Completeness is judged per lead time, not from the shared valid_time axis.
+
+    The valid_time coordinate is the union over all lead times, so it is denser
+    than any single lead time's sampling. Counting its length passes every lead
+    time through and lets a single sample masquerade as a daily minimum.
+    """
+    valid_times = pd.date_range("2020-01-01", periods=4, freq="6h")
+    values = np.full((3, 4), np.nan)
+    # One sample per lead time, at a different hour for each: exactly what a
+    # sparse initialization cadence produces on a union valid_time axis.
+    values[0, 0], values[1, 1], values[2, 2] = 5.0, 6.0, 7.0
+    da = xr.DataArray(
+        values,
+        dims=["lead_time", "valid_time"],
+        coords={"lead_time": [0, 6, 12], "valid_time": valid_times},
+    )
+
+    result = utils.min_if_all_timesteps_present_forecast(da, 6)
+
+    assert da.valid_time.size == 4
+    assert np.all(np.isnan(result.values))
+
+    complete = da.copy()
+    complete.values[0, :] = [5.0, 4.0, 3.0, 6.0]
+    result = utils.min_if_all_timesteps_present_forecast(complete, 6)
+    assert result.sel(lead_time=0).item() == 3.0
+    assert np.all(np.isnan(result.sel(lead_time=[6, 12]).values))
+
+
+def test_expected_timesteps_per_day():
+    """Timesteps per day come from the lead_time spacing, not valid_time."""
+    lead_times = pd.timedelta_range("0h", "48h", freq="6h")
+    da = xr.DataArray(
+        np.zeros(len(lead_times)), dims=["lead_time"], coords={"lead_time": lead_times}
+    )
+    assert utils.expected_timesteps_per_day(da) == 4
+
+    hourly = xr.DataArray(
+        np.zeros(3),
+        dims=["lead_time"],
+        coords={"lead_time": pd.timedelta_range("0h", "2h", freq="1h")},
+    )
+    assert utils.expected_timesteps_per_day(hourly) == 24
+
+    single = xr.DataArray(
+        [0.0], dims=["lead_time"], coords={"lead_time": [pd.Timedelta("0h")]}
+    )
+    assert utils.expected_timesteps_per_day(single) == 1
+
+
+def test_expected_timesteps_per_day_accepts_integer_hour_lead_times():
+    """Integer lead times mean hours, the convention used across the codebase."""
+    da = xr.DataArray(
+        np.zeros(9), dims=["lead_time"], coords={"lead_time": np.arange(0, 54, 6)}
+    )
+    assert utils.expected_timesteps_per_day(da) == 4
+
+
+def _sparse_init_forecast(init_freq="72h"):
+    """Forecast on a (lead_time, valid_time) grid with 00Z-only inits."""
+    inits = set(pd.date_range("2020-06-01", "2020-06-13", freq=init_freq))
+    lead_times = pd.timedelta_range("0h", "240h", freq="6h")
+    valid_times = pd.date_range("2020-06-08", "2020-06-14", freq="6h")
+
+    values = np.full((len(lead_times), len(valid_times)), np.nan)
+    for i, lead_time in enumerate(lead_times):
+        for j, valid_time in enumerate(valid_times):
+            if (valid_time - lead_time) in inits:
+                values[i, j] = valid_time.hour + lead_time / pd.Timedelta("1h") / 100
+
+    return xr.DataArray(
+        values,
+        dims=["lead_time", "valid_time"],
+        coords={"lead_time": lead_times, "valid_time": valid_times},
+    )
+
+
+def test_reduce_forecast_over_window_per_init_reduces_along_each_run():
+    """Each init contributes one value, reduced over its own lead times."""
+    forecast = _sparse_init_forecast()
+    center = np.datetime64("2020-06-11T00:00:00")
+
+    result = utils.reduce_forecast_over_window_per_init(forecast, center, 24, "max")
+
+    assert result.dims == ("lead_time",)
+    assert "init_time" in result.coords
+    # No lead time has more than one sample inside the window, so a reduction
+    # over valid_time would have had a single value to work with.
+    in_window = forecast.where(
+        (forecast.valid_time >= center - np.timedelta64(12, "h"))
+        & (forecast.valid_time <= center + np.timedelta64(12, "h"))
+    )
+    assert in_window.notnull().sum("valid_time").max().item() == 1
+    # The per-init reduction sees the whole diurnal cycle instead.
+    assert result.sizes["lead_time"] >= 3
+    init_times = pd.to_datetime(result.init_time.values)
+    assert all(t.hour == 0 for t in init_times)
+    lead_hours = result.lead_time / np.timedelta64(1, "h")
+    np.testing.assert_array_equal(
+        lead_hours.values, (center - result.init_time.values) / np.timedelta64(1, "h")
+    )
+
+
+def test_reduce_forecast_over_window_per_init_honors_required_timesteps():
+    """Initializations covering less than the requested window are dropped."""
+    forecast = _sparse_init_forecast()
+    center = np.datetime64("2020-06-11T00:00:00")
+
+    permissive = utils.reduce_forecast_over_window_per_init(
+        forecast, center, 24, "min", required_timesteps=1
+    )
+    strict = utils.reduce_forecast_over_window_per_init(
+        forecast, center, 24, "min", required_timesteps=99
+    )
+
+    assert permissive.sizes["lead_time"] > 0
+    assert strict.sizes["lead_time"] == 0
+    assert "init_time" in strict.coords
+
+
+def test_reduce_forecast_over_window_per_init_drops_negative_lead_times():
+    """Runs launched after the target time are not forecasts of it."""
+    forecast = _sparse_init_forecast(init_freq="24h")
+    center = np.datetime64("2020-06-08T00:00:00")
+
+    result = utils.reduce_forecast_over_window_per_init(forecast, center, 24, "max")
+
+    assert result.sizes["lead_time"] > 0
+    assert np.all(result.lead_time.values >= np.timedelta64(0, "h"))
+
+
+def test_reduce_forecast_over_window_per_init_outside_the_window():
+    """A window with no forecast coverage yields an empty, well-formed result."""
+    forecast = _sparse_init_forecast()
+
+    result = utils.reduce_forecast_over_window_per_init(
+        forecast, np.datetime64("2021-01-01T00:00:00"), 24, "max"
+    )
+
+    assert result.sizes["lead_time"] == 0
+    assert "init_time" in result.coords
+
+
 def test_determine_temporal_resolution():
     """Test determining time resolution in hours."""
     # Create dataset with 6-hourly resolution
