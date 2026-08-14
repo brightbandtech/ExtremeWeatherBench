@@ -1553,6 +1553,28 @@ class TestLSR:
         mock_read_parquet.assert_called_once_with("test.parquet", storage_options={})
         assert result.equals(sample_lsr_dataframe)
 
+    @mock.patch("pandas.read_parquet")
+    def test_lsr_open_data_from_source_with_time_filters(
+        self, mock_read_parquet, sample_lsr_dataframe
+    ):
+        """Case metadata should be pushed into the parquet read as filters."""
+        mock_read_parquet.return_value = sample_lsr_dataframe
+        mock_case = mock.Mock()
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-21")
+        lsr = inputs.LSR(
+            source="test.parquet",
+            variables=["report"],
+            variable_mapping={},
+            storage_options={},
+        )
+        lsr._open_data_from_source(case_metadata=mock_case)
+        kwargs = mock_read_parquet.call_args.kwargs
+        assert kwargs["storage_options"] == {}
+        assert kwargs["filters"] == [
+            ("valid_time", ">=", pd.Timestamp("2021-06-20")),
+            ("valid_time", "<=", pd.Timestamp("2021-06-21")),
+        ]
 
     def test_lsr_subset_data_to_case(self, sample_lsr_dataframe):
         """Test LSR subset_data_to_case."""

@@ -1209,7 +1209,10 @@ def run_pipeline(
     # Gridded: map names, subset case, preprocess, then subset variables so
     # preprocess can add fields such as geopotential thickness. Tabular
     # sources such as IBTrACS need original column names inside preprocess.
-    data = input_data._open_data_from_source()
+    if isinstance(input_data, inputs.LSR):
+        data = input_data._open_data_from_source(case_metadata=case_metadata)
+    else:
+        data = input_data._open_data_from_source()
     is_gridded = isinstance(data, (xr.Dataset, xr.DataArray))
     if not is_gridded:
         data = input_data.preprocess(data)
