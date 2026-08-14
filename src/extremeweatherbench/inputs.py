@@ -397,13 +397,8 @@ class ForecastBase(InputBase):
             (len(subset_time_data.init_time), len(subset_time_data.lead_time)),
             dtype=bool,
         )
-
-        # Map the valid indices back to the subset data coordinates
-        for i, j in zip(subset_time_indices[0], subset_time_indices[1]):
-            # Find the position of this init_time in the subset data
-            init_pos = np.where(unique_init_indices == i)[0]
-            if len(init_pos) > 0:
-                valid_combinations_mask[init_pos[0], j] = True
+        init_pos = np.searchsorted(unique_init_indices, subset_time_indices[0])
+        valid_combinations_mask[init_pos, subset_time_indices[1]] = True
 
         # Add the mask as a coordinate so downstream code can use it
         subset_time_data = subset_time_data.assign_coords(
@@ -1229,17 +1224,24 @@ def align_forecast_to_target(
     # Regrid forecast to target grid using nearest neighbor interpolation
     # extrapolate in the case of targets slightly outside the forecast domain
     if spatial_dims:
-        interp_method: Literal["nearest", "linear"] = (
-            "nearest" if method == "nearest" else "linear"
+        same_grid = all(
+            time_aligned_forecast[dim].equals(time_aligned_target[dim])
+            for dim in spatial_dims
         )
+        if same_grid:
+            time_space_aligned_forecast = time_aligned_forecast
+        else:
+            interp_method: Literal["nearest", "linear"] = (
+                "nearest" if method == "nearest" else "linear"
+            )
 
-        interp_kwargs = cast(
-            dict[str, Any],
-            {"method": interp_method, "kwargs": {"fill_value": "extrapolate"}},
-        )
-        interp_kwargs.update(spatial_dims)
+            interp_kwargs = cast(
+                dict[str, Any],
+                {"method": interp_method, "kwargs": {"fill_value": "extrapolate"}},
+            )
+            interp_kwargs.update(spatial_dims)
 
-        time_space_aligned_forecast = time_aligned_forecast.interp(**interp_kwargs)
+            time_space_aligned_forecast = time_aligned_forecast.interp(**interp_kwargs)
     else:
         time_space_aligned_forecast = time_aligned_forecast
 

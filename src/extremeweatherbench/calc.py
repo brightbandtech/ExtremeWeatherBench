@@ -4,7 +4,6 @@ from typing import Literal, Optional, Sequence, Union
 import numpy as np
 import numpy.typing as npt
 import regionmask
-import scores.categorical as categorical
 import shapely
 import xarray as xr
 from numba import float64, guvectorize
@@ -384,15 +383,11 @@ def find_land_intersection(
         a mask of points where AR overlaps with land
     """
     if land_mask is None:
-        land_mask = regionmask.defined_regions.natural_earth_v5_0_0.land_110.mask(
-            mask.longitude, mask.latitude
-        )
+        land_mask = utils.regionmask_land_110(mask.latitude, mask.longitude)
         land_mask = land_mask.where(np.isnan(land_mask), 1).where(land_mask == 0, 0)
 
-    # Use the scores.categorical library to compute the binary mask (true positives)
-    contingency_manager = categorical.BinaryContingencyManager(mask, land_mask)
-    # return the true positive mask, where mask is true and land is true
-    return contingency_manager.tp
+    overlap = mask.astype(bool) & land_mask.astype(bool)
+    return xr.where(overlap, 1, 0)
 
 
 def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -> float:

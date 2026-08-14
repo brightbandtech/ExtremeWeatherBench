@@ -156,6 +156,25 @@ def convert_longitude_to_180(
         return np.mod(longitude - 180, 360) - 180
 
 
+# Cached Natural Earth land masks keyed by lat/lon byte values.
+_REGIONMASK_LAND_CACHE: dict[tuple[bytes, bytes], xr.DataArray] = {}
+
+
+def regionmask_land_110(
+    latitude: xr.DataArray | npt.NDArray, longitude: xr.DataArray | npt.NDArray
+) -> xr.DataArray:
+    """Land mask from Natural Earth 110m. 0 is land. Cached per grid."""
+    lat_vals = np.asarray(latitude)
+    lon_vals = np.asarray(longitude)
+    key = (lat_vals.tobytes(), lon_vals.tobytes())
+    mask = _REGIONMASK_LAND_CACHE.get(key)
+    if mask is None:
+        land = regionmask.defined_regions.natural_earth_v5_0_0.land_110
+        mask = land.mask(longitude, latitude)
+        _REGIONMASK_LAND_CACHE[key] = mask
+    return mask
+
+
 def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     """Subset a dataset to only include land gridpoints based on a land-sea mask.
 
@@ -165,8 +184,7 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     Returns:
         The dataset masked to only land gridpoints.
     """
-    land = regionmask.defined_regions.natural_earth_v5_0_0.land_110
-    land_sea_mask = land.mask(dataset.longitude, dataset.latitude)
+    land_sea_mask = regionmask_land_110(dataset.latitude, dataset.longitude)
     land_mask = land_sea_mask == 0
     # Subset the dataset to only include land gridpoints
     return dataset.where(land_mask)
@@ -438,6 +456,9 @@ def _lead_time_as_timedelta(lead_time: xr.DataArray) -> xr.DataArray:
 def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
     """Convert the init_time coordinate to a valid_time coordinate.
 
+    Each lead is reindexed onto the union of valid times, then concatenated.
+    That matches concat(..., join="outer") without growing aligns.
+
     Args:
         ds: The dataset to convert with lead_time and init_time coordinates.
 
@@ -445,20 +466,22 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
         The dataset with a valid_time coordinate.
     """
     lead_time = _lead_time_as_timedelta(ds.lead_time)
-    valid_time = xr.DataArray(
-        ds.init_time, coords={"init_time": ds.init_time}
-    ) + xr.DataArray(lead_time, coords={"lead_time": ds.lead_time})
-    ds = ds.assign_coords(valid_time=valid_time)
-    return xr.concat(
-        [
-            ds.sel(lead_time=lead).swap_dims({"init_time": "valid_time"})
-            for lead in ds.lead_time
-        ],
-        "lead_time",
+    ds = ds.assign_coords(valid_time=ds.init_time + lead_time)
+    vt_union = np.unique(ds.valid_time.values.reshape(-1))
+    pieces = [
+        ds.isel(lead_time=i)
+        .swap_dims({"init_time": "valid_time"})
+        .reindex(valid_time=vt_union)
+        for i in range(ds.sizes["lead_time"])
+    ]
+    out = xr.concat(
+        pieces,
+        dim="lead_time",
         coords="different",
         compat="equals",
         join="outer",
     )
+    return out.assign_coords(lead_time=("lead_time", ds.lead_time.values))
 
 
 def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:

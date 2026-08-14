@@ -138,22 +138,11 @@ def _safe_concat(
         across DataFrames, converts to object dtype only when there are
         dtype mismatches.
     """
-    # Filter out problematic DataFrames that would trigger FutureWarning
     valid_dfs = []
     for i, df in enumerate(dataframes):
-        # Skip empty DataFrames
-        if df.empty:
-            logger.debug("Skipping empty DataFrame %s", i)
+        if df.empty or df.isna().all().all():
+            logger.debug("Skipping empty or all-NA DataFrame %s", i)
             continue
-        # Skip DataFrames where all values are NA
-        if df.isna().all().all():
-            logger.debug("Skipping all-NA DataFrame %s", i)
-            continue
-        # Skip DataFrames where all columns are empty/NA
-        if len(df.columns) > 0 and all(df[col].isna().all() for col in df.columns):
-            logger.debug("Skipping DataFrame %s with all-NA columns", i)
-            continue
-
         valid_dfs.append(df)
 
     if valid_dfs:

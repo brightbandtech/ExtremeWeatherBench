@@ -1,11 +1,13 @@
 """Evaluation routines for use during ExtremeWeatherBench case studies / analyses."""
 
 import contextlib
+import contextvars
 import copy
 import dataclasses
 import logging
 import multiprocessing
 import pathlib
+from collections import OrderedDict
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 import dask.array as da
@@ -31,6 +33,11 @@ logger = logging.getLogger(__name__)
 
 # Re-exported for backwards compatibility.
 OUTPUT_COLUMNS = outputs.OUTPUT_COLUMNS
+
+# Process-local reuse of forecast/target datasets within one evaluation.
+_pipeline_cache_var: contextvars.ContextVar[Optional[dict[tuple, xr.Dataset]]] = (
+    contextvars.ContextVar("_pipeline_cache", default=None)
+)
 
 
 class ExtremeWeatherBench:
@@ -101,55 +108,16 @@ class ExtremeWeatherBench:
         sparse: bool = False,
         **kwargs,
     ) -> Union[pd.DataFrame, xr.Dataset]:
-        """Runs the ExtremeWeatherBench evaluation workflow.
-
-        This method will run the evaluation workflow in the order of the case operators,
-        optionally caching the mid-flight outputs of the workflow if cache_dir was
-        provided for serial runs.
-
-        Args:
-            n_jobs: The number of jobs to run in parallel. If None, defaults to the
-                joblib backend default value. If 1, the workflow will run serially.
-                Ignored if parallel_config is provided.
-            parallel_config: Optional dictionary of joblib parallel configuration.
-                If provided, this takes precedence over n_jobs. If not provided and
-                n_jobs is specified, a default config with the loky backend is used.
-            progress: Whether to display progress bars. Defaults to True.
-            output_format: "pandas" for the long-form DataFrame, or "xarray"
-                for the flat Dataset from outputs.results_to_dataset.
-            sparse: Forwarded to outputs.results_to_dataset when
-                output_format is "xarray".
-            **kwargs: Additional arguments to pass to compute_case_operator.
-        Returns:
-            The evaluation results in the requested output_format.
-
-        Raises:
-            ValueError: If output_format is not "pandas" or "xarray".
-        """
+        """Deprecated alias for :meth:`run_evaluation`."""
         logger.warning("The run method is deprecated. Use run_evaluation instead.")
-        logger.info("Running ExtremeWeatherBench evaluations...")
-
-        if output_format not in ("pandas", "xarray"):
-            raise ValueError(
-                f"Unknown output_format '{output_format}'. Expected 'pandas' or "
-                "'xarray'."
-            )
-
-        # Check for serial or parallel configuration
-        parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
-
-        run_results = _run_evaluation(
-            self.case_operators,
-            cache_dir=self.cache_dir,
+        return self.run_evaluation(
+            n_jobs=n_jobs,
             parallel_config=parallel_config,
             progress=progress,
+            output_format=output_format,
+            sparse=sparse,
             **kwargs,
         )
-
-        flattened_results = [
-            result for case_results in run_results for result in case_results
-        ]
-        return _convert_results(flattened_results, output_format, sparse=sparse)
 
     def run_evaluation(
         self,
@@ -185,13 +153,8 @@ class ExtremeWeatherBench:
         Raises:
             ValueError: If output_format is not "pandas" or "xarray".
         """
+        _validate_output_format(output_format)
         logger.info("Running ExtremeWeatherBench evaluations...")
-
-        if output_format not in ("pandas", "xarray"):
-            raise ValueError(
-                f"Unknown output_format '{output_format}'. Expected 'pandas' or "
-                "'xarray'."
-            )
 
         # Check for serial or parallel configuration
         parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
@@ -208,6 +171,15 @@ class ExtremeWeatherBench:
             result for case_results in run_results for result in case_results
         ]
         return _convert_results(flattened_results, output_format, sparse=sparse)
+
+
+def _validate_output_format(output_format: str) -> None:
+    """Raise ValueError unless output_format is pandas or xarray."""
+    if output_format not in ("pandas", "xarray"):
+        raise ValueError(
+            f"Unknown output_format '{output_format}'. Expected 'pandas' or "
+            "'xarray'."
+        )
 
 
 def _convert_results(
@@ -230,13 +202,10 @@ def _convert_results(
     Raises:
         ValueError: If output_format is not "pandas" or "xarray".
     """
+    _validate_output_format(output_format)
     if output_format == "pandas":
         return outputs.results_to_dataframe(results)
-    if output_format == "xarray":
-        return outputs.results_to_dataset(results, sparse=sparse)
-    raise ValueError(
-        f"Unknown output_format '{output_format}'. Expected 'pandas' or 'xarray'."
-    )
+    return outputs.results_to_dataset(results, sparse=sparse)
 
 
 def _parallel_serial_config_check(
@@ -312,31 +281,37 @@ def _run_evaluation(
         else:
             logger.info("Running case operators in serial...")
             run_results = []
+            cache_token = _pipeline_cache_var.set({})
             case_bar = progress_module.make_case_bar(
                 len(case_operators), disable=not progress
             )
             task_bar = progress_module.make_dask_task_bar(disable=not progress)
-            with progress_module.registered_bar(case_bar, allow_phase_updates=True):
-                with progress_module.DaskTaskBar(task_bar):
-                    for case_operator in case_operators:
-                        step_bar = progress_module.make_case_step_bar(
-                            case_operator.case_metadata.case_id_number,
-                            _count_case_steps(case_operator, cache_dir),
-                            disable=not progress,
-                        )
-                        progress_module.register_step_bar(step_bar)
-                        try:
-                            run_results.append(
-                                _compute_case_operator_results(
-                                    case_operator, cache_dir, **kwargs
-                                )
+            try:
+                with progress_module.registered_bar(
+                    case_bar, allow_phase_updates=True
+                ):
+                    with progress_module.DaskTaskBar(task_bar):
+                        for case_operator in case_operators:
+                            step_bar = progress_module.make_case_step_bar(
+                                case_operator.case_metadata.case_id_number,
+                                _count_case_steps(case_operator, cache_dir),
+                                disable=not progress,
                             )
-                        finally:
-                            progress_module.register_step_bar(None)
-                            step_bar.close()
-                        case_bar.update(1)
-            task_bar.close()
-            case_bar.close()
+                            progress_module.register_step_bar(step_bar)
+                            try:
+                                run_results.append(
+                                    _compute_case_operator_results(
+                                        case_operator, cache_dir, **kwargs
+                                    )
+                                )
+                            finally:
+                                progress_module.register_step_bar(None)
+                                step_bar.close()
+                            case_bar.update(1)
+            finally:
+                task_bar.close()
+                case_bar.close()
+                _pipeline_cache_var.reset(cache_token)
 
     return run_results
 
@@ -421,22 +396,26 @@ def _run_parallel_evaluation(
 
     try:
         # TODO(198): return a generator and compute at a higher level
+        # Group operators that share a case and forecast so one worker can
+        # reuse the forecast dataset (PPH + LSR on the same HRES object).
+        groups = _group_operators_sharing_forecast(case_operators)
+        parallel_tqdm_kwargs["total_tasks"] = len(groups)
         with joblib.parallel_config(**parallel_config):
-            run_results = utils.ParallelTqdm(
+            nested_results = utils.ParallelTqdm(
                 pre_close=_close_worker_progress, **parallel_tqdm_kwargs
             )(
-                # None is the cache_dir, we can't cache in parallel mode
-                joblib.delayed(_compute_case_operator_with_progress)(
-                    case_operator,
+                joblib.delayed(_compute_operator_group_with_progress)(
+                    group,
                     cache_dir=cache_dir,
                     event_queue=event_queue,
                     log_queue=log_queue,
-                    dispatch_id=dispatch_id,
                     **kwargs,
                 )
-                for dispatch_id, case_operator in enumerate(case_operators)
+                for group in groups
             )
-        return run_results
+        return _scatter_group_results(
+            groups, nested_results, len(case_operators)
+        )
     finally:
         _close_worker_progress()
         if manager is not None:
@@ -445,6 +424,128 @@ def _run_parallel_evaluation(
         if dask_client is not None:
             logger.info("Closing dask client")
             dask_client.close()
+
+
+@dataclasses.dataclass(frozen=True)
+class IndexedOperator:
+    """An operator tagged with its original input index."""
+
+    index: int
+    operator: "cases.CaseOperator"
+
+
+def _group_operators_sharing_forecast(
+    case_operators: list["cases.CaseOperator"],
+) -> list[list[IndexedOperator]]:
+    """Group operators that share a case and forecast source.
+
+    PPH and LSR for the same case can reuse one forecast pipeline this way.
+    """
+    groups: OrderedDict[tuple, list[IndexedOperator]] = OrderedDict()
+    for i, op in enumerate(case_operators):
+        key = (
+            op.case_metadata.case_id_number,
+            op.forecast.name,
+            op.forecast.source,
+        )
+        groups.setdefault(key, []).append(
+            IndexedOperator(index=i, operator=op)
+        )
+    return list(groups.values())
+
+
+def _scatter_group_results(
+    groups: list[list[IndexedOperator]],
+    nested_results: list[list[list[xr.DataArray]]],
+    n_operators: int,
+) -> list[list[xr.DataArray]]:
+    """Restore original operator order from grouped parallel results.
+
+    Each job returns per-operator results in group order. Indices stay
+    on the parent in ``groups``.
+    """
+    run_results: list[list[xr.DataArray]] = [[] for _ in range(n_operators)]
+    for group, group_results in zip(groups, nested_results, strict=True):
+        for indexed, res in zip(group, group_results, strict=True):
+            run_results[indexed.index] = res
+    return run_results
+
+
+def _variable_cache_token(var: Any) -> str:
+    """Stable cache token for a pipeline variable."""
+    if isinstance(var, str):
+        return var
+    return f"{type(var).__name__}:{getattr(var, 'name', '')}"
+
+
+def _pipeline_cache_key(
+    case_metadata: "cases.IndividualCase",
+    input_data: "inputs.InputBase",
+) -> tuple:
+    """Key for reusing a pipeline dataset within one evaluation run."""
+    var_key = tuple(sorted(_variable_cache_token(v) for v in input_data.variables))
+    return (
+        case_metadata.case_id_number,
+        type(input_data).__name__,
+        input_data.name,
+        input_data.source,
+        var_key,
+    )
+
+
+def _run_pipeline_maybe_cached(
+    case_metadata: "cases.IndividualCase",
+    input_data: "inputs.InputBase",
+    pipeline_cache: Optional[dict[tuple, xr.Dataset]],
+    extra_key: tuple = (),
+    **kwargs,
+) -> xr.Dataset:
+    """Run an input pipeline, reusing a dataset when the cache hits."""
+    if pipeline_cache is None:
+        return run_pipeline(case_metadata, input_data, **kwargs)
+    key = _pipeline_cache_key(case_metadata, input_data) + extra_key
+    cached = pipeline_cache.get(key)
+    if cached is not None:
+        logger.debug(
+            "Reusing cached %s dataset for case %s",
+            input_data.name,
+            case_metadata.case_id_number,
+        )
+        return cached
+    ds = run_pipeline(case_metadata, input_data, **kwargs)
+    pipeline_cache[key] = ds
+    return ds
+
+
+def _compute_operator_group_with_progress(
+    indexed_ops: list[IndexedOperator],
+    cache_dir: Optional[pathlib.Path] = None,
+    event_queue=None,
+    log_queue=None,
+    **kwargs,
+) -> list[list[xr.DataArray]]:
+    """Run operators that share a forecast in one worker.
+
+    A process-local pipeline cache lets the second operator skip a second
+    forecast derive (for example CBSS for PPH then LSR). Results stay in
+    group order; the parent scatters them with ``groups``.
+    """
+    kwargs = dict(kwargs)
+    token = _pipeline_cache_var.set({})
+    try:
+        return [
+            _compute_case_operator_with_progress(
+                indexed.operator,
+                cache_dir=cache_dir,
+                event_queue=event_queue,
+                log_queue=log_queue,
+                dispatch_id=indexed.index,
+                **kwargs,
+            )
+            for indexed in indexed_ops
+        ]
+    finally:
+        _pipeline_cache_var.reset(token)
 
 
 def _plan_metric_evaluations(
@@ -580,6 +681,7 @@ def compute_case_operator(
             instance or child class of BaseMetric).
         ValueError: If output_format is not "pandas" or "xarray".
     """
+    _validate_output_format(output_format)
     results = _compute_case_operator_results(case_operator, cache_dir, **kwargs)
     return _convert_results(results, output_format)
 
@@ -647,6 +749,10 @@ def _compute_case_operator_results(
         cache_dir=cache_dir,
         name=f"{case_operator.case_metadata.case_id_number}_{case_operator.target.name}",
     )
+    # Compute once so each metric does not rebuild the same dask graph.
+    if cache_dir is None:
+        aligned_forecast_ds = aligned_forecast_ds.compute()
+        aligned_target_ds = aligned_target_ds.compute()
     logger.info(
         "Datasets built for case %s.", case_operator.case_metadata.case_id_number
     )
@@ -681,17 +787,13 @@ def _compute_case_operator_results(
                     )
                 )
 
-        # Cache the results of each metric if caching
-        if cache_dir:
-            cache_path = (
-                pathlib.Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
+    if cache_dir:
+        concatenated = outputs.results_to_dataframe(results)
+        if not concatenated.empty:
+            concatenated.to_pickle(
+                cache_dir
+                / f"case_{case_operator.case_metadata.case_id_number}_results.pkl"
             )
-            concatenated = outputs.results_to_dataframe(results)
-            if not concatenated.empty:
-                concatenated.to_pickle(
-                    cache_path
-                    / f"case_{case_operator.case_metadata.case_id_number}_results.pkl"
-                )
 
     return results
 
@@ -1023,7 +1125,13 @@ def _build_datasets(
     progress_module.set_phase(
         f"case {case_operator.case_metadata.case_id_number} | target pipeline"
     )
-    target_ds = run_pipeline(case_operator.case_metadata, augmented_target, **kwargs)
+    pipeline_cache = _pipeline_cache_var.get()
+    target_ds = _run_pipeline_maybe_cached(
+        case_operator.case_metadata,
+        augmented_target,
+        pipeline_cache,
+        **kwargs,
+    )
 
     # Pass target dataset to forecast pipeline only if needed
     # Check if any forecast variable requires target dataset
@@ -1045,8 +1153,13 @@ def _build_datasets(
     progress_module.set_phase(
         f"case {case_operator.case_metadata.case_id_number} | forecast pipeline"
     )
-    forecast_ds = run_pipeline(
-        case_operator.case_metadata, augmented_forecast, **kwargs
+    forecast_extra = (augmented_target.name,) if needs_target else ()
+    forecast_ds = _run_pipeline_maybe_cached(
+        case_operator.case_metadata,
+        augmented_forecast,
+        pipeline_cache,
+        extra_key=forecast_extra,
+        **kwargs,
     )
 
     # Check if any dimension has zero length
@@ -1093,10 +1206,14 @@ def run_pipeline(
     Returns:
         The processed input data as an xarray dataset.
     """
-    # Open data and process through pipeline steps
-    data = input_data.open_and_maybe_preprocess_data_from_source().pipe(
-        lambda ds: input_data.maybe_map_variable_names(ds)
-    )
+    # Gridded: map names, subset case, preprocess, then subset variables so
+    # preprocess can add fields such as geopotential thickness. Tabular
+    # sources such as IBTrACS need original column names inside preprocess.
+    data = input_data._open_data_from_source()
+    is_gridded = isinstance(data, (xr.Dataset, xr.DataArray))
+    if not is_gridded:
+        data = input_data.preprocess(data)
+    data = input_data.maybe_map_variable_names(data)
 
     # Get the appropriate source module for the data type
     source_module = sources.get_backend_module(type(data))
@@ -1108,25 +1225,34 @@ def run_pipeline(
         case_metadata,
         source_module=source_module,
     ):
-        valid_data = (
-            inputs.maybe_subset_variables(
+        # Gridded: time/space subset and preprocess before variable subset
+        # so preprocess can create fields such as geopotential thickness.
+        to_subset = data
+        if not is_gridded:
+            to_subset = inputs.maybe_subset_variables(
                 data,
                 variables=input_data.variables,
                 source_module=source_module,
             )
-            .pipe(
+        valid_data = (
+            to_subset.pipe(
                 lambda ds: input_data.subset_data_to_case(ds, case_metadata, **kwargs)
             )
             .pipe(input_data.maybe_convert_to_dataset)
             .pipe(input_data.add_source_to_dataset_attrs)
-            .pipe(
-                lambda ds: derived.maybe_derive_variables(
-                    ds,
-                    variables=input_data.variables,
-                    case_metadata=case_metadata,
-                    **kwargs,
-                )
+        )
+        if is_gridded:
+            valid_data = input_data.preprocess(valid_data)
+            valid_data = inputs.maybe_subset_variables(
+                valid_data,
+                variables=input_data.variables,
+                source_module=source_module,
             )
+        valid_data = derived.maybe_derive_variables(
+            valid_data,
+            variables=input_data.variables,
+            case_metadata=case_metadata,
+            **kwargs,
         )
         return valid_data
     else:
