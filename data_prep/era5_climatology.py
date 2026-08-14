@@ -115,7 +115,7 @@ def _rss_gb() -> float:
             for line in fh:
                 if line.startswith("VmRSS:"):
                     return int(line.split()[1]) / 1_000_000  # kB → GB
-    except Exception:
+    except OSError:
         pass
     return float("nan")
 
@@ -141,7 +141,7 @@ def _process_single_year(
     era5 = xr.open_zarr(
         ERA5_ARCO_URL,
         chunks=None,
-        storage_options=dict(token="anon"),
+        storage_options={"token": "anon"},
     )
 
     weight_da = _build_weights(half_window_days)
@@ -294,7 +294,7 @@ def compute_dayofyear_quantile_climatology(
     del valid
     logger.info("Combined shape: %s  RAM=%.1f GB", dict(ds_out.sizes), _rss_gb())
     ds_out.attrs["percentile"] = percentile
-    ds_out.attrs["percentile_label"] = f"p{int(round(percentile * 100)):02d}"
+    ds_out.attrs["percentile_label"] = f"p{round(percentile * 100):02d}"
     ds_out.attrs["source"] = "ERA5 ARCO"
     ds_out.attrs["start_year"] = start_year
     ds_out.attrs["end_year"] = end_year
@@ -414,7 +414,7 @@ def combine_stores(
 def _zarr_store_path(
     output_dir: pathlib.Path, variable: str, quantile: float
 ) -> pathlib.Path:
-    label = f"p{int(round(quantile * 100)):02d}"
+    label = f"p{round(quantile * 100):02d}"
     return output_dir / f"{variable.replace(' ', '_')}_{label}_climatology.zarr"
 
 
@@ -483,7 +483,7 @@ def cmd_all_quantiles(args: argparse.Namespace) -> None:
     )
 
     for i, quantile in enumerate(remaining):
-        label = f"p{int(round(quantile * 100)):02d}"
+        label = f"p{round(quantile * 100):02d}"
         zarr_out = _zarr_store_path(args.output_dir, args.variable, quantile)
         logger.info("---- Quantile %s (%d/%d) ----", label, i + 1, len(remaining))
         compute_dayofyear_quantile_climatology(

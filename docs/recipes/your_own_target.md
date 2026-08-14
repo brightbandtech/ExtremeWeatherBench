@@ -41,7 +41,7 @@ class MERRA2(inputs.TargetBase):
     source: str = "gs://my-bucket/merra2.zarr"
     variable_mapping: dict = dataclasses.field(
         default_factory=lambda: {
-            "T2M":  "surface_air_temperature",
+            "T2M": "surface_air_temperature",
             "time": "valid_time",
         }
     )
@@ -77,10 +77,12 @@ merra2_target = MERRA2(
 eval_objects = [
     ewb.EvaluationObject(
         event_type="heat_wave",
-        metric_list=[ewb.metrics.MeanAbsoluteError(
-            forecast_variable="surface_air_temperature",
-            target_variable="surface_air_temperature",
-        )],
+        metric_list=[
+            ewb.metrics.MeanAbsoluteError(
+                forecast_variable="surface_air_temperature",
+                target_variable="surface_air_temperature",
+            )
+        ],
         target=merra2_target,
         forecast=my_forecast,
     ),
@@ -124,8 +126,8 @@ class MyStationObs(inputs.TargetBase):
         return data.filter(
             (pl.col("valid_time") >= time_min)
             & (pl.col("valid_time") <= time_max)
-            & (pl.col("latitude")  >= bounds[1])
-            & (pl.col("latitude")  <= bounds[3])
+            & (pl.col("latitude") >= bounds[1])
+            & (pl.col("latitude") <= bounds[3])
             & (pl.col("longitude") >= bounds[0])
             & (pl.col("longitude") <= bounds[2])
         )
@@ -227,22 +229,14 @@ class CustomGHCN(inputs.TargetBase):
     def _custom_convert_to_dataset(self, data):
         df = data.collect().to_pandas()
         df["surface_air_temperature"] += 273.15
-        df["longitude"] = utils.convert_longitude_to_360(
-            df["longitude"]
-        )
-        df = df.set_index(
-            ["valid_time", "latitude", "longitude"]
-        )
+        df["longitude"] = utils.convert_longitude_to_360(df["longitude"])
+        df = df.set_index(["valid_time", "latitude", "longitude"])
         return xr.Dataset.from_dataframe(
             df[~df.index.duplicated(keep="first")], sparse=True
         )
 
-    def maybe_align_forecast_to_target(
-        self, forecast_data, target_data
-    ):
-        return inputs.align_forecast_to_target(
-            forecast_data, target_data
-        )
+    def maybe_align_forecast_to_target(self, forecast_data, target_data):
+        return inputs.align_forecast_to_target(forecast_data, target_data)
 
 
 custom_target = CustomGHCN()

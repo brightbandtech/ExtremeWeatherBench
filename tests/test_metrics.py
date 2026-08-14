@@ -194,7 +194,7 @@ class TestThresholdMetrics:
         assert isinstance(csi_metric, metrics.ThresholdMetric)
         assert isinstance(csi_metric, metrics.BaseMetric)
         assert hasattr(csi_metric, "compute_metric")
-        assert hasattr(csi_metric, "__call__")
+        assert callable(csi_metric)
         assert csi_metric.forecast_threshold == 15000
         assert csi_metric.target_threshold == 0.3
 
@@ -727,7 +727,7 @@ class TestMaximumMeanAbsoluteError:
             result = metric._compute_metric(forecast, target)
             # If it succeeds, check it returns something
             assert result is not None
-        except Exception:
+        except (ValueError, TypeError, KeyError, AttributeError):
             # If computation fails due to data structure issues,
             # at least test instantiation works
             assert isinstance(metric, metrics.MaximumMeanAbsoluteError)
@@ -793,7 +793,7 @@ class TestMinimumMeanAbsoluteError:
             result = metric._compute_metric(forecast, target)
             # If it succeeds, check it returns something
             assert result is not None
-        except Exception:
+        except (ValueError, TypeError, KeyError, AttributeError):
             # If computation fails due to data structure issues,
             # at least test instantiation works
             assert isinstance(metric, metrics.MinimumMeanAbsoluteError)
@@ -847,7 +847,7 @@ class TestMaximumLowestMeanAbsoluteError:
             result = metric._compute_metric(forecast, target)
             # If it succeeds, check structure
             assert isinstance(result, (xr.Dataset, xr.DataArray))
-        except Exception:
+        except (ValueError, TypeError, KeyError, AttributeError):
             # If computation fails due to data structure issues, at least test
             # instantiation works
             assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
@@ -901,7 +901,7 @@ class TestMaximumLowestMeanAbsoluteError:
             )
             # Verify result is returned
             assert result is not None
-        except Exception:
+        except (ValueError, TypeError, KeyError, AttributeError):
             # If it still fails due to complex data requirements,
             # just verify the metric can be instantiated
             assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
@@ -958,7 +958,7 @@ class TestMaximumLowestMeanAbsoluteError:
                 extra_param=123,
             )
             assert result is not None
-        except Exception:
+        except (ValueError, TypeError, KeyError, AttributeError):
             # If it fails due to data structure, at least we tested
             # the kwargs filtering path
             assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
@@ -1273,7 +1273,7 @@ class TestDurationMeanError:
             result = metric._compute_metric(forecast, target)
             # If it succeeds, check it returns something
             assert result is not None
-        except Exception:
+        except (ValueError, TypeError, KeyError, AttributeError):
             # If computation fails due to data structure issues,
             # at least test instantiation works
             assert isinstance(metric, metrics.OnsetMeanError)
@@ -3915,7 +3915,7 @@ class TestLandfallMetrics:
             },
         )
 
-        fc_out, tgt_out = calc.filter_by_landfall_time_window(
+        fc_out, _tgt_out = calc.filter_by_landfall_time_window(
             fc, tgt, window_hours=12.0
         )
         assert len(fc_out) == 1
@@ -4507,7 +4507,7 @@ class TestMaybeComputeLandfalls:
 
             mock_find.side_effect = mock_find_func
 
-            result_forecast, result_target = metric.maybe_compute_landfalls(
+            _result_forecast, _result_target = metric.maybe_compute_landfalls(
                 forecast, target
             )
 
@@ -4559,7 +4559,7 @@ class TestMaybeComputeLandfalls:
             mock_find.return_value = _empty
 
             # Only provide forecast_landfall, not target_landfall
-            result_forecast, result_target = metric.maybe_compute_landfalls(
+            _result_forecast, _result_target = metric.maybe_compute_landfalls(
                 forecast, target, forecast_landfall=forecast_landfall
             )
 
@@ -4584,7 +4584,7 @@ class TestMaybeComputeLandfalls:
             mock_find.return_value = _empty
 
             # Only provide target_landfall, not forecast_landfall
-            result_forecast, result_target = metric.maybe_compute_landfalls(
+            _result_forecast, _result_target = metric.maybe_compute_landfalls(
                 forecast, target, target_landfall=target_landfall
             )
 

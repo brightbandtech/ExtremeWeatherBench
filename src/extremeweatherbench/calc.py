@@ -1,14 +1,15 @@
 import logging
-from typing import Literal, Optional, Sequence, Union
+from collections.abc import Sequence
+from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
 import regionmask
-import scores.categorical as categorical
 import shapely
 import xarray as xr
 from numba import float64, guvectorize
 from scipy import ndimage
+from scores import categorical
 from skimage import filters
 
 from extremeweatherbench import utils
@@ -23,7 +24,7 @@ logger.setLevel(logging.INFO)
 
 
 def convert_from_cartesian_to_latlon(
-    input_point: Union[np.ndarray, tuple[float, float]],
+    input_point: np.ndarray | tuple[float, float],
     latitude: xr.DataArray,
     longitude: xr.DataArray,
 ) -> tuple[float, float]:
@@ -113,10 +114,10 @@ def saturation_mixing_ratio(
 
 
 def haversine_distance(
-    input_a: Sequence[Union[float, xr.DataArray]],
-    input_b: Sequence[Union[float, xr.DataArray]],
+    input_a: Sequence[float | xr.DataArray],
+    input_b: Sequence[float | xr.DataArray],
     units: Literal["km", "kilometers", "deg", "degrees"] = "km",
-) -> Union[float, xr.DataArray]:
+) -> float | xr.DataArray:
     """Calculate the great-circle/haversine distance between two points on the Earth's
     surface.
 
@@ -194,7 +195,7 @@ def orography(ds: xr.Dataset) -> xr.DataArray:
         era5 = xr.open_zarr(
             inputs.ARCO_ERA5_FULL_URI,
             chunks=None,
-            storage_options=dict(token="anon"),
+            storage_options={"token": "anon"},
         )
         return (
             era5.isel(time=1000000)["geopotential_at_surface"].sel(
@@ -278,10 +279,10 @@ def geopotential_thickness(
         ) / g0
     else:
         geopotential_thickness = geopotential_heights - geopotential_height_bottom
-    geopotential_thickness.attrs = dict(
-        description=f"Geopotential thickness of {top_level} hPa and {bottom_level} hPa",
-        units="m",
-    )
+    geopotential_thickness.attrs = {
+        "description": f"Geopotential thickness of {top_level} hPa and {bottom_level} hPa",
+        "units": "m",
+    }
     return geopotential_thickness
 
 
@@ -372,7 +373,7 @@ def specific_humidity_from_relative_humidity(
 
 
 def find_land_intersection(
-    mask: xr.DataArray, land_mask: Optional[xr.DataArray] = None
+    mask: xr.DataArray, land_mask: xr.DataArray | None = None
 ) -> xr.DataArray:
     """Find points where a data mask intersects with a land mask.
 
@@ -428,8 +429,8 @@ def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -
 
 def find_landfalls(
     track_data: xr.DataArray,
-    land_geom: Optional[shapely.geometry.Polygon] = None,
-    ocean_geom: Optional[shapely.geometry.Polygon] = None,
+    land_geom: shapely.geometry.Polygon | None = None,
+    ocean_geom: shapely.geometry.Polygon | None = None,
 ) -> xr.DataArray:
     """Find landfall point(s) where a tracked object intersects land.
 
@@ -551,10 +552,10 @@ def _landfall_point_to_init_row(
 def find_next_landfall_for_init_time(
     forecast_landfalls: xr.DataArray,
     target_landfalls: xr.DataArray,
-    max_lead_time: Optional[np.timedelta64] = None,
+    max_lead_time: np.timedelta64 | None = None,
     min_target_separation_hours: float = 0.0,
-    max_time_mismatch_hours: Optional[float] = None,
-    track_start_times: Optional[dict[np.datetime64, np.datetime64]] = None,
+    max_time_mismatch_hours: float | None = None,
+    track_start_times: dict[np.datetime64, np.datetime64] | None = None,
 ) -> xr.DataArray:
     """Match forecast landfalls to the closest target landfall.
 
@@ -1070,7 +1071,7 @@ def filter_inits_by_track_start(
 def _landfall_pair_time_mismatch(
     forecast_landfalls: xr.DataArray,
     target_landfalls: xr.DataArray,
-) -> Optional[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
     """Return ``(fc_vt, tgt_vt, |fc_vt - tgt_vt|)`` as numpy arrays.
 
     Returns ``None`` if either array lacks the ``init_time`` dim or

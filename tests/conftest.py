@@ -46,11 +46,11 @@ def make_sample_gridded_obs_dataset():
     )
     # Set a specific value for a specific time and location to remove ambiguity
     dataset["2m_temperature"].loc[
-        dict(
-            time="2021-06-21 18:00",
-            latitude=slice(40, 45),
-            longitude=slice(100, 105),
-        )
+        {
+            "time": "2021-06-21 18:00",
+            "latitude": slice(40, 45),
+            "longitude": slice(100, 105),
+        }
     ] = 25
     return dataset
 
@@ -106,21 +106,21 @@ def make_sample_forecast_dataset():
     )
     # Set a specific value for a specific time and location to remove ambiguity
     dataset["surface_air_temperature"].loc[
-        dict(
-            init_time="2021-06-21 00:00",
-            lead_time=np.timedelta64(42, "h"),
-            latitude=slice(40, 45),
-            longitude=slice(100, 105),
-        )
+        {
+            "init_time": "2021-06-21 00:00",
+            "lead_time": np.timedelta64(42, "h"),
+            "latitude": slice(40, 45),
+            "longitude": slice(100, 105),
+        }
     ] = 24
     # Set a specific value for a specific time and location to remove ambiguity
     dataset["surface_air_temperature"].loc[
-        dict(
-            init_time="2021-06-20 00:00",
-            lead_time=np.timedelta64(42, "h"),
-            latitude=slice(40, 45),
-            longitude=slice(100, 105),
-        )
+        {
+            "init_time": "2021-06-20 00:00",
+            "lead_time": np.timedelta64(42, "h"),
+            "latitude": slice(40, 45),
+            "longitude": slice(100, 105),
+        }
     ] = 23
     return dataset
 
@@ -143,7 +143,7 @@ def make_sample_results_dataarray_list():
 
 def dataset_to_dataarray(dataset):
     """Convert an xarray Dataset to a DataArray."""
-    mock_data_var = [data_var for data_var in dataset.data_vars][0]
+    mock_data_var = next(iter(dataset.data_vars))
     return dataset[mock_data_var]
 
 

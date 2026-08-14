@@ -1328,7 +1328,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=6.0.0" },
     { name = "pytest-mock", specifier = ">=3.14.0" },
     { name = "python-semantic-release", specifier = ">=10.3.0" },
-    { name = "ruff", specifier = ">=0.9.4" },
+    { name = "ruff", specifier = ">=0.16.2" },
     { name = "twine", specifier = ">=5.1.1" },
     { name = "types-pytz", specifier = ">=2025.2.0.20250809" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20241230" },

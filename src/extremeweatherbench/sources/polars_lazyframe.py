@@ -8,7 +8,7 @@ import polars as pl
 from extremeweatherbench import utils
 
 if TYPE_CHECKING:
-    import extremeweatherbench.regions as regions
+    from extremeweatherbench import regions
 
 
 def safely_pull_variables(
@@ -47,7 +47,7 @@ def safely_pull_variables(
         >>> result.collect().columns
         ['temp']
     """
-    import extremeweatherbench.defaults as defaults
+    from extremeweatherbench import defaults
 
     # Get column names from LazyFrame
     available_columns = data.collect_schema().names()

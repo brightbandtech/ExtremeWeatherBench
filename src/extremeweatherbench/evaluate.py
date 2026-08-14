@@ -6,7 +6,8 @@ import dataclasses
 import logging
 import multiprocessing
 import pathlib
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import dask.array as da
 import joblib
@@ -15,16 +16,11 @@ import sparse
 import xarray as xr
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-import extremeweatherbench.cases as cases
-import extremeweatherbench.derived as derived
-import extremeweatherbench.inputs as inputs
-import extremeweatherbench.metrics as metrics
 import extremeweatherbench.progress as progress_module
-import extremeweatherbench.sources as sources
-import extremeweatherbench.utils as utils
+from extremeweatherbench import cases, derived, inputs, metrics, sources, utils
 
 if TYPE_CHECKING:
-    import extremeweatherbench.regions as regions
+    from extremeweatherbench import regions
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +60,7 @@ class ExtremeWeatherBench:
         self,
         case_metadata: Union[list[dict[str, Any]], "list[cases.IndividualCase]"],
         evaluation_objects: list["inputs.EvaluationObject"],
-        cache_dir: Optional[Union[str, pathlib.Path]] = None,
+        cache_dir: str | pathlib.Path | None = None,
         region_subsetter: Optional["regions.RegionSubsetter"] = None,
     ):
         """Initialize the ExtremeWeatherBench workflow.
@@ -83,9 +79,8 @@ class ExtremeWeatherBench:
         self.cache_dir = pathlib.Path(cache_dir) if cache_dir else None
 
         # Instantiate cache dir if needed
-        if self.cache_dir:
-            if not self.cache_dir.exists():
-                self.cache_dir.mkdir(parents=True, exist_ok=True)
+        if self.cache_dir and not self.cache_dir.exists():
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.region_subsetter = region_subsetter
 
     # Case operators as a property can be used as a convenience method for a workflow
@@ -103,8 +98,8 @@ class ExtremeWeatherBench:
 
     def run(
         self,
-        n_jobs: Optional[int] = None,
-        parallel_config: Optional[dict] = None,
+        n_jobs: int | None = None,
+        parallel_config: dict | None = None,
         progress: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
@@ -149,8 +144,8 @@ class ExtremeWeatherBench:
 
     def run_evaluation(
         self,
-        n_jobs: Optional[int] = None,
-        parallel_config: Optional[dict] = None,
+        n_jobs: int | None = None,
+        parallel_config: dict | None = None,
         progress: bool = True,
         **kwargs,
     ) -> pd.DataFrame:
@@ -194,9 +189,9 @@ class ExtremeWeatherBench:
 
 
 def _parallel_serial_config_check(
-    n_jobs: Optional[int] = None,
-    parallel_config: Optional[dict] = None,
-) -> Optional[dict]:
+    n_jobs: int | None = None,
+    parallel_config: dict | None = None,
+) -> dict | None:
     """Check if running in serial or parallel mode.
 
     Args:
@@ -236,8 +231,8 @@ def _parallel_serial_config_check(
 
 def _run_evaluation(
     case_operators: list["cases.CaseOperator"],
-    cache_dir: Optional[pathlib.Path] = None,
-    parallel_config: Optional[dict] = None,
+    cache_dir: pathlib.Path | None = None,
+    parallel_config: dict | None = None,
     progress: bool = True,
     **kwargs,
 ) -> list[pd.DataFrame]:
@@ -270,25 +265,25 @@ def _run_evaluation(
                 len(case_operators), disable=not progress
             )
             task_bar = progress_module.make_dask_task_bar(disable=not progress)
-            with progress_module.registered_bar(case_bar, allow_phase_updates=True):
-                with progress_module.DaskTaskBar(task_bar):
-                    for case_operator in case_operators:
-                        step_bar = progress_module.make_case_step_bar(
-                            case_operator.case_metadata.case_id_number,
-                            _count_case_steps(case_operator, cache_dir),
-                            disable=not progress,
+            with (
+                progress_module.registered_bar(case_bar, allow_phase_updates=True),
+                progress_module.DaskTaskBar(task_bar),
+            ):
+                for case_operator in case_operators:
+                    step_bar = progress_module.make_case_step_bar(
+                        case_operator.case_metadata.case_id_number,
+                        _count_case_steps(case_operator, cache_dir),
+                        disable=not progress,
+                    )
+                    progress_module.register_step_bar(step_bar)
+                    try:
+                        run_results.append(
+                            compute_case_operator(case_operator, cache_dir, **kwargs)
                         )
-                        progress_module.register_step_bar(step_bar)
-                        try:
-                            run_results.append(
-                                compute_case_operator(
-                                    case_operator, cache_dir, **kwargs
-                                )
-                            )
-                        finally:
-                            progress_module.register_step_bar(None)
-                            step_bar.close()
-                        case_bar.update(1)
+                    finally:
+                        progress_module.register_step_bar(None)
+                        step_bar.close()
+                    case_bar.update(1)
             task_bar.close()
             case_bar.close()
 
@@ -298,7 +293,7 @@ def _run_evaluation(
 def _run_parallel_evaluation(
     case_operators: list["cases.CaseOperator"],
     parallel_config: dict,
-    cache_dir: Optional[pathlib.Path] = None,
+    cache_dir: pathlib.Path | None = None,
     progress: bool = True,
     **kwargs,
 ) -> list[pd.DataFrame]:
@@ -488,7 +483,7 @@ def _count_metric_evaluations(case_operator: "cases.CaseOperator") -> int:
 
 def _count_case_steps(
     case_operator: "cases.CaseOperator",
-    cache_dir: Optional[pathlib.Path] = None,
+    cache_dir: pathlib.Path | None = None,
 ) -> int:
     """Count the coarse steps a case will report progress for.
 
@@ -508,7 +503,7 @@ def _count_case_steps(
 
 def compute_case_operator(
     case_operator: "cases.CaseOperator",
-    cache_dir: Optional[pathlib.Path] = None,
+    cache_dir: pathlib.Path | None = None,
     **kwargs,
 ) -> pd.DataFrame:
     """Compute the resulting evaluation of a case operator.
@@ -546,11 +541,12 @@ def compute_case_operator(
     forecast_ds, target_ds = _build_datasets(case_operator, **kwargs)
 
     # Check if any dimension has zero length
-    if 0 in forecast_ds.sizes.values() or 0 in target_ds.sizes.values():
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
-
-    # Or, check if there aren't any dimensions
-    elif len(forecast_ds.sizes) == 0 or len(target_ds.sizes) == 0:
+    if (
+        0 in forecast_ds.sizes.values()
+        or 0 in target_ds.sizes.values()
+        or len(forecast_ds.sizes) == 0
+        or len(target_ds.sizes) == 0
+    ):
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
     # spatiotemporally align the target and forecast datasets dependent on the target
@@ -620,7 +616,7 @@ def compute_case_operator(
 
 def _compute_case_operator_with_progress(
     case_operator: "cases.CaseOperator",
-    cache_dir: Optional[pathlib.Path] = None,
+    cache_dir: pathlib.Path | None = None,
     event_queue=None,
     log_queue=None,
     dispatch_id=None,
@@ -672,9 +668,8 @@ def _compute_case_operator_with_progress(
         else contextlib.nullcontext()
     )
     try:
-        with log_context:
-            with progress_module.DaskTaskSink(sink, case_id):
-                return compute_case_operator(case_operator, cache_dir, **kwargs)
+        with log_context, progress_module.DaskTaskSink(sink, case_id):
+            return compute_case_operator(case_operator, cache_dir, **kwargs)
     finally:
         sink(
             progress_module.ProgressEvent(
@@ -888,9 +883,8 @@ def _get_all_derived_output_variables(
     """
     output_vars = set()
     for var in variables:
-        if isinstance(var, derived.DerivedVariable):
-            if hasattr(var, "output_variables") and var.output_variables:
-                output_vars.update(var.output_variables)
+        if isinstance(var, derived.DerivedVariable) and var.output_variables:
+            output_vars.update(var.output_variables)
     return output_vars
 
 
@@ -1023,26 +1017,22 @@ def _build_datasets(
     if zero_length_dims:
         if "valid_time" in zero_length_dims:
             logger.warning(
-                "Forecast dataset %s for case %s has no data for case time range %s to "
-                "%s."
-                % (
-                    case_operator.forecast.name,
-                    case_operator.case_metadata.case_id_number,
-                    case_operator.case_metadata.start_date,
-                    case_operator.case_metadata.end_date,
-                )
+                "Forecast dataset %s for case %s has no data for case "
+                "time range %s to %s.",
+                case_operator.forecast.name,
+                case_operator.case_metadata.case_id_number,
+                case_operator.case_metadata.start_date,
+                case_operator.case_metadata.end_date,
             )
         else:
             logger.warning(
-                "Forecast dataset %s for case %s has zero-length dimensions %s for "
-                "case time range %s to %s."
-                % (
-                    case_operator.forecast.name,
-                    case_operator.case_metadata.case_id_number,
-                    zero_length_dims,
-                    case_operator.case_metadata.start_date,
-                    case_operator.case_metadata.end_date,
-                )
+                "Forecast dataset %s for case %s has zero-length "
+                "dimensions %s for case time range %s to %s.",
+                case_operator.forecast.name,
+                case_operator.case_metadata.case_id_number,
+                zero_length_dims,
+                case_operator.case_metadata.start_date,
+                case_operator.case_metadata.end_date,
             )
         return xr.Dataset(), xr.Dataset()
     return (forecast_ds, target_ds)
@@ -1100,13 +1090,11 @@ def run_pipeline(
         return valid_data
     else:
         logger.warning(
-            "Data input %s for case %s has no data for case time range %s to %s."
-            % (
-                input_data.name,
-                case_metadata.case_id_number,
-                case_metadata.start_date.strftime("%Y-%m-%d %H:%M:%S"),
-                case_metadata.end_date.strftime("%Y-%m-%d %H:%M:%S"),
-            )
+            "Data input %s for case %s has no data for case time range %s to %s.",
+            input_data.name,
+            case_metadata.case_id_number,
+            case_metadata.start_date.strftime("%Y-%m-%d %H:%M:%S"),
+            case_metadata.end_date.strftime("%Y-%m-%d %H:%M:%S"),
         )
         return xr.Dataset()
 
@@ -1159,10 +1147,9 @@ def _safe_concat(
             for df in valid_dfs[1:]:
                 # Check if columns have different dtypes across DataFrames
                 for col in reference_df.columns:
-                    if col in df.columns:
-                        if reference_df[col].dtype != df[col].dtype:
-                            has_dtype_mismatch = True
-                            break
+                    if col in df.columns and reference_df[col].dtype != df[col].dtype:
+                        has_dtype_mismatch = True
+                        break
                 if has_dtype_mismatch:
                     break
 

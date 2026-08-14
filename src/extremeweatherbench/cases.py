@@ -9,16 +9,16 @@ import importlib
 import itertools
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Any, Sequence, Union
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
 import dacite
 import yaml  # type: ignore[import]
 
-import extremeweatherbench.regions as regions
+from extremeweatherbench import regions
 
 if TYPE_CHECKING:
-    import extremeweatherbench.inputs as inputs
-    import extremeweatherbench.metrics as metrics
+    from extremeweatherbench import inputs, metrics
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +93,7 @@ def build_case_operators(
 
 
 def load_individual_cases(
-    cases: Union[list[dict[str, Any]], list[IndividualCase]],
+    cases: list[dict[str, Any]] | list[IndividualCase],
 ) -> list[IndividualCase]:
     """Load IndividualCase metadata from a dictionary.
 
@@ -125,7 +125,7 @@ def load_individual_cases(
 
 
 def load_individual_cases_from_yaml(
-    yaml_file: Union[str, pathlib.Path],
+    yaml_file: str | pathlib.Path,
 ) -> list[IndividualCase]:
     """Load IndividualCase metadata directly from a yaml file.
 
@@ -181,7 +181,7 @@ def load_ewb_events_yaml_into_case_list() -> list[IndividualCase]:
 load_cases = load_ewb_events_yaml_into_case_list
 
 
-def read_incoming_yaml(input_pth: Union[str, pathlib.Path]):
+def read_incoming_yaml(input_pth: str | pathlib.Path):
     """Read events yaml from data into a dictionary.
 
     This function is a wrapper around yaml.safe_load that reads the yaml file directly.

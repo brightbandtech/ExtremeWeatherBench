@@ -278,11 +278,14 @@ a single virtual zarr `Dataset`. No command-line entry point.
 
 ```python
 import fsspec
-from data_prep.convert_to_kerchunk import generate_json_from_nc, xarray_dataset_from_json_list
+from data_prep.convert_to_kerchunk import (
+    generate_json_from_nc,
+    xarray_dataset_from_json_list,
+)
 
 fs_read = fsspec.filesystem("s3", anon=True)
-fs_out  = fsspec.filesystem("file")
-so      = {"anon": True}
+fs_out = fsspec.filesystem("file")
+so = {"anon": True}
 
 json_list = generate_json_from_nc(
     file_url="s3://noaa-oar-mlwp-data/FourCastNetv2/...",

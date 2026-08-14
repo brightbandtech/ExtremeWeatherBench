@@ -3,14 +3,12 @@ import copy
 import dataclasses
 import logging
 import warnings
+from collections.abc import Callable, Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     Literal,
     Optional,
-    Sequence,
-    TypeAlias,
     Union,
     cast,
 )
@@ -21,13 +19,10 @@ import pandas as pd
 import polars as pl
 import xarray as xr
 
-import extremeweatherbench.cases as cases
-import extremeweatherbench.derived as derived
-import extremeweatherbench.sources as sources
-import extremeweatherbench.utils as utils
+from extremeweatherbench import cases, derived, sources, utils
 
 if TYPE_CHECKING:
-    import extremeweatherbench.metrics as metrics
+    from extremeweatherbench import metrics
 
 warnings.filterwarnings(
     "ignore",
@@ -46,7 +41,7 @@ ARCO_ERA5_FULL_URI = (
 DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh_all_2020_2024.parq"
 
 #: Storage/access options for local storm report (LSR) tabular data.
-LSR_URI = "gs://extremeweatherbench/datasets/combined_canada_australia_us_lsr_01012020_09272025.parq"  # noqa: E501
+LSR_URI = "gs://extremeweatherbench/datasets/combined_canada_australia_us_lsr_01012020_09272025.parq"
 
 #: Storage/access options for practically perfect hindcast data.
 PPH_URI = (
@@ -158,7 +153,7 @@ IBTrACS_metadata_variable_mapping = {
     "MLC_PRES": "mlc_air_pressure_at_mean_sea_level",
 }
 
-IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
+type IncomingDataInput = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 
 CIRA_CREDENTIALS = icechunk.containers_credentials(
     {"s3://noaa-oar-mlwp-data/": icechunk.s3_credentials(anonymous=True)}
@@ -214,7 +209,7 @@ class InputBase(abc.ABC):
         default_factory=list
     )
     variable_mapping: dict = dataclasses.field(default_factory=dict)
-    storage_options: Optional[dict] = None
+    storage_options: dict | None = None
     preprocess: Callable = _default_preprocess
 
     def open_and_maybe_preprocess_data_from_source(
@@ -328,7 +323,7 @@ class InputBase(abc.ABC):
         elif isinstance(data, pd.DataFrame):
             old_name_obj = list(data.columns)
         else:
-            raise ValueError(f"Data type {type(data)} not supported")
+            raise TypeError(f"Data type {type(data)} not supported")
 
         if not variable_mapping:
             return data
@@ -360,7 +355,7 @@ class ForecastBase(InputBase):
         subset_data_to_case: Subset forecast data to case (overrides parent)
     """
 
-    chunks: Optional[Union[dict, str]] = "auto"
+    chunks: dict | str | None = "auto"
 
     def subset_data_to_case(
         self,
@@ -370,7 +365,7 @@ class ForecastBase(InputBase):
     ) -> IncomingDataInput:
         drop = kwargs.get("drop", False)
         if not isinstance(data, xr.Dataset):
-            raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+            raise TypeError(f"Expected xarray Dataset, got {type(data)}")
         # Drop duplicate init_time values
         if len(np.unique(data.init_time)) != len(data.init_time):
             _, index = np.unique(data.init_time, return_index=True)
@@ -464,7 +459,7 @@ class KerchunkForecast(ForecastBase):
     to the public CIRA/NODD S3 buckets these references typically point to.
     """
 
-    chunks: Optional[Union[dict, str]] = "auto"
+    chunks: dict | str | None = "auto"
 
     def _open_data_from_source(self) -> IncomingDataInput:
         return open_kerchunk_reference(
@@ -481,7 +476,7 @@ class ZarrForecast(ForecastBase):
     Extends ForecastBase for forecast data stored in zarr format.
     """
 
-    chunks: Optional[Union[dict, str]] = "auto"
+    chunks: dict | str | None = "auto"
 
     def _open_data_from_source(self) -> IncomingDataInput:
         return xr.open_zarr(
@@ -509,7 +504,7 @@ class XarrayForecast(ForecastBase):
 
     #: The xarray dataset containing the forecast data. This is required for the class to be instantiated
     #: because we inherit from ForecastBase, which has its own set of required attributes.
-    ds: Optional[xr.Dataset] = None  # type: ignore[assignment]
+    ds: xr.Dataset | None = None  # type: ignore[assignment]
     source: str = "memory"
     name: str = "in-memory dataset"
 
@@ -586,7 +581,7 @@ class ERA5(TargetBase):
     """
 
     name: str = "ERA5"
-    chunks: Optional[Union[dict, str]] = None
+    chunks: dict | str | None = None
     source: str = ARCO_ERA5_FULL_URI
     variable_mapping: dict = dataclasses.field(
         default_factory=lambda: ERA5_metadata_variable_mapping.copy()
@@ -608,7 +603,7 @@ class ERA5(TargetBase):
     ) -> IncomingDataInput:
         drop = kwargs.get("drop", False)
         if not isinstance(data, xr.Dataset):
-            raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+            raise TypeError(f"Expected xarray Dataset, got {type(data)}")
         return zarr_target_subsetter(data, case_metadata, drop=drop)
 
     def maybe_align_forecast_to_target(
@@ -660,7 +655,7 @@ class GHCN(TargetBase):
         **kwargs,
     ) -> IncomingDataInput:
         if not isinstance(data, pl.LazyFrame):
-            raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
+            raise TypeError(f"Expected polars LazyFrame, got {type(data)}")
 
         # Create filter expressions for LazyFrame
         time_min = case_metadata.start_date - pd.Timedelta(days=2)
@@ -691,7 +686,7 @@ class GHCN(TargetBase):
                 data = xr.Dataset.from_dataframe(
                     data[~data.index.duplicated(keep="first")], sparse=True
                 )
-            except Exception as e:
+            except (ValueError, TypeError, KeyError) as e:
                 logger.warning(
                     "Error converting GHCN data to xarray: %s, returning empty Dataset",
                     e,
@@ -699,7 +694,7 @@ class GHCN(TargetBase):
                 return xr.Dataset()
             return data
         else:
-            raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
+            raise TypeError(f"Data is not a polars LazyFrame: {type(data)}")
 
     def maybe_align_forecast_to_target(
         self,
@@ -737,7 +732,7 @@ class LSR(TargetBase):
         **kwargs,
     ) -> IncomingDataInput:
         if not isinstance(data, pd.DataFrame):
-            raise ValueError(f"Expected pandas DataFrame, got {type(data)}")
+            raise TypeError(f"Expected pandas DataFrame, got {type(data)}")
 
         data = data.copy()
 
@@ -762,7 +757,7 @@ class LSR(TargetBase):
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if not isinstance(data, pd.DataFrame):
-            raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
+            raise TypeError(f"Data is not a pandas DataFrame: {type(data)}")
 
         # Map report_type column to numeric values
         report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
@@ -841,14 +836,14 @@ class PPH(TargetBase):
     ) -> IncomingDataInput:
         drop = kwargs.get("drop", False)
         if not isinstance(data, xr.Dataset):
-            raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+            raise TypeError(f"Expected xarray Dataset, got {type(data)}")
         return zarr_target_subsetter(data, case_metadata, drop=drop)
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, xr.Dataset):
             return data
         else:
-            raise ValueError(f"Data is not an xarray Dataset: {type(data)}")
+            raise TypeError(f"Data is not an xarray Dataset: {type(data)}")
 
     def maybe_align_forecast_to_target(
         self,
@@ -984,7 +979,7 @@ class IBTrACS(TargetBase):
         **kwargs,
     ) -> IncomingDataInput:
         if not isinstance(data, pl.LazyFrame):
-            raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
+            raise TypeError(f"Expected polars LazyFrame, got {type(data)}")
 
         season = case_metadata.start_date.year
         if case_metadata.start_date.month > 11:
@@ -1057,13 +1052,13 @@ class IBTrACS(TargetBase):
 
             return data
         else:
-            raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
+            raise TypeError(f"Data is not a polars LazyFrame: {type(data)}")
 
 
 def open_kerchunk_reference(
     forecast_dir: str,
-    storage_options: Optional[dict] = None,
-    chunks: Union[dict, str] = "auto",
+    storage_options: dict | None = None,
+    chunks: dict | str = "auto",
 ) -> xr.Dataset:
     """Open a dataset from a kerchunked reference file in parquet or json format.
     This has been built primarily for the CIRA MLWP S3 bucket's data
@@ -1082,7 +1077,7 @@ def open_kerchunk_reference(
     """
     if storage_options is None:
         storage_options = copy.deepcopy(DEFAULT_KERCHUNK_STORAGE_OPTIONS)
-    if forecast_dir.endswith(".parq") or forecast_dir.endswith(".parquet"):
+    if forecast_dir.endswith((".parq", ".parquet")):
         kerchunk_ds = xr.open_dataset(
             forecast_dir,
             engine="kerchunk",
@@ -1131,7 +1126,7 @@ def open_icechunk_dataset_from_datatree(
     storage: icechunk.Storage,
     group: str,
     branch: str = "main",
-    chunks: Optional[Union[dict, str]] = "auto",
+    chunks: dict | str | None = "auto",
     **repository_kwargs,
 ) -> xr.Dataset:
     """Open an icechunk datatree from a storage.
@@ -1294,22 +1289,19 @@ def check_for_missing_data(
         source_module = sources.get_backend_module(type(data))
 
     # First check if the data has valid times in the given date range
-    if not source_module.check_for_valid_times(
-        data, case_metadata.start_date, case_metadata.end_date
-    ):
-        return False
-    # Then check if the data has spatial data for the given location
-    elif not source_module.check_for_spatial_data(data, case_metadata.location):
-        return False
-    else:
-        return True
+    return not (
+        not source_module.check_for_valid_times(
+            data, case_metadata.start_date, case_metadata.end_date
+        )
+        or not source_module.check_for_spatial_data(data, case_metadata.location)
+    )
 
 
 def get_cira_icechunk(
     model_name: str,
-    variables: list[Union[str, derived.DerivedVariable]] = [],
+    variables: list[str | derived.DerivedVariable] | None = None,
     preprocess: Callable = _default_preprocess,
-    name: Optional[str] = None,
+    name: str | None = None,
 ) -> XarrayForecast:
     """Get a CIRA icechunk forecast object for a given model name.
 
@@ -1326,6 +1318,8 @@ def get_cira_icechunk(
         An XarrayForecast object for the given model.
     """
     # Check if the model name is valid
+    if variables is None:
+        variables = []
     if model_name not in CIRA_MODEL_NAMES:
         raise ValueError(
             f"Model name {model_name} not found in CIRA_MODEL_NAMES. Model names must be one of: {CIRA_MODEL_NAMES}"

@@ -1,7 +1,8 @@
 import abc
 import logging
 import operator
-from typing import Any, Callable, Literal, Optional, Sequence, Type, Union
+from collections.abc import Callable, Sequence
+from typing import Any, Literal
 
 import numpy as np
 import scores
@@ -26,27 +27,28 @@ class ComputeDocstringMetaclass(abc.ABCMeta):
     """
 
     def __new__(cls, name, bases, namespace):
-        cls = super().__new__(cls, name, bases, namespace)
+        new_cls = super().__new__(cls, name, bases, namespace)
         # NOTE: the `compute_metric()` method will be defined in the ABC `BaseMetric`,
         # and we never expect the user re-implement it. So it won't be in the namespace
         # of the concrete metric classes - it will only be in the namespace of the ABC
         # `BaseMetric`, and will be available as an attribute of the concrete metric
         # classes.
-        if "_compute_metric" in namespace and hasattr(cls, "compute_metric"):
-            # Transfer the docstring from _compute_metric to compute_metric, if the
-            # former exists.
-            if cls._compute_metric.__doc__ is not None:
-                # Create a new method for _this_ class, so we can avoid overwriting what
-                # we set for the parent.
-                _original_compute_metric = cls.compute_metric
+        if (
+            "_compute_metric" in namespace
+            and hasattr(new_cls, "compute_metric")
+            and new_cls._compute_metric.__doc__ is not None
+        ):
+            # Create a new method for _this_ class, so we can avoid overwriting what
+            # we set for the parent.
+            _original_compute_metric = new_cls.compute_metric
 
-                def _compute_metric_with_docstring(self, *args, **kwargs):
-                    return _original_compute_metric(self, *args, **kwargs)
+            def _compute_metric_with_docstring(self, *args, **kwargs):
+                return _original_compute_metric(self, *args, **kwargs)
 
-                _compute_metric_with_docstring.__doc__ = cls._compute_metric.__doc__
-                cls.compute_metric = _compute_metric_with_docstring
+            _compute_metric_with_docstring.__doc__ = new_cls._compute_metric.__doc__
+            new_cls.compute_metric = _compute_metric_with_docstring
 
-        return cls
+        return new_cls
 
 
 class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
@@ -72,8 +74,8 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
         self,
         name: str,
         preserve_dims: str = "lead_time",
-        forecast_variable: Optional[str | derived.DerivedVariable] = None,
-        target_variable: Optional[str | derived.DerivedVariable] = None,
+        forecast_variable: str | derived.DerivedVariable | None = None,
+        target_variable: str | derived.DerivedVariable | None = None,
     ):
         """Initialize the base metric.
 
@@ -123,7 +125,6 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
         Returns:
             The computed metric result.
         """
-        pass
 
     def compute_metric(
         self,
@@ -214,7 +215,7 @@ class CompositeMetric(BaseMetric):
             **kwargs: Keyword arguments passed to BaseMetric.__init__
         """
         super().__init__(*args, **kwargs)
-        self._metric_instances: list["BaseMetric"] = []
+        self._metric_instances: list[BaseMetric] = []
 
     def maybe_expand_composite(self) -> Sequence["BaseMetric"]:
         """Expand composite metrics into individual metrics.
@@ -300,11 +301,11 @@ class ThresholdMetric(CompositeMetric):
         self,
         name: str = "threshold_metrics",
         preserve_dims: str = "lead_time",
-        forecast_variable: Optional[str | derived.DerivedVariable] = None,
-        target_variable: Optional[str | derived.DerivedVariable] = None,
+        forecast_variable: str | derived.DerivedVariable | None = None,
+        target_variable: str | derived.DerivedVariable | None = None,
         forecast_threshold: float = 0.5,
         target_threshold: float = 0.5,
-        metrics: Optional[list[Type["ThresholdMetric"]]] = None,
+        metrics: list[type["ThresholdMetric"]] | None = None,
         **kwargs,
     ):
         """Initialize the threshold metric.
@@ -370,9 +371,7 @@ class ThresholdMetric(CompositeMetric):
         forecast_threshold: float,
         target_threshold: float,
         preserve_dims: str,
-        op_func: Union[
-            Callable, Literal[">", ">=", "<", "<=", "==", "!="]
-        ] = operator.ge,
+        op_func: Callable | Literal[">", ">=", "<", "<=", "==", "!="] = operator.ge,
     ) -> scores.categorical.BasicContingencyManager:
         """Create and transform a contingency manager.
 
@@ -791,13 +790,15 @@ class MeanSquaredError(BaseMetric):
     def __init__(
         self,
         name: str = "MeanSquaredError",
-        interval_where_one: Optional[
-            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
-        ] = None,
-        interval_where_positive: Optional[
-            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
-        ] = None,
-        weights: Optional[xr.DataArray] = None,
+        interval_where_one: tuple[
+            int | float | xr.DataArray, int | float | xr.DataArray
+        ]
+        | None = None,
+        interval_where_positive: tuple[
+            int | float | xr.DataArray, int | float | xr.DataArray
+        ]
+        | None = None,
+        weights: xr.DataArray | None = None,
         *args,
         **kwargs,
     ):
@@ -848,13 +849,15 @@ class MeanAbsoluteError(BaseMetric):
     def __init__(
         self,
         name: str = "MeanAbsoluteError",
-        interval_where_one: Optional[
-            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
-        ] = None,
-        interval_where_positive: Optional[
-            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
-        ] = None,
-        weights: Optional[xr.DataArray] = None,
+        interval_where_one: tuple[
+            int | float | xr.DataArray, int | float | xr.DataArray
+        ]
+        | None = None,
+        interval_where_positive: tuple[
+            int | float | xr.DataArray, int | float | xr.DataArray
+        ]
+        | None = None,
+        weights: xr.DataArray | None = None,
         *args,
         **kwargs,
     ):
@@ -994,9 +997,8 @@ class EarlySignal(BaseMetric):
     def __init__(
         self,
         name: str = "EarlySignal",
-        comparison_operator: Union[
-            Callable, Literal[">", ">=", "<", "<=", "==", "!="]
-        ] = ">=",
+        comparison_operator: Callable
+        | Literal[">", ">=", "<", "<=", "==", "!="] = ">=",
         forecast_threshold: float = 0.5,
         overlap_target_threshold: float | None = None,
         spatial_aggregation: Literal["any", "all", "half"] = "any",
@@ -1144,7 +1146,7 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
     def __init__(
         self,
         tolerance_range_hours: int = 24,
-        reduce_spatial_dims: list[str] = ["latitude", "longitude"],
+        reduce_spatial_dims: list[str] | None = None,
         name: str = "MaximumMeanAbsoluteError",
         *args,
         **kwargs,
@@ -1163,6 +1165,8 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
             **kwargs: Additional keyword arguments passed to
                 MeanAbsoluteError.
         """
+        if reduce_spatial_dims is None:
+            reduce_spatial_dims = ["latitude", "longitude"]
         self.tolerance_range_hours = tolerance_range_hours
         self.reduce_spatial_dims = reduce_spatial_dims
         super().__init__(name, *args, **kwargs)
@@ -1230,7 +1234,7 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
     def __init__(
         self,
         tolerance_range_hours: int = 24,
-        reduce_spatial_dims: list[str] = ["latitude", "longitude"],
+        reduce_spatial_dims: list[str] | None = None,
         name: str = "MinimumMeanAbsoluteError",
         *args,
         **kwargs,
@@ -1249,6 +1253,8 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
             **kwargs: Additional keyword arguments passed to
                 MeanAbsoluteError.
         """
+        if reduce_spatial_dims is None:
+            reduce_spatial_dims = ["latitude", "longitude"]
         self.tolerance_range_hours = tolerance_range_hours
         self.reduce_spatial_dims = reduce_spatial_dims
         super().__init__(name, *args, **kwargs)
@@ -1404,7 +1410,7 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
 
 def _calculate_event_duration(
     mask: xr.DataArray,
-    time_resolution_hours: int | float,
+    time_resolution_hours: float,
     preserve_dims: str = "init_time",
 ) -> xr.DataArray:
     """Count total consecutive-run duration in hours along valid_time.
@@ -1486,8 +1492,8 @@ class DurationMeanError(MeanError):
     def __init__(
         self,
         threshold_criteria: xr.DataArray | float,
-        reduce_spatial_dims: list[str] = ["latitude", "longitude"],
-        op_func: Union[Callable, Literal[">", ">=", "<", "<=", "==", "!="]] = ">=",
+        reduce_spatial_dims: list[str] | None = None,
+        op_func: Callable | Literal[">", ">=", "<", "<=", "==", "!="] = ">=",
         name: str = "DurationMeanError",
         preserve_dims: str = "init_time",
         product_time_resolution_hours: bool = False,
@@ -1509,6 +1515,8 @@ class DurationMeanError(MeanError):
             product_time_resolution_hours: Whether to multiply duration by
                 time resolution of forecast (in hours). Defaults to False.
         """
+        if reduce_spatial_dims is None:
+            reduce_spatial_dims = ["latitude", "longitude"]
         super().__init__(name=name, preserve_dims=preserve_dims)
         self.reduce_spatial_dims = reduce_spatial_dims
         self.threshold_criteria = threshold_criteria
@@ -1645,12 +1653,12 @@ class LandfallMetric(CompositeMetric):
         preserve_dims: str = "init_time",
         approach: Literal["first", "next"] = "first",
         exclude_post_landfall: bool = False,
-        forecast_variable: Optional[str | derived.DerivedVariable] = None,
-        target_variable: Optional[str | derived.DerivedVariable] = None,
-        metrics: Optional[list[Type["LandfallMetric"]]] = None,
+        forecast_variable: str | derived.DerivedVariable | None = None,
+        target_variable: str | derived.DerivedVariable | None = None,
+        metrics: list[type["LandfallMetric"]] | None = None,
         min_target_separation_hours: float = 0.0,
-        max_time_mismatch_hours: Optional[float] = None,
-        landfall_time_filter: Optional[tuple[str, float]] = ("window", 24.0),
+        max_time_mismatch_hours: float | None = None,
+        landfall_time_filter: tuple[str, float] | None = ("window", 24.0),
         *args,
         **kwargs,
     ):
@@ -1683,11 +1691,11 @@ class LandfallMetric(CompositeMetric):
                 ``None`` disables filtering.
         """
         super().__init__(
+            *args,
             name=name,
             preserve_dims=preserve_dims,
             forecast_variable=forecast_variable,
             target_variable=target_variable,
-            *args,
             **kwargs,
         )
         self.approach = approach

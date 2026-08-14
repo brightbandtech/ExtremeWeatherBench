@@ -230,9 +230,5 @@ runner = ewb.evaluation(
     evaluation_objects=eval_objects,
 )
 outputs = runner.run_evaluation()
-print(
-    outputs[
-        ["metric", "value", "init_time", "case_id_number"]
-    ].head(20)
-)
+print(outputs[["metric", "value", "init_time", "case_id_number"]].head(20))
 ```

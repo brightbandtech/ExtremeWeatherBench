@@ -1861,9 +1861,9 @@ class TestAdjustBoundsToDatasetConvention:
 
         (
             lon_min,
-            lat_min,
+            _lat_min,
             lon_max,
-            lat_max,
+            _lat_max,
         ) = regions._adjust_bounds_to_dataset_convention(region_bounds, dataset_360)
 
         # Should convert to 0-360

@@ -74,8 +74,8 @@ rows from each target (`"ERA5"` vs `"GHCN"`), making it straightforward
 to compare them:
 
 ```python
-era5_results  = outputs[outputs["target_source"] == "ERA5"]
-ghcn_results  = outputs[outputs["target_source"] == "GHCN"]
+era5_results = outputs[outputs["target_source"] == "ERA5"]
+ghcn_results = outputs[outputs["target_source"] == "GHCN"]
 ```
 
 > **Detailed Explanation**: Each `EvaluationObject` expands into one
@@ -208,9 +208,7 @@ forecast = ewb.ZarrForecast(
     storage_options={"remote_options": {"anon": True}},
 )
 
-era5_target = ewb.ERA5(
-    variables=["surface_air_temperature"]
-)
+era5_target = ewb.ERA5(variables=["surface_air_temperature"])
 ghcn_target = ewb.GHCN()
 
 shared_metrics = [
@@ -247,8 +245,6 @@ outputs = runner.run_evaluation()
 
 mae = outputs[outputs["metric"] == "MeanAbsoluteError"]
 for source in ["ERA5", "GHCN"]:
-    mean_mae = mae[
-        mae["target_source"] == source
-    ]["value"].mean()
+    mean_mae = mae[mae["target_source"] == source]["value"].mean()
     print(f"{source:6s} mean MAE: {mean_mae:.4f} K")
 ```

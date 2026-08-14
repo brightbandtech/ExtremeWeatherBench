@@ -16,12 +16,11 @@ eval_objects = ewb.defaults.get_brightband_evaluation_objects()
 cases = ewb.cases.load_cases()
 
 runner = ewb.evaluate.ExtremeWeatherBench(
-    case_metadata=cases, 
-    evaluation_objects=eval_objects
+    case_metadata=cases, evaluation_objects=eval_objects
 )
 
 outputs = runner.run_evaluation()
-outputs.to_csv('your_outputs.csv')
+outputs.to_csv("your_outputs.csv")
 ```
 
 or:
@@ -88,7 +87,7 @@ hres_forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
     variables=["surface_air_temperature"],
-    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping, # built-in mapping
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,  # built-in mapping
     storage_options={"remote_options": {"anon": True}},
 )
 ```
@@ -118,7 +117,7 @@ era5_heatwave_target = ewb.inputs.ERA5(
 Note that EWB provides defaults for arguments, so most users will be able to instead write this (if defining variables with the intent of it applying to all metrics):
 
 ```python
-era5_heatwave_target = ewb.ERA5(variables=['surface_air_temperature'])
+era5_heatwave_target = ewb.ERA5(variables=["surface_air_temperature"])
 ```
 
 Or (if defining variables as arguments to the metrics):
@@ -169,7 +168,7 @@ ewb_instance = ewb.evaluate.ExtremeWeatherBench(
 )
 
 outputs = ewb_instance.run_evaluation()
-outputs.to_csv('your_file_name.csv')
+outputs.to_csv("your_file_name.csv")
 ```
 
 Where the EWB default events YAML file is loaded in using
@@ -188,6 +187,7 @@ All of the following import styles work:
 
 ```python
 import extremeweatherbench as ewb
+
 ewb.inputs.ERA5(...)
 
 from extremeweatherbench import inputs, metrics, cases, evaluate

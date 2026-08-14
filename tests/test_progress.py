@@ -152,7 +152,7 @@ def test_step_bar_does_not_overshoot_total():
 
 def test_queue_sink_publishes_events():
     """A queue sink forwards events verbatim to its queue."""
-    q: "queue.Queue" = queue.Queue()
+    q: queue.Queue = queue.Queue()
     sink = progress.QueueSink(q)
     sink(progress.ProgressEvent(case_id=3, phase="target pipeline", step=1))
     event = q.get_nowait()
@@ -626,7 +626,7 @@ def test_captured_warnings_is_idempotent_when_already_enabled():
 
 def test_forwarding_logs_to_routes_records_and_restores_handlers():
     """The root logger's handlers are swapped for a QueueHandler, then restored."""
-    log_queue: "queue.Queue" = queue.Queue()
+    log_queue: queue.Queue = queue.Queue()
     root = logging.getLogger()
     original_handlers = root.handlers[:]
     with progress.forwarding_logs_to(log_queue):
@@ -644,7 +644,7 @@ def test_forwarding_logs_to_routes_records_and_restores_handlers():
 
 def test_forwarding_logs_to_restores_handlers_when_block_raises():
     """A raising block must not leave the handler swap in place."""
-    log_queue: "queue.Queue" = queue.Queue()
+    log_queue: queue.Queue = queue.Queue()
     root = logging.getLogger()
     original_handlers = root.handlers[:]
     try:
@@ -657,7 +657,7 @@ def test_forwarding_logs_to_restores_handlers_when_block_raises():
 
 def test_forwarding_logs_to_also_captures_warnings():
     """warnings.warn() inside forwarding_logs_to also reaches the queue."""
-    log_queue: "queue.Queue" = queue.Queue()
+    log_queue: queue.Queue = queue.Queue()
     with progress.forwarding_logs_to(log_queue):
         warnings.warn("worker warning", RuntimeWarning)
     records = []
@@ -685,7 +685,7 @@ def test_log_record_survives_manager_queue_round_trip():
 
 def test_log_queue_listener_emits_via_handle():
     """The listener drains a queue and re-emits records through logging."""
-    log_queue: "queue.Queue" = queue.Queue()
+    log_queue: queue.Queue = queue.Queue()
     record = logging.LogRecord(
         name="extremeweatherbench.worker_test",
         level=logging.WARNING,
@@ -717,7 +717,7 @@ def test_log_queue_listener_emits_via_handle():
 
 def test_log_queue_listener_close_drains_leftover_records():
     """close() flushes records still queued after the drain thread stops."""
-    log_queue: "queue.Queue" = queue.Queue()
+    log_queue: queue.Queue = queue.Queue()
     captured = []
     handler = logging.Handler()
     handler.emit = captured.append

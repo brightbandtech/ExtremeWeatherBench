@@ -6,7 +6,8 @@ import inspect
 import logging
 import operator
 import pathlib
-from typing import Any, Callable, Literal, Optional, Sequence, Union
+from collections.abc import Callable, Sequence
+from typing import Any, Literal
 
 import geopandas as gpd
 import numpy as np
@@ -21,7 +22,7 @@ import xarray as xr
 import yaml  # type: ignore[import]
 from joblib import Parallel
 
-import extremeweatherbench.progress as progress
+from extremeweatherbench import progress
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ def _empty_init_time_array() -> xr.DataArray:
 
 
 def maybe_get_operator(
-    operator_method: Union[Literal[">", ">=", "<", "<=", "==", "!="], Callable],
+    operator_method: Literal[">", ">=", "<", "<=", "==", "!="] | Callable,
 ) -> Callable:
     """Get the operator function from the operator string. If the operator_method is a
     callable, return it.
@@ -112,7 +113,7 @@ def is_valid_landfall(landfall: xr.DataArray | None) -> bool:
 
 
 def _create_nan_dataarray(
-    preserved_dims: Union[str, list[str]] = "init_time",
+    preserved_dims: str | list[str] = "init_time",
 ) -> xr.DataArray:
     """Create a NaN DataArray with the given dimension(s).
 
@@ -139,14 +140,14 @@ def convert_longitude_to_360(longitude: float) -> float:
 
 
 def convert_longitude_to_180(
-    longitude: float | Union[xr.Dataset, xr.DataArray],
+    longitude: float | xr.Dataset | xr.DataArray,
     longitude_name: str = "longitude",
-) -> float | Union[xr.Dataset, xr.DataArray]:
+) -> float | xr.Dataset | xr.DataArray:
     """Convert a longitude from the range [0, 360) to [-180, 180).
 
     Datasets are coerced to [-180, 180) and sorted by longitude.
     """
-    if isinstance(longitude, xr.Dataset) or isinstance(longitude, xr.DataArray):
+    if isinstance(longitude, (xr.Dataset, xr.DataArray)):
         longitude.coords[longitude_name] = (
             longitude.coords[longitude_name] + 180
         ) % 360 - 180
@@ -395,7 +396,7 @@ def reduce_forecast_over_window_per_init(
 
 def determine_temporal_resolution(
     data: xr.Dataset | xr.DataArray,
-) -> Optional[float]:
+) -> float | None:
     """Determine the temporal resolution of the data.
 
     Args:
@@ -531,7 +532,7 @@ def stack_dataarray_from_dims(
     da: xr.DataArray,
     stack_dims: list[str],
     max_size: float = 1e9,
-    coords: Optional[npt.NDArray] = None,
+    coords: npt.NDArray | None = None,
 ) -> xr.DataArray:
     """Stack sparse data with n-dimensions.
 
@@ -591,7 +592,7 @@ def stack_dataarray_from_dims(
     return maybe_densify_dataarray(da, max_size=max_size)
 
 
-def check_for_vars(variable_list: list[str], source: Sequence) -> Optional[str]:
+def check_for_vars(variable_list: list[str], source: Sequence) -> str | None:
     """Check if the variable is in the source.
 
     Args:
@@ -750,8 +751,8 @@ def idx_to_coords(
 
 
 def convert_day_yearofday_to_time(
-    dataset: Union[xr.Dataset, xr.DataArray], year: int
-) -> Union[xr.Dataset, xr.DataArray]:
+    dataset: xr.Dataset | xr.DataArray, year: int
+) -> xr.Dataset | xr.DataArray:
     """Convert dayofyear and hour to new time coordinate.
 
     Args:
@@ -984,7 +985,7 @@ def _cache_maybe_densify_helper(
 def maybe_cache_and_compute(
     data: xr.Dataset | xr.DataArray,
     name: str,
-    cache_dir: Optional[Union[str, pathlib.Path]] = None,
+    cache_dir: str | pathlib.Path | None = None,
 ) -> xr.Dataset | xr.DataArray:
     """Compute and cache datasets if cache_dir is provided.
 

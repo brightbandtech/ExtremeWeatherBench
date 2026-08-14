@@ -3,7 +3,6 @@
 
 import logging
 import pickle
-from typing import Dict, Optional, Tuple
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -12,10 +11,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import regionmask
-import scipy.ndimage as ndimage
 import xarray as xr
 from dask.distributed import Client
 from matplotlib.patches import Rectangle
+from scipy import ndimage
 
 from extremeweatherbench import calc, cases, derived, inputs, regions, utils
 from extremeweatherbench.events import atmospheric_river as ar
@@ -113,7 +112,7 @@ def calculate_extent_bounds(
 def identify_ar_objects(
     ar_mask: xr.DataArray,
     min_area_gridpoints: int = 500,
-) -> Tuple[np.ndarray, Dict[int, Dict]]:
+) -> tuple[np.ndarray, dict[int, dict]]:
     """Identify separate atmospheric river objects using connected components.
 
     Args:
@@ -181,7 +180,7 @@ def identify_ar_objects(
     return labeled_array, object_properties
 
 
-def find_largest_ar_object(ar_mask: xr.DataArray, **object_kwargs) -> Optional[Dict]:
+def find_largest_ar_object(ar_mask: xr.DataArray, **object_kwargs) -> dict | None:
     """Find the largest valid atmospheric river object.
 
     Args:
@@ -214,7 +213,7 @@ def find_central_ar_object(
     center_lat: float,
     center_lon: float,
     min_object_size: int = MIN_AR_OBJECT_SIZE,
-) -> Optional[int]:
+) -> int | None:
     """Find AR object label closest to map center.
 
     Args:
@@ -270,8 +269,8 @@ def find_central_ar_object(
 def find_timestamp_peak_field(
     ivt_data: xr.DataArray,
     ar_mask: xr.DataArray,
-    land_mask: Optional[xr.DataArray] = None,
-) -> Tuple[int, float]:
+    land_mask: xr.DataArray | None = None,
+) -> tuple[int, float]:
     """Find timestamp with highest aggregate IVT within AR regions closest to center.
 
     Args:
@@ -412,10 +411,10 @@ def find_timestamp_peak_field(
 def expand_bounds_to_contiguous_ar(
     ar_mask: xr.DataArray,
     land_intersection: xr.DataArray,
-    initial_bounds: Dict[str, float],
+    initial_bounds: dict[str, float],
     object_id: int,
     labeled_array: np.ndarray,
-) -> Tuple[float, float, float, float]:
+) -> tuple[float, float, float, float]:
     """Expand bounds to include all contiguous AR over land.
 
     Args:
@@ -521,9 +520,9 @@ def expand_bounds_to_contiguous_ar(
 def find_ar_bounds_from_largest_object(
     ar_mask: xr.DataArray,
     min_area_gridpoints: float = 500,
-    land_intersection: Optional[xr.DataArray] = None,
+    land_intersection: xr.DataArray | None = None,
     expand_to_contiguous: bool = True,
-) -> Tuple[float, float, float, float, Optional[Dict]]:
+) -> tuple[float, float, float, float, dict | None]:
     """Find geographical bounds of largest AR object.
 
     Args:
@@ -585,9 +584,9 @@ def create_case_summary_plot(
     composite_land_intersection: xr.DataArray,
     peak_time_idx: int,
     peak_ivt_value: float,
-    ar_bounds: Dict,
+    ar_bounds: dict,
     buffered_bounds: regions.Region,
-    largest_obj_metadata: Optional[Dict] = None,
+    largest_obj_metadata: dict | None = None,
     extent_modifier_degrees: float = 5,
 ) -> None:
     """Create summary plot showing composite AR approach and bounds.
@@ -777,7 +776,7 @@ def create_case_summary_plot(
 def process_ar_event(
     single_case: cases.IndividualCase,
     era5_ar: inputs.ERA5,
-    AR_OBJECT_CONFIG: Dict,
+    AR_OBJECT_CONFIG: dict,
     extent_modifier_degrees: float = 5,
 ) -> dict:
     """Process an atmospheric river event."""

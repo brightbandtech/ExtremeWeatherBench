@@ -112,8 +112,7 @@ def mixing_ratio_inline(pressure: float, vapor_pressure: float) -> float:
     # Prevent supersaturation: cap vapor pressure at 0.9999 * pressure
     # This handles both real supersaturation in data and numerical precision issues
     max_vapor_pressure = 0.9999 * pressure
-    if vapor_pressure > max_vapor_pressure:
-        vapor_pressure = max_vapor_pressure
+    vapor_pressure = min(vapor_pressure, max_vapor_pressure)
     return EPSILON * vapor_pressure / (pressure - vapor_pressure)
 
 
@@ -493,7 +492,7 @@ def compute_ml_cape_cin_from_profile(
     p_lcl, t_lcl = lcl(p_surface, ml_temp, ml_dewpoint)
 
     # Step 2b: Insert LCL into profile for better resolution
-    pressure, temperature, dewpoint, geopotential, lcl_idx = insert_lcl_level(
+    pressure, temperature, dewpoint, geopotential, _lcl_idx = insert_lcl_level(
         pressure, temperature, dewpoint, geopotential, p_lcl, t_lcl
     )
 

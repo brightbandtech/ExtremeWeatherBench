@@ -437,7 +437,7 @@ class TestMaybeMapVariableNames:
 
         mock_data = MockData()
 
-        with pytest.raises(ValueError, match="Data type .* not supported"):
+        with pytest.raises(TypeError, match="Data type .* not supported"):
             test_input.maybe_map_variable_names(mock_data)
 
     def test_maybe_map_variable_names_empty_variable_mapping(
@@ -509,7 +509,7 @@ class TestForecastBase:
             storage_options={},
         )
 
-        with pytest.raises(ValueError, match="Expected xarray Dataset"):
+        with pytest.raises(TypeError, match="Expected xarray Dataset"):
             forecast.subset_data_to_case("invalid_data", mock.Mock())
 
     @mock.patch("extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time")
@@ -1199,7 +1199,7 @@ class TestGHCN:
             storage_options={},
         )
 
-        with pytest.raises(ValueError, match="Expected polars LazyFrame"):
+        with pytest.raises(TypeError, match="Expected polars LazyFrame"):
             ghcn.subset_data_to_case("invalid_data", mock.Mock())
 
     def test_ghcn_subset_data_to_case_sorted_valid_time(self, sample_ghcn_dataframe):
@@ -1267,7 +1267,7 @@ class TestGHCN:
             storage_options={},
         )
 
-        with pytest.raises(ValueError, match="Data is not a polars LazyFrame"):
+        with pytest.raises(TypeError, match="Data is not a polars LazyFrame"):
             ghcn._custom_convert_to_dataset("invalid_data")
 
     def test_ghcn_custom_convert_to_dataset_no_duplicates(self, sample_ghcn_dataframe):
@@ -1440,7 +1440,7 @@ class TestGHCN:
             # Operation should complete without error
             assert isinstance(aligned_forecast, xr.Dataset)
             assert isinstance(aligned_target, xr.Dataset)
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             # If it does fail, it should be a controlled failure, not a crash
             assert "empty" in str(e).lower() or "no data" in str(e).lower()
 
@@ -1529,7 +1529,7 @@ class TestLSR:
             storage_options={},
         )
 
-        with pytest.raises(ValueError, match="Expected pandas DataFrame"):
+        with pytest.raises(TypeError, match="Expected pandas DataFrame"):
             lsr.subset_data_to_case("invalid_data", mock.Mock())
 
     def test_lsr_custom_convert_to_dataset(self, sample_lsr_dataframe):
@@ -1561,7 +1561,7 @@ class TestLSR:
             storage_options={},
         )
 
-        with pytest.raises(ValueError, match="Data is not a pandas DataFrame"):
+        with pytest.raises(TypeError, match="Data is not a pandas DataFrame"):
             lsr._custom_convert_to_dataset("invalid_data")
 
     @mock.patch("extremeweatherbench.inputs.align_forecast_to_target")
@@ -1675,7 +1675,7 @@ class TestIBTrACS:
             storage_options={},
         )
 
-        with pytest.raises(ValueError, match="Data is not a polars LazyFrame"):
+        with pytest.raises(TypeError, match="Data is not a polars LazyFrame"):
             ibtracs._custom_convert_to_dataset("invalid_data")
 
 
