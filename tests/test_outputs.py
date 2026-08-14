@@ -535,6 +535,271 @@ class TestResultsToDataset:
         assert not any("sparse=True" in r.getMessage() for r in caplog.records)
 
 
+def _peak_result(
+    values=(1.0, 2.0),
+    init_times=None,
+    lead_times=(0, 6),
+    metric="MaximumMeanAbsoluteError",
+    **overrides,
+):
+    init_times = (
+        init_times
+        if init_times is not None
+        else pd.date_range("2021-06-20", periods=len(values), freq="D")
+    )
+    result = xr.DataArray(
+        data=list(values),
+        dims=["init_time"],
+        coords={
+            "init_time": init_times,
+            "lead_time": ("init_time", list(lead_times)),
+        },
+    )
+    metadata = {**METADATA_KWARGS, "metric": metric, **overrides}
+    return outputs.annotate_metric_result(result, **metadata)
+
+
+class TestResultsToDatasetPeakTimeCoord:
+    """Test peak metrics carrying both init_time and lead_time."""
+
+    def test_peak_alone_gets_both_dims_at_true_positions(self):
+        result = _peak_result(values=(1.0, 2.0), lead_times=(6, 12))
+        ds = outputs.results_to_dataset([result])
+        df = outputs.results_to_dataframe([result])
+
+        var = ds["surface_air_temperature_vs_2m_temperature"]
+        assert "lead_time" in var.dims
+        assert "init_time" in var.dims
+
+        computed = var.compute()
+        n_real = int(computed.notnull().sum())
+        assert n_real == len(df)
+
+        for init_time, lead_time, value in zip(
+            result.coords["init_time"].values,
+            result.coords["lead_time"].values,
+            result.values,
+        ):
+            selected = computed.sel(init_time=init_time, lead_time=lead_time).item()
+            assert selected == pytest.approx(value)
+
+    def test_peak_alone_shape_matches_peak_combined_with_rmse(self):
+        """A peak result's own (init_time, lead_time) shape, after
+        dropping placeholder padding, must not depend on what else ran
+        alongside it."""
+        peak = _peak_result(values=(1.0, 2.0), lead_times=(6, 12))
+        rmse = _lead_time_result(values=(3.0, 4.0), lead_times=(0, 6))
+
+        alone = outputs.results_to_dataset([peak])
+        combined = outputs.results_to_dataset([peak, rmse])
+        var_name = "surface_air_temperature_vs_2m_temperature"
+
+        selectors = {
+            "case_id_number": 1,
+            "forecast_source": "test_forecast",
+            "target_source": "test_target",
+            "metric": "MaximumMeanAbsoluteError",
+        }
+        alone_peak = outputs.drop_empty_slices(alone[var_name].sel(**selectors))
+        combined_peak = outputs.drop_empty_slices(combined[var_name].sel(**selectors))
+
+        assert dict(alone_peak.sizes) == dict(combined_peak.sizes)
+        xr.testing.assert_equal(
+            alone_peak.sortby(list(alone_peak.dims)).compute(),
+            combined_peak.sortby(list(combined_peak.dims)).compute(),
+        )
+
+    def test_peak_combined_with_rmse_does_not_raise_and_values_agree(self):
+        peak = _peak_result(
+            values=(1.0, 2.0),
+            init_times=pd.date_range("2021-06-20", periods=2, freq="D"),
+            lead_times=(6, 12),
+            metric="MaximumMeanAbsoluteError",
+            target_variable="2m_temperature",
+            forecast_variable="2m_temperature",
+        )
+        rmse = _result(
+            dims="lead_time",
+            metric="RootMeanSquaredError",
+            values=(10.0, 20.0),
+            coord_values=(0, 6),
+            target_variable="2m_temperature",
+            forecast_variable="2m_temperature",
+        )
+
+        ds = outputs.results_to_dataset([peak, rmse])
+        df = outputs.results_to_dataframe([peak, rmse])
+        var = ds["2m_temperature"].compute()
+
+        n_real = int(var.notnull().sum())
+        assert n_real == len(df)
+
+        peak_selection = var.sel(metric="MaximumMeanAbsoluteError")
+        for init_time, lead_time, value in zip(
+            peak.coords["init_time"].values,
+            peak.coords["lead_time"].values,
+            peak.values,
+        ):
+            selected = peak_selection.sel(
+                init_time=init_time, lead_time=lead_time
+            ).item()
+            assert selected == pytest.approx(value)
+
+        rmse_selection = outputs.drop_empty_slices(
+            var.sel(
+                metric="RootMeanSquaredError",
+                case_id_number=1,
+                forecast_source="test_forecast",
+                target_source="test_target",
+            )
+        )
+        assert rmse_selection.dims == ("lead_time",)
+        np.testing.assert_array_equal(
+            rmse_selection.compute().sortby("lead_time").values, [10.0, 20.0]
+        )
+
+    def test_repeated_verifying_lead_time_across_init_times(self):
+        result = _peak_result(
+            values=(1.0, 2.0, 3.0),
+            init_times=pd.date_range("2021-06-20", periods=3, freq="D"),
+            lead_times=(6, 6, 12),
+        )
+        ds = outputs.results_to_dataset([result])
+        df = outputs.results_to_dataframe([result])
+        var = ds["surface_air_temperature_vs_2m_temperature"].compute()
+
+        assert int(var.notnull().sum()) == len(df)
+        assert var.sizes["lead_time"] == 2
+
+        for init_time, lead_time, value in zip(
+            result.coords["init_time"].values,
+            result.coords["lead_time"].values,
+            result.values,
+        ):
+            assert var.sel(
+                init_time=init_time, lead_time=lead_time
+            ).item() == pytest.approx(value)
+
+    def test_distinct_verifying_lead_times_across_init_times(self):
+        result = _peak_result(
+            values=(1.0, 2.0, 3.0),
+            init_times=pd.date_range("2021-06-20", periods=3, freq="D"),
+            lead_times=(0, 6, 12),
+        )
+        ds = outputs.results_to_dataset([result])
+        var = ds["surface_air_temperature_vs_2m_temperature"].compute()
+
+        assert var.sizes["lead_time"] == 3
+        assert var.sizes["init_time"] == 3
+        assert int(var.notnull().sum()) == 3
+
+    def test_station_latitude_longitude_stay_data_variables_not_dims(self):
+        stations = np.array([1, 2, 3])
+        result = xr.DataArray(
+            data=[1.0, 2.0, 3.0], dims=["station"], coords={"station": stations}
+        )
+        result = result.assign_coords(
+            latitude=("station", [10.0, 20.0, 30.0]),
+            longitude=("station", [-80.0, -90.0, -100.0]),
+        )
+        annotated = outputs.annotate_metric_result(result, **METADATA_KWARGS)
+
+        ds = outputs.results_to_dataset([annotated])
+
+        assert "latitude" not in ds.dims
+        assert "longitude" not in ds.dims
+        assert "latitude" in ds.data_vars
+        assert "longitude" in ds.data_vars
+
+    def test_landfall_extra_coords_still_promoted_alongside_peak_metric(self):
+        landfall = _landfall_result(1, 10.0, -80.0, "2021-06-20T12:00")
+        peak = _peak_result(
+            values=(1.0, 2.0),
+            init_times=pd.date_range("2021-06-20", periods=2, freq="D"),
+            lead_times=(6, 12),
+            target_variable="surface_wind_speed",
+            forecast_variable="surface_wind_speed",
+            forecast_source="test_forecast",
+            target_source="test_target",
+            case_id_number=1,
+            event_type="tropical_cyclone",
+        )
+
+        ds = outputs.results_to_dataset([landfall, peak])
+
+        assert "forecast_landfall_latitude" in ds.data_vars
+        assert "forecast_landfall_latitude" not in ds.coords
+        assert "lead_time" in ds.dims
+        assert "init_time" in ds.dims
+
+    def test_drop_empty_slices_on_scattered_peak_result(self):
+        result = _peak_result(values=(1.0, 2.0), lead_times=(6, 12))
+        ds = outputs.results_to_dataset([result])
+        selection = ds["surface_air_temperature_vs_2m_temperature"].sel(
+            metric="MaximumMeanAbsoluteError",
+            case_id_number=1,
+            forecast_source="test_forecast",
+            target_source="test_target",
+        )
+
+        collapsed = outputs.drop_empty_slices(selection)
+
+        assert set(collapsed.dims) == {"init_time", "lead_time"}
+        assert int(collapsed.compute().notnull().sum()) == 2
+
+
+class TestResultsToDatasetPeakTimeCoordSparseDenseEquivalence:
+    """sparse=True must match sparse=False for peak metrics too."""
+
+    def _assert_equivalent(self, results):
+        dense = outputs.results_to_dataset(results).compute()
+        sparse_ds = outputs.results_to_dataset(results, sparse=True)
+        densified = sparse_ds.map(utils.maybe_densify_dataarray).compute()
+        xr.testing.assert_identical(densified, dense)
+
+    def test_peak_alone(self):
+        self._assert_equivalent([_peak_result(values=(1.0, 2.0), lead_times=(6, 12))])
+
+    def test_peak_combined_with_rmse(self):
+        peak = _peak_result(
+            values=(1.0, 2.0),
+            lead_times=(6, 12),
+            target_variable="2m_temperature",
+            forecast_variable="2m_temperature",
+        )
+        rmse = _result(
+            dims="lead_time",
+            metric="RootMeanSquaredError",
+            values=(10.0, 20.0),
+            coord_values=(0, 6),
+            target_variable="2m_temperature",
+            forecast_variable="2m_temperature",
+        )
+        self._assert_equivalent([peak, rmse])
+
+    def test_repeated_verifying_lead_times(self):
+        self._assert_equivalent(
+            [
+                _peak_result(
+                    values=(1.0, 2.0, 3.0),
+                    init_times=pd.date_range("2021-06-20", periods=3, freq="D"),
+                    lead_times=(6, 6, 12),
+                )
+            ]
+        )
+
+    def test_distinct_verifying_lead_times(self):
+        self._assert_equivalent(
+            [
+                _peak_result(
+                    values=(1.0, 2.0, 3.0),
+                    init_times=pd.date_range("2021-06-20", periods=3, freq="D"),
+                    lead_times=(0, 6, 12),
+                )
+            ]
+        )
+
+
 def _landfall_result(case_id, lat, lon, valid_time, **overrides):
     init_times = pd.date_range("2021-06-20", periods=2, freq="D")
     result = xr.DataArray(

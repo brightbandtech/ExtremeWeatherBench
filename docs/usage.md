@@ -229,10 +229,13 @@ lacks with a single out-of-band placeholder label (`NaT` for
 datetime/timedelta dimensions, `NaN` otherwise). That's why the
 `lead_time` and `init_time` coordinates above each carry one extra,
 otherwise-unused label: it's where results lacking that dimension get
-parked. The values are correct, and this mirrors the CSV, where an
-RMSE row already has an empty `init_time` column, but selecting a
-single metric leaves that placeholder label behind as an awkward extra
-row:
+parked. Peak metrics (e.g. `MaximumMeanAbsoluteError`) are the
+exception: they reduce over a run but report against the lead time at
+which it verified, so their values genuinely occupy both `init_time`
+and `lead_time` rather than needing either one padded. The values are
+correct, and this mirrors the CSV, where an RMSE row already has an
+empty `init_time` column, but selecting a single metric leaves that
+placeholder label behind as an awkward extra row:
 
 ```python
 rmse = outputs["surface_air_temperature"].sel(

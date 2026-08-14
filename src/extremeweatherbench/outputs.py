@@ -207,6 +207,33 @@ def _sentinel_for_dtype(dtype: np.dtype) -> object:
     return np.nan
 
 
+_PEAK_TIME_COORDS = ("init_time", "lead_time")
+
+
+def _scatter_peak_time_coord(result: xr.DataArray) -> xr.DataArray:
+    """Turn a peak metric's verifying lead/init time into a real dim.
+
+    Peak metrics reduce over a run but report against the lead_time (or
+    init_time) at which that run verified: one of the pair is the
+    result's own dim, the other rides along it as a non-dim coord. A
+    MultiIndex over both, then unstacked, scatters each value to its
+    true position instead of leaving the pair to collide downstream.
+
+    Args:
+        result: A single annotated metric result.
+
+    Returns:
+        result unchanged, unless it carries exactly one of init_time/
+        lead_time as its own dim and the other as a non-dim coord along
+        it, in which case both become dims of the returned result.
+    """
+    own_dim = next((d for d in _PEAK_TIME_COORDS if d in result.dims), None)
+    other = next((c for c in _PEAK_TIME_COORDS if c != own_dim), None)
+    if own_dim is None or other not in result.coords or other in result.dims:
+        return result
+    return result.set_index(__scatter_idx=(own_dim, other)).unstack("__scatter_idx")
+
+
 def _collect_own_dim_dtypes(results: list[xr.DataArray]) -> dict[str, np.dtype]:
     """Find every non-metadata dim used anywhere in the run, with its dtype."""
     dim_dtypes: dict[str, np.dtype] = {}
@@ -399,9 +426,11 @@ def results_to_dataset(results: list[xr.DataArray], sparse: bool = False) -> xr.
     forecast_source, and target_source (via expand_dims on the scalar
     metadata coords annotate_metric_result attached), keeping whatever
     dims the metric itself preserved (lead_time, init_time, latitude,
-    longitude, level, ...). Slabs are combined with an outer join so
-    each result occupies its own disjoint hyper-slab; everything else is
-    NaN (or absent, if sparse=True).
+    longitude, level, ...). A peak metric result that carries both
+    init_time and lead_time (see _scatter_peak_time_coord) occupies
+    both dims. Slabs are combined with an outer join so each result
+    occupies its own disjoint hyper-slab; everything else is NaN (or
+    absent, if sparse=True).
 
     Args:
         results: A flat list of annotated metric results for a run.
@@ -414,6 +443,7 @@ def results_to_dataset(results: list[xr.DataArray], sparse: bool = False) -> xr.
     if not results:
         return xr.Dataset()
 
+    results = [_scatter_peak_time_coord(r) for r in results]
     own_dim_dtypes = _collect_own_dim_dtypes(results)
     datasets = [_result_to_padded_dataset(r, own_dim_dtypes) for r in results]
 
