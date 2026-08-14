@@ -273,20 +273,23 @@ def min_if_all_timesteps_present(
 ) -> xr.DataArray:
     """Return the minimum value of a DataArray if all timesteps of a day are present.
 
+    Counts values that are actually present rather than the length of the time
+    coordinate, so a day padded out with NaNs is correctly rejected as
+    incomplete.
+
     Args:
         da: The input DataArray.
+        time_resolution_hours: The spacing of the data in hours.
 
     Returns:
         The minimum value of the DataArray if all timesteps are present,
-        otherwise the original DataArray.
+        otherwise NaN.
     """
     timesteps_per_day = 24 / time_resolution_hours
-    # .size rather than .values.size: the element count is known from the
-    # shape, so asking for it should not pull a dask-backed day into memory.
-    if da.size == timesteps_per_day:
-        return da.min()
-    else:
-        return xr.DataArray(np.nan)
+    # Comparing lazily rather than in a Python `if` keeps a dask-backed day
+    # out of memory: nothing here is computed until the caller asks for it.
+    timesteps_present = da.notnull().sum()
+    return da.min().where(timesteps_present == timesteps_per_day)
 
 
 def min_if_all_timesteps_present_forecast(
@@ -295,23 +298,99 @@ def min_if_all_timesteps_present_forecast(
     """Return the minimum value of a DataArray if all timesteps of a day are present
     given a dataset with lead_time and valid_time dimensions.
 
+    The completeness check is made per lead time against the number of values
+    actually present. Checking the length of the valid_time coordinate instead
+    would pass for every lead time, because that coordinate is the union over
+    all lead times and is denser than any single lead time's sampling.
+
     Args:
         da: The input DataArray.
+        time_resolution_hours: The spacing of the data in hours.
 
     Returns:
-        The minimum value of the DataArray if all timesteps are present,
-        otherwise the original DataArray.
+        The minimum along valid_time for lead times holding a full day of
+        values, and NaN for the rest.
     """
     timesteps_per_day = 24 / time_resolution_hours
-    if da.valid_time.size == timesteps_per_day:
-        return da.min("valid_time")
-    else:
-        # Return an array with the same lead_time dimension but filled with NaNs
-        return xr.DataArray(
-            np.full(da.lead_time.size, np.nan),
-            coords={"lead_time": da.lead_time},
-            dims=["lead_time"],
-        )
+    timesteps_present = da.notnull().sum("valid_time")
+    return da.min("valid_time").where(timesteps_present == timesteps_per_day)
+
+
+def expected_timesteps_per_day(forecast: xr.DataArray) -> int:
+    """Number of forecast steps that make up one day at the lead_time spacing.
+
+    This is the per-init sampling rate, which is the meaningful one when asking
+    whether a single forecast run covers a full day. It is unrelated to the
+    spacing of the valid_time axis, which is the union over all lead times.
+
+    Args:
+        forecast: A forecast DataArray with a lead_time coordinate.
+
+    Returns:
+        The number of lead times spanning 24 hours, at least 1.
+    """
+    lead_time = _lead_time_as_timedelta(forecast.lead_time)
+    steps = np.abs(np.diff(lead_time.values)) / np.timedelta64(1, "h")
+    steps = steps[steps > 0]
+    if steps.size == 0:
+        return 1
+    return max(round(24 / steps.min()), 1)
+
+
+def reduce_forecast_over_window_per_init(
+    forecast: xr.DataArray,
+    center_time: Any,
+    tolerance_range_hours: int,
+    method: str = "max",
+    required_timesteps: int = 1,
+) -> xr.DataArray:
+    """Reduce a forecast over a time window separately for each initialization.
+
+    Peak metrics ask what extreme value a forecast predicted near the time the
+    target's extreme occurred. That is a reduction along a single run's
+    trajectory, so it must be taken over lead_time at fixed init_time. Reducing
+    over valid_time at fixed lead_time instead samples a different run at every
+    step, and when the initialization interval is wider than the window it
+    degenerates to a single instantaneous value whose time of day is set by
+    ``lead_time mod 24 h``.
+
+    The result is indexed by the lead time of the target's extreme relative to
+    each initialization, ``center_time - init_time``, and keeps init_time as a
+    coordinate so the provenance of each value survives into the output.
+
+    Args:
+        forecast: Forecast DataArray with lead_time and valid_time dimensions,
+            already reduced over any spatial dimensions.
+        center_time: The target time the window is centered on.
+        tolerance_range_hours: Full width of the window in hours.
+        method: The reduction to apply, e.g. "max" or "min".
+        required_timesteps: Minimum number of values an initialization must
+            contribute inside the window to be scored. Initializations with
+            fewer are dropped rather than scored on partial coverage.
+
+    Returns:
+        A DataArray with a lead_time dimension and an init_time coordinate.
+    """
+    half_window = np.timedelta64(tolerance_range_hours // 2, "h")
+    center = np.ravel(np.asarray(center_time))[0]
+
+    forecast_by_init = convert_valid_time_to_init_time(forecast)
+    windowed = forecast_by_init.where(
+        (forecast_by_init.valid_time >= center - half_window)
+        & (forecast_by_init.valid_time <= center + half_window)
+    )
+    windowed = windowed.where(
+        windowed.notnull().sum("lead_time") >= required_timesteps, drop=True
+    )
+
+    reduced = getattr(windowed, method)("lead_time")
+    reduced = reduced.assign_coords(
+        lead_time=("init_time", (center - reduced.init_time).data)
+    )
+    # A run launched after the target's extreme did not forecast it, and a
+    # negative lead time would be meaningless in the output.
+    reduced = reduced.where(reduced.lead_time >= np.timedelta64(0, "h"), drop=True)
+    return reduced.swap_dims({"init_time": "lead_time"}).sortby("lead_time")
 
 
 def determine_temporal_resolution(
@@ -349,6 +428,13 @@ def determine_temporal_resolution(
     return np.min(num_timesteps).astype(float)
 
 
+def _lead_time_as_timedelta(lead_time: xr.DataArray) -> xr.DataArray:
+    """Coerce an integer-hours lead_time to timedelta64."""
+    if np.issubdtype(lead_time.dtype, np.timedelta64):
+        return lead_time
+    return lead_time.copy(data=pd.to_timedelta(lead_time.values, unit="h"))
+
+
 def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
     """Convert the init_time coordinate to a valid_time coordinate.
 
@@ -358,9 +444,10 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
     Returns:
         The dataset with a valid_time coordinate.
     """
+    lead_time = _lead_time_as_timedelta(ds.lead_time)
     valid_time = xr.DataArray(
         ds.init_time, coords={"init_time": ds.init_time}
-    ) + xr.DataArray(ds.lead_time, coords={"lead_time": ds.lead_time})
+    ) + xr.DataArray(lead_time, coords={"lead_time": ds.lead_time})
     ds = ds.assign_coords(valid_time=valid_time)
     return xr.concat(
         [
@@ -383,9 +470,10 @@ def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:
     Returns:
         The dataarray with an init_time dimension.
     """
+    lead_time = _lead_time_as_timedelta(da.lead_time)
     init_time = xr.DataArray(
         da.valid_time, coords={"valid_time": da.valid_time}
-    ) - xr.DataArray(da.lead_time, coords={"lead_time": da.lead_time})
+    ) - xr.DataArray(lead_time, coords={"lead_time": da.lead_time})
     da = da.assign_coords(init_time=init_time)
     return xr.concat(
         [

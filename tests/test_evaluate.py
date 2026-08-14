@@ -167,7 +167,7 @@ def sample_case_operator(
 def sample_forecast_dataset():
     """Create a sample forecast dataset."""
     init_time = pd.date_range("2021-06-20", periods=3)
-    lead_time = [0, 6, 12]
+    lead_time = np.array([0, 6, 12], dtype="timedelta64[h]").astype("timedelta64[ns]")
     latitudes = np.linspace(40, 50, 11)
     longitudes = np.linspace(-125, -115, 11)
 

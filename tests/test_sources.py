@@ -976,3 +976,61 @@ class TestXarrayDatasetModule:
 
         result = xarray_dataset.check_for_spatial_data(ds, region)
         assert result is False
+
+    def test_check_for_spatial_data_prime_meridian_crossing_region(self):
+        """Test check_for_spatial_data for a region straddling longitude 0."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+
+        # Region spans -30 to 30, a single lobe that straddles 0/360.
+        region = BoundingBoxRegion(
+            latitude_min=20.0,
+            latitude_max=40.0,
+            longitude_min=-30.0,
+            longitude_max=30.0,
+        )
+
+        # -180/180 axis with values on both sides of 0.
+        data = np.random.randn(3, 3)  # 3x3 spatial grid
+        ds_180 = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={
+                "latitude": [25.0, 30.0, 35.0],
+                "longitude": [-10.0, 0.0, 10.0],
+            },
+        )
+        assert xarray_dataset.check_for_spatial_data(ds_180, region) is True
+
+        # 0-360 axis with values on both sides of the 360/0 wrap.
+        data = np.random.randn(3, 2)  # 3x2 spatial grid
+        ds_0360 = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={
+                "latitude": [25.0, 30.0, 35.0],
+                "longitude": [350.0, 5.0],
+            },
+        )
+        assert xarray_dataset.check_for_spatial_data(ds_0360, region) is True
+
+    def test_check_for_spatial_data_lobe_ending_at_prime_meridian(self):
+        """Test check_for_spatial_data for a lobe ending exactly at longitude 0."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+
+        # Region spans -100 to 0, so the lobe's upper bound is exactly 0.
+        region = BoundingBoxRegion(
+            latitude_min=20.0,
+            latitude_max=40.0,
+            longitude_min=-100.0,
+            longitude_max=0.0,
+        )
+
+        data = np.random.randn(3, 1)  # 3x1 spatial grid
+        ds = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={
+                "latitude": [25.0, 30.0, 35.0],
+                "longitude": [-50.0],
+            },
+        )
+
+        result = xarray_dataset.check_for_spatial_data(ds, region)
+        assert result is True
