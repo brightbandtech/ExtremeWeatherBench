@@ -5,8 +5,7 @@ import datetime
 import pandas as pd
 import xarray as xr
 
-import extremeweatherbench.regions as regions
-import extremeweatherbench.utils as utils
+from extremeweatherbench import regions, utils
 
 
 def safely_pull_variables(

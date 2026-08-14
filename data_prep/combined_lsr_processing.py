@@ -128,12 +128,12 @@ async def pull_lsr_data_async(
         raise ValueError("LSR data before 2004-02-29 not available")
 
     # Try the filtered URL first, if it fails, try without _filtered
-    url = f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts_filtered.csv"  # noqa: E501
+    url = f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts_filtered.csv"
 
     try:
         async with session.head(url) as response:
             if response.status == 404:
-                url = f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts.csv"  # noqa: E501
+                url = f"https://www.spc.noaa.gov/climo/reports/{date.strftime('%y%m%d')}_rpts.csv"
 
         async with session.get(url) as response:
             if response.status != 200:

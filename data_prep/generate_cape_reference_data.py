@@ -76,7 +76,7 @@ def compute_metpy_reference(
             cape, cin = mixed_layer_cape_cin(p, t, td)
             cape_ref[i] = cape.magnitude
             cin_ref[i] = cin.magnitude
-        except Exception:
+        except (ValueError, RuntimeError, IndexError):
             cape_ref[i] = np.nan
             cin_ref[i] = np.nan
 

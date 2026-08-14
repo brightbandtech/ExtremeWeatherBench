@@ -72,7 +72,7 @@ import extremeweatherbench as ewb
 # Load in a forecast; here, we load in GFS initialized FCNv2 from the CIRA MLWP archive with a default variable built-in for convenience
 fcnv2_heatwave_forecast = ewb.defaults.cira_fcnv2_heatwave_forecast
 
-# Load in ERA5 with another default convenience variable 
+# Load in ERA5 with another default convenience variable
 era5_heatwave_target = ewb.defaults.era5_heatwave_target
 
 # EvaluationObjects are used to evaluate a single forecast source against a single target source with a defined event type. Event types are declared with each case. One or more metrics can be evaluated with each EvaluationObject.
@@ -99,11 +99,11 @@ ewb_instance = ewb.evaluate.ExtremeWeatherBench(
 
 # Execute a parallel run and return the evaluation results as a pandas DataFrame
 heatwave_outputs = ewb_instance.run_evaluation(
-    parallel_config={'n_jobs':16} # Uses 16 jobs with the loky backend as default
+    parallel_config={"n_jobs": 16}  # Uses 16 jobs with the loky backend as default
 )
 
 # Save the results
-heatwave_outputs.to_csv('heatwave_evaluation_results.csv')
+heatwave_outputs.to_csv("heatwave_evaluation_results.csv")
 ```
 
 ## Using command line initialization:

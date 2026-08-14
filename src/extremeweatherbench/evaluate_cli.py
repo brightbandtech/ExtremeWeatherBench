@@ -2,14 +2,11 @@ import importlib.util
 import os
 import pathlib
 import pickle
-from typing import Optional
 
 import click
 import pandas as pd
 
-import extremeweatherbench.cases as cases
-import extremeweatherbench.defaults as defaults
-import extremeweatherbench.evaluate as evaluate
+from extremeweatherbench import cases, defaults, evaluate
 
 
 @click.command()
@@ -63,12 +60,12 @@ import extremeweatherbench.evaluate as evaluate
 def cli_runner(
     ctx: click.Context,
     default: bool,
-    config_file: Optional[str],
-    output_dir: Optional[str],
-    cache_dir: Optional[str],
+    config_file: str | None,
+    output_dir: str | None,
+    cache_dir: str | None,
     n_jobs: int,
-    parallel_config: Optional[dict],
-    save_case_operators: Optional[str],
+    parallel_config: dict | None,
+    save_case_operators: str | None,
     no_progress: bool,
 ):
     """ExtremeWeatherBench command line interface.

@@ -31,9 +31,8 @@ group_list = inputs.list_groups_in_icechunk_datatree(storage)
 ## Loading the data as an XarrayObject
 
 ```python
-
 # Helper function to access the virtual dataset
-fcnv2 = inputs.get_cira_icechunk(model_name='FOUR_v200_IFS')
+fcnv2 = inputs.get_cira_icechunk(model_name="FOUR_v200_IFS")
 ```
 
 `fcnv2` is a `ForecastBase` object ready to be used within EWB's evaluation framework. 
@@ -47,15 +46,14 @@ storage = icechunk.gcs_storage(
 )
 
 fcnv2_icechunk_ds = inputs.open_icechunk_dataset_from_datatree(
-    storage=storage, 
-    group="FOUR_v200_IFS", 
-    authorize_virtual_chunk_access=inputs.CIRA_CREDENTIALS
-    )
+    storage=storage,
+    group="FOUR_v200_IFS",
+    authorize_virtual_chunk_access=inputs.CIRA_CREDENTIALS,
+)
 
 fcnv2 = inputs.XarrayForecast(
-    ds=fcnv2_icechunk_ds,
-    variable_mapping=inputs.CIRA_metadata_variable_mapping
-    )
+    ds=fcnv2_icechunk_ds, variable_mapping=inputs.CIRA_metadata_variable_mapping
+)
 ```
 
 Which is a three step process of accessing the icechunk storage, loading the dataset from the datatree/zarr group format, and finally applying that `Dataset` in a `ForecastBase` object.
@@ -89,7 +87,6 @@ ghcn_target = inputs.GHCN()
 ## Load in case metadata
 
 ```python
-
 # Use EWB's cases and subset to the first two heat waves
 case_vals = cases.load_ewb_events_yaml_into_case_list()
 case_vals = [case for case in case_vals if case.case_id_number in [1, 2]]
@@ -99,7 +96,6 @@ From here, all we need to do is plug in the event type, metric list, target, and
 to an `EvaluationObject` and run EWB's evaluation engine:
 
 ```python
-
 evaluation_object = [
     inputs.EvaluationObject(
         event_type="heat_wave",
@@ -110,15 +106,14 @@ evaluation_object = [
 ]
 
 ewb = evaluate.ExtremeWeatherBench(
-    case_metadata=case_vals,
-    evaluation_objects=evaluation_object
-    )
+    case_metadata=case_vals, evaluation_objects=evaluation_object
+)
 
 # Set up parallel configuration for the run to pass into joblib
 parallel_config = {
-    'backend': 'loky',
-    'n_jobs': 4,
-    }
+    "backend": "loky",
+    "n_jobs": 4,
+}
 
 output = ewb.run_evaluation(parallel_config=parallel_config)
 ```

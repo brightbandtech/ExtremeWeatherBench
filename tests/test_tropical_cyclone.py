@@ -7,7 +7,6 @@ This test suite covers:
 - Dataset conversion utilities
 """
 
-# flake8: noqa: E501
 import math
 from unittest.mock import patch
 

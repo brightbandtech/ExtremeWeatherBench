@@ -20,7 +20,8 @@ import queue
 import sys
 import threading
 import time
-from typing import Any, Callable, Iterator, Optional, Union
+from collections.abc import Callable, Iterator
+from typing import Any
 
 import dask.callbacks
 from tqdm.auto import tqdm
@@ -71,15 +72,15 @@ class _ProgressState:
     """
 
     def __init__(self) -> None:
-        self.active_bar: Optional[tqdm] = None
+        self.active_bar: tqdm | None = None
         self.phase_updates_allowed: bool = False
         self.current_phase: str = ""
-        self.step_bar: Optional[tqdm] = None
-        self.sink: Optional[Callable[["ProgressEvent"], None]] = None
-        self.case_id: Union[int, str] = ""
+        self.step_bar: tqdm | None = None
+        self.sink: Callable[[ProgressEvent], None] | None = None
+        self.case_id: int | str = ""
         self.total_steps: int = 0
         self.step: int = 0
-        self.slot_key: Union[int, str] = ""
+        self.slot_key: int | str = ""
         self.label: str = ""
 
 
@@ -113,7 +114,7 @@ def make_case_bar(total: int, disable: bool = False) -> tqdm:
 
 
 def make_case_step_bar(
-    case_id: Union[int, str],
+    case_id: int | str,
     total_steps: int,
     position: int = 1,
     disable: bool = False,
@@ -193,7 +194,7 @@ def clear_bar() -> None:
     _state.current_phase = ""
 
 
-def register_step_bar(bar: Optional[tqdm]) -> None:
+def register_step_bar(bar: tqdm | None) -> None:
     """Set (or clear) the nested step bar that set_phase advances.
 
     Args:
@@ -203,10 +204,10 @@ def register_step_bar(bar: Optional[tqdm]) -> None:
 
 
 def register_sink(
-    sink: Optional[Callable[["ProgressEvent"], None]],
-    case_id: Union[int, str] = "",
+    sink: Callable[["ProgressEvent"], None] | None,
+    case_id: int | str = "",
     total_steps: int = 0,
-    slot_key: Union[int, str] = "",
+    slot_key: int | str = "",
     label: str = "",
 ) -> None:
     """Route this process's progress events to sink.
@@ -360,7 +361,7 @@ class DaskTaskSink(dask.callbacks.Callback):
     def __init__(
         self,
         sink: Callable[["ProgressEvent"], None],
-        case_id: Union[int, str],
+        case_id: int | str,
         throttle_seconds: float = FAST_BAR_MININTERVAL,
     ):
         super().__init__()
@@ -434,8 +435,8 @@ class ProgressEvent:
         finished: True when the case is complete and its slot frees.
     """
 
-    case_id: Union[int, str]
-    slot_key: Union[int, str] = ""
+    case_id: int | str
+    slot_key: int | str = ""
     label: str = ""
     phase: str = ""
     step: int = 0
@@ -492,7 +493,7 @@ class LogSink:
 
     def __init__(self, throttle_seconds: float = 5.0) -> None:
         self.throttle_seconds = throttle_seconds
-        self._last_log: dict[Union[int, str], float] = {}
+        self._last_log: dict[int | str, float] = {}
 
     def __call__(self, event: ProgressEvent) -> None:
         if event.finished:
@@ -521,7 +522,7 @@ class WorkerSlotRenderer:
     """
 
     def __init__(self, n_slots: int, disable: bool = False) -> None:
-        self.slot_by_case: dict[Union[int, str], int] = {}
+        self.slot_by_case: dict[int | str, int] = {}
         self._free_slots = list(range(n_slots))
         self._bars = [
             make_case_step_bar(
@@ -535,9 +536,9 @@ class WorkerSlotRenderer:
             # before anything has actually started.
             bar.set_description_str("")
             bar.bar_format = "{desc}"
-        self._queue: Optional[Any] = None
+        self._queue: Any | None = None
         self._stop = threading.Event()
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
     def handle(self, event: ProgressEvent) -> None:
         """Apply one event to the slot bars.
@@ -649,7 +650,7 @@ class _ForwardingQueueHandler(logging.handlers.QueueHandler):
     def enqueue(self, record: logging.LogRecord) -> None:
         try:
             self.queue.put_nowait(record)
-        except Exception:  # noqa: BLE001 - logging must never break a run
+        except Exception:  # noqa: BLE001, S110
             pass
 
 
@@ -684,9 +685,9 @@ class LogQueueListener:
     """
 
     def __init__(self) -> None:
-        self._queue: Optional[Any] = None
+        self._queue: Any | None = None
         self._stop = threading.Event()
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
     def start(self, log_queue: Any) -> None:
         """Begin draining log_queue on a daemon thread.
@@ -707,14 +708,14 @@ class LogQueueListener:
                 continue
             except (EOFError, OSError, BrokenPipeError):
                 return
-            except Exception:  # noqa: BLE001 - logging must never break a run
+            except Exception:  # noqa: BLE001, S112
                 continue
             self._emit(record)
 
     def _emit(self, record: logging.LogRecord) -> None:
         try:
             logging.getLogger(record.name).handle(record)
-        except Exception:  # noqa: BLE001 - logging must never break a run
+        except Exception:  # noqa: BLE001, S110
             pass
 
     def close(self, drain_deadline: float = 2.0) -> None:

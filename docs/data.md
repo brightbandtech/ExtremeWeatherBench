@@ -240,11 +240,11 @@ constructing any forecast or target:
 
 ```python
 my_mapping = {
-    "t2m": "surface_air_temperature",     # 2-m temperature → EWB name
-    "u10": "surface_eastward_wind",        # 10-m U wind → EWB name
-    "v10": "surface_northward_wind",       # 10-m V wind → EWB name
-    "prediction_timedelta": "lead_time",   # timedelta dim → EWB name
-    "time": "init_time",                   # init-time dim → EWB name
+    "t2m": "surface_air_temperature",  # 2-m temperature → EWB name
+    "u10": "surface_eastward_wind",  # 10-m U wind → EWB name
+    "v10": "surface_northward_wind",  # 10-m V wind → EWB name
+    "prediction_timedelta": "lead_time",  # timedelta dim → EWB name
+    "time": "init_time",  # init-time dim → EWB name
 }
 ```
 

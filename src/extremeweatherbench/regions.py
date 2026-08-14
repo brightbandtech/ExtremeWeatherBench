@@ -4,7 +4,8 @@ import abc
 import logging
 import pathlib
 import warnings
-from typing import TYPE_CHECKING, Literal, Mapping, Type, Union
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Literal
 
 import geopandas as gpd
 import numpy as np
@@ -16,7 +17,7 @@ import xarray as xr
 from extremeweatherbench import utils
 
 if TYPE_CHECKING:
-    import extremeweatherbench.cases as cases
+    from extremeweatherbench import cases
 
 logger = logging.getLogger(__name__)
 
@@ -43,12 +44,10 @@ class Region(abc.ABC):
     def create_region(cls, *args, **kwargs) -> "Region":
         """Abstract factory method to create a region; subclasses must implement with
         their own, specialized arguments."""
-        pass
 
     @abc.abstractmethod
     def as_geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame."""
-        pass
 
     def get_adjusted_bounds(
         self, dataset: xr.Dataset
@@ -339,7 +338,7 @@ class ShapefileRegion(Region):
             return gpd.read_file(self.shapefile_path)
         except Exception as e:
             logger.error(f"Error reading shapefile: {e}")
-            raise ValueError(f"Error reading shapefile: {e}")
+            raise ValueError(f"Error reading shapefile: {e}") from e
 
     def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
         """Mask a dataset to the region.
@@ -380,7 +379,7 @@ class ShapefileRegion(Region):
 
 
 # Registry of region types that can be extended by users
-REGION_TYPES: dict[str, Type[Region]] = {
+REGION_TYPES: dict[str, type[Region]] = {
     "centered_region": CenteredRegion,
     "bounded_region": BoundingBoxRegion,
     "shapefile_region": ShapefileRegion,
@@ -514,7 +513,7 @@ class RegionSubsetter:
 
     def __init__(
         self,
-        region: Union[Region, Mapping[str, float]],
+        region: Region | Mapping[str, float],
         method: Literal["intersects", "percent", "all"] = "intersects",
         percent_threshold: float = 0.5,
     ):
@@ -588,7 +587,7 @@ class RegionSubsetter:
 # Convenience functions for direct usage
 def subset_cases_to_region(
     case_list: "list[cases.IndividualCase]",
-    region: Union[Region, Mapping[str, float]],
+    region: Region | Mapping[str, float],
     method: Literal["intersects", "percent", "all"] = "intersects",
     percent_threshold: float = 0.5,
 ) -> "list[cases.IndividualCase]":

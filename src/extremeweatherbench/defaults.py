@@ -263,7 +263,7 @@ def get_climatology(quantile: float = 0.85) -> xr.DataArray:
         raise ValueError(f"Quantile must be one of {_QUANTILE_LIST}")
     idx = _QUANTILE_LIST.index(quantile)
     return xr.open_zarr(
-        "gs://extremeweatherbench/datasets/surface_air_temperature_1990_2019_climatology.zarr",  # noqa: E501
+        "gs://extremeweatherbench/datasets/surface_air_temperature_1990_2019_climatology.zarr",
         storage_options={"anon": True},
         chunks={},
     )["2m_temperature"].isel(quantile=idx)
@@ -361,7 +361,7 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         routine.
     """
     # Import metrics here to avoid circular import
-    import extremeweatherbench.metrics as metrics
+    from extremeweatherbench import metrics
 
     heatwave_metric_list: list[metrics.BaseMetric] = [
         metrics.MaximumMeanAbsoluteError(),

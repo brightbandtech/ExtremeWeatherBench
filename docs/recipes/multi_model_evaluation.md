@@ -69,10 +69,7 @@ import extremeweatherbench as ewb
 from extremeweatherbench import inputs
 
 hres = ewb.ZarrForecast(
-    source=(
-        "gs://weatherbench2/datasets/hres/"
-        "2016-2022-0012-1440x721.zarr"
-    ),
+    source=("gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr"),
     name="HRES",
     variable_mapping=ewb.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
@@ -206,9 +203,7 @@ model_names = [
     "AURO_v100_IFS",
 ]
 
-target = ewb.ERA5(
-    variables=["surface_air_temperature"]
-)
+target = ewb.ERA5(variables=["surface_air_temperature"])
 
 metrics_list = [
     ewb.metrics.MeanAbsoluteError(
@@ -230,9 +225,7 @@ eval_objects = [
         event_type="heat_wave",
         metric_list=metrics_list,
         target=target,
-        forecast=inputs.get_cira_icechunk(
-            model_name=name
-        ),
+        forecast=inputs.get_cira_icechunk(model_name=name),
     )
     for name in model_names
 ]

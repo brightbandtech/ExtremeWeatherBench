@@ -71,11 +71,11 @@ Key arguments:
 ```python
 my_mapping = {
     "forecast_reference_time": "init_time",
-    "step":                     "lead_time",
-    "t2m":                      "surface_air_temperature",
-    "u10":                      "surface_eastward_wind",
-    "v10":                      "surface_northward_wind",
-    "msl":                      "air_pressure_at_mean_sea_level",
+    "step": "lead_time",
+    "t2m": "surface_air_temperature",
+    "u10": "surface_eastward_wind",
+    "v10": "surface_northward_wind",
+    "msl": "air_pressure_at_mean_sea_level",
 }
 
 my_zarr_forecast = ewb.ZarrForecast(
@@ -110,8 +110,8 @@ my_forecast = ewb.XarrayForecast(
     variables=["surface_air_temperature"],
     variable_mapping={
         "forecast_reference_time": "init_time",
-        "step":  "lead_time",
-        "t2m":   "surface_air_temperature",
+        "step": "lead_time",
+        "t2m": "surface_air_temperature",
     },
 )
 ```
@@ -130,6 +130,7 @@ def celsius_to_kelvin(ds: xr.Dataset) -> xr.Dataset:
     if "t2m" in ds:
         ds["t2m"] = ds["t2m"] + 273.15
     return ds
+
 
 preprocessed_forecast = ewb.XarrayForecast(
     ds=ds,

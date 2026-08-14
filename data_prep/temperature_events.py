@@ -35,7 +35,8 @@ import logging
 import operator as op_module
 import pathlib
 import time as time_module
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, cast
+from collections.abc import Callable
+from typing import Any, Literal, cast
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -48,11 +49,11 @@ import numba as nb
 import numpy as np
 import pandas as pd
 import regionmask
-import scipy.ndimage as ndimage
 import xarray as xr
 from dask.distributed import Client, LocalCluster
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from ruamel.yaml import YAML
+from scipy import ndimage
 from xarray.core.indexes import IndexSelResult, PandasIndex, _query_slice
 from xarray.core.indexing import _expand_slice
 
@@ -103,7 +104,7 @@ class PeriodicBoundaryIndex(PandasIndex):
     _min: float
     _max: float
 
-    __slots__ = ("index", "dim", "coord_dtype", "period", "_max", "_min")
+    __slots__ = ("_max", "_min", "coord_dtype", "dim", "index", "period")
 
     def __init__(self, *args, period=360, **kwargs):
         super().__init__(*args, **kwargs)
@@ -300,9 +301,9 @@ def open_era5_t2m(start_date: str, end_date: str) -> xr.DataArray:
 
 
 def get_climatology_bounds(
-    q_lower: Optional[float] = None,
-    q_upper: Optional[float] = None,
-) -> Tuple[Optional[xr.DataArray], Optional[xr.DataArray]]:
+    q_lower: float | None = None,
+    q_upper: float | None = None,
+) -> tuple[xr.DataArray | None, xr.DataArray | None]:
     """Return climatology DataArrays for the lower and/or upper bound.
 
     Args:
@@ -359,8 +360,8 @@ def compute_grid_cell_area(
 
 def build_exceedance_mask(
     t2m: xr.DataArray,
-    clim_lower: Optional[xr.DataArray],
-    clim_upper: Optional[xr.DataArray],
+    clim_lower: xr.DataArray | None,
+    clim_upper: xr.DataArray | None,
     land_mask: xr.DataArray,
     op_lower: str = ">",
     op_upper: str = "<",
@@ -426,13 +427,13 @@ def _peak_day_index(daily_counts: np.ndarray) -> int:
 def _initial_edges_active(
     init_region_land: np.ndarray,
     band_pts: int,
-) -> Dict[str, bool]:
+) -> dict[str, bool]:
     """Return edges that have ≥ 25% land in the initial box band.
 
     Edges that are mostly ocean are disabled before the expansion loop
     so the box does not slide into open water from the start.
     """
-    active: Dict[str, bool] = {}
+    active: dict[str, bool] = {}
     for edge in ("north", "south", "east", "west"):
         if edge == "north":
             strip = init_region_land[-band_pts:, :]
@@ -488,13 +489,13 @@ def _edge_valid_fraction(
 
 
 def expand_event_bounds(
-    event: Dict,
+    event: dict,
     filt_mask: np.ndarray,
     dates: np.ndarray,
     lats: np.ndarray,
     lons: np.ndarray,
     land_mask_np: np.ndarray,
-) -> Dict:
+) -> dict:
     """Expand a detected event's bounding box using case-script logic.
 
     Starting from the blob-tracked bounding box, expands each edge
@@ -517,7 +518,7 @@ def expand_event_bounds(
         lon_max, max_consecutive_days, and mean_consecutive_days.
     """
     grid_res = float(np.abs(np.diff(lats[:2]))[0]) if len(lats) > 1 else 0.25
-    band_pts = max(1, int(round(EXPANSION_DEGREES / grid_res)))
+    band_pts = max(1, round(EXPANSION_DEGREES / grid_res))
 
     start_date = np.datetime64(event["start"])
     end_date = np.datetime64(event["end"])
@@ -586,7 +587,7 @@ def process_event(
     out_dir: pathlib.Path = pathlib.Path("."),
     quantile: float | None = None,
     op_str: str | None = None,
-) -> Optional[Dict]:
+) -> dict | None:
     """Re-expand one curated case's time window and spatial bounds.
 
     Grows the time window forward from ``start_date - 3`` one day at
@@ -743,7 +744,7 @@ def process_event(
     all_lats = daily_all_pass.latitude.values
     all_lons = daily_all_pass.longitude.values
     grid_res = np.abs(np.diff(all_lats[:2]))[0] if len(all_lats) > 1 else 0.25
-    band_pts = max(1, int(round(EXPANSION_DEGREES / grid_res)))
+    band_pts = max(1, round(EXPANSION_DEGREES / grid_res))
 
     box_lon_min_era = _to_plot_lon(box_lon_min)
     box_lon_max_era = _to_plot_lon(box_lon_max)
@@ -992,11 +993,11 @@ def _count_overlaps_nb(
 
 def _resolve_event(
     oid: int,
-    overlap_mat: Optional[np.ndarray],
-    prev_map: Dict[int, int],
-    events: Dict[int, Dict],
-    cur_map: Dict[int, int],
-) -> Optional[int]:
+    overlap_mat: np.ndarray | None,
+    prev_map: dict[int, int],
+    events: dict[int, dict],
+    cur_map: dict[int, int],
+) -> int | None:
     """Find and merge prior-day events overlapping with blob ``oid``.
 
     Returns the surviving event ID after any merges, or None if no
@@ -1041,17 +1042,15 @@ def _resolve_event(
 
 
 def _terminate_declined_events(
-    events: Dict[int, Dict],
-    cur_map: Dict[int, int],
+    events: dict[int, dict],
+    cur_map: dict[int, int],
 ) -> None:
     """Mark events as done if absent today or below 50% of peak area."""
     active = set(cur_map.values())
     for eid, ev in events.items():
         if ev["done"]:
             continue
-        if eid not in active:
-            ev["done"] = True
-        elif ev["area"] < AREA_DECLINE_FRACTION * ev["peak"]:
+        if eid not in active or ev["area"] < AREA_DECLINE_FRACTION * ev["peak"]:
             ev["done"] = True
 
 
@@ -1129,9 +1128,9 @@ def detect_events(
     lats: np.ndarray,
     lons: np.ndarray,
     event_type: str,
-    area_grid: Optional[np.ndarray] = None,
+    area_grid: np.ndarray | None = None,
     min_seed_area_km2: float = 0.0,
-) -> List[Dict]:
+) -> list[dict]:
     """Track spatiotemporal events from a filtered boolean mask.
 
     A new event is seeded only when the current-day blob AND the prior
@@ -1157,11 +1156,11 @@ def detect_events(
     filt_np = filtered_mask
 
     n_days = filt_np.shape[0]
-    events: Dict[int, Dict] = {}
+    events: dict[int, dict] = {}
     next_id = 1
-    prev_labels: Optional[np.ndarray] = None
+    prev_labels: np.ndarray | None = None
     prev_n_obj: int = 0
-    prev_map: Dict[int, int] = {}
+    prev_map: dict[int, int] = {}
 
     for di in range(n_days):
         day = filt_np[di]
@@ -1177,9 +1176,9 @@ def detect_events(
 
         labels, n_obj = ndimage.label(day)
         labels = labels.astype(np.int32)
-        cur_map: Dict[int, int] = {}
+        cur_map: dict[int, int] = {}
 
-        overlap_mat: Optional[np.ndarray] = None
+        overlap_mat: np.ndarray | None = None
         if prev_labels is not None and n_obj > 0 and prev_n_obj > 0:
             overlap_mat = _count_overlaps_nb(
                 prev_labels,
@@ -1283,13 +1282,13 @@ def detect_events(
 
 
 def include_temps_with_events(
-    events: List[Dict],
+    events: list[dict],
     t2m_daily_np: np.ndarray,
     exc_filt: np.ndarray,
     dates: np.ndarray,
     lats: np.ndarray,
     lons: np.ndarray,
-) -> List[Dict]:
+) -> list[dict]:
     """Add mean and minimum temperature (°C) to each event dict.
 
     Uses a pre-computed global daily-mean temperature array so all
@@ -1338,7 +1337,7 @@ def include_temps_with_events(
 
 
 def events_to_dataframe(
-    events: List[Dict],
+    events: list[dict],
     min_gridpoints: int = MIN_GRIDPOINTS,
     min_area_km2: float = MIN_AREA_KM2,
 ) -> pd.DataFrame:
@@ -1519,7 +1518,7 @@ def compute_consecutive_field(
     return consec, daily_all_pass.latitude.values, daily_all_pass.longitude.values
 
 
-def results_to_dataframe(results: List[Dict]) -> pd.DataFrame:
+def results_to_dataframe(results: list[dict]) -> pd.DataFrame:
     """Convert ``process_event`` result dicts to a labelled DataFrame.
 
     Events below ``MIN_GRIDPOINTS`` peak grid points are dropped.
@@ -1569,7 +1568,7 @@ def results_to_dataframe(results: List[Dict]) -> pd.DataFrame:
 
 
 def write_bounds_to_yaml(
-    results: List[Dict],
+    results: list[dict],
     yaml_path: pathlib.Path,
 ) -> None:
     """Write refreshed bounded_region parameters back into events.yaml.

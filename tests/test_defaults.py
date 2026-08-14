@@ -1,7 +1,6 @@
 """Tests for defaults module."""
 
 import numpy as np
-import pytest
 import xarray as xr
 
 from extremeweatherbench import defaults, inputs, metrics
@@ -163,13 +162,9 @@ class TestDefaults:
 
     def test_get_brightband_evaluation_objects_no_exceptions(self):
         """Test that get_brightband_evaluation_objects runs without exceptions."""
-        try:
-            result = defaults.get_brightband_evaluation_objects()
-            # Basic validation that it returns something reasonable
-            assert isinstance(result, list)
-            assert len(result) > 0
-        except Exception as e:
-            pytest.fail(f"get_brightband_evaluation_objects raised an exception: {e}")
+        result = defaults.get_brightband_evaluation_objects()
+        assert isinstance(result, list)
+        assert len(result) > 0
 
 
 class TestCiraFcnv2PreprocessFunctions:

@@ -222,7 +222,7 @@ class TestEdgeCases:
         )
 
         # Should handle inversion layers
-        cape, cin = compute_ml_cape_cin_from_profile(p, t, td, z)
+        cape, _cin = compute_ml_cape_cin_from_profile(p, t, td, z)
 
         # Probably no CAPE with strong inversion
         assert cape >= 0, "CAPE should be non-negative"
@@ -765,7 +765,7 @@ class TestCINIntegrationScope:
         td_dry = td - 12.0
 
         cape, cin = compute_ml_cape_cin_from_profile(_PRES, t, td, _GEOPOT)
-        cape_dry, cin_dry = compute_ml_cape_cin_from_profile(
+        _cape_dry, _cin_dry = compute_ml_cape_cin_from_profile(
             _PRES, t_dry, td_dry, _GEOPOT
         )
 
@@ -1004,7 +1004,7 @@ class TestCapeOutput:
         from extremeweatherbench._cape import compute_ml_cape_cin_from_profile
 
         pressure, temperature, dewpoint, geopotential = self._profile()
-        cape, cin = compute_ml_cape_cin_from_profile(
+        cape, _cin = compute_ml_cape_cin_from_profile(
             pressure[::-1].copy(),
             temperature[::-1].copy(),
             dewpoint[::-1].copy(),

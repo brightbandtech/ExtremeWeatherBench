@@ -18,8 +18,7 @@ def _compute_metric(
     forecast: xr.DataArray,
     target: xr.DataArray,
     **kwargs,
-) -> xr.DataArray:
-    ...
+) -> xr.DataArray: ...
 ```
 
 The method receives one-dimensional or multi-dimensional DataArrays for
@@ -55,12 +54,9 @@ class MeanAbsolutePercentageError(ewb.BaseMetric):
         target: xr.DataArray,
         **kwargs,
     ) -> xr.DataArray:
-        percentage_error = (
-            (forecast - target).abs() / target.where(target != 0)
-        ) * 100
+        percentage_error = ((forecast - target).abs() / target.where(target != 0)) * 100
         return percentage_error.mean(
-            dim=[d for d in percentage_error.dims
-                 if d != self.preserve_dims]
+            dim=[d for d in percentage_error.dims if d != self.preserve_dims]
         )
 ```
 
@@ -219,25 +215,16 @@ class MeanAbsolutePercentageError(ewb.BaseMetric):
         target: xr.DataArray,
         **kwargs,
     ) -> xr.DataArray:
-        percentage_error = (
-            (forecast - target).abs()
-            / target.where(target != 0)
-        ) * 100
+        percentage_error = ((forecast - target).abs() / target.where(target != 0)) * 100
         return percentage_error.mean(
-            dim=[
-                d
-                for d in percentage_error.dims
-                if d != self.preserve_dims
-            ]
+            dim=[d for d in percentage_error.dims if d != self.preserve_dims]
         )
 
 
 class ProbabilityOfDetection(ewb.ThresholdMetric):
     """Probability of Detection (Hit Rate)."""
 
-    def __init__(
-        self, name: str = "ProbabilityOfDetection", **kwargs
-    ):
+    def __init__(self, name: str = "ProbabilityOfDetection", **kwargs):
         super().__init__(name=name, **kwargs)
 
     def _compute_metric(

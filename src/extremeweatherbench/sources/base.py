@@ -1,7 +1,7 @@
 import datetime
 from typing import Any, Protocol, runtime_checkable
 
-import extremeweatherbench.regions as regions
+from extremeweatherbench import regions
 
 
 @runtime_checkable
@@ -35,7 +35,6 @@ class Source(Protocol):
         Returns:
             Data containing only the identified variables.
         """
-        pass
 
     def check_for_valid_times(
         self, data: Any, start_date: datetime.datetime, end_date: datetime.datetime
@@ -51,7 +50,6 @@ class Source(Protocol):
             True if the data has any times within the specified range,
             False otherwise.
         """
-        pass
 
     def check_for_spatial_data(self, data: Any, location: "regions.Region") -> bool:
         """Check if the data has spatial data for the given location.
@@ -64,4 +62,3 @@ class Source(Protocol):
             True if the data has any data within the specified region,
             False otherwise.
         """
-        pass

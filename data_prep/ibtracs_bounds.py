@@ -4,7 +4,6 @@ import datetime
 import logging
 import re
 from importlib import resources
-from typing import TYPE_CHECKING
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -17,9 +16,7 @@ from matplotlib.patches import Rectangle
 
 import extremeweatherbench as ewb
 import extremeweatherbench.data
-
-if TYPE_CHECKING:
-    from extremeweatherbench.regions import Region
+from extremeweatherbench.regions import Region
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -180,7 +177,7 @@ def load_and_process_ibtracs_data():
 
     # Get all storms from 2020 - 2025 seasons
     all_storms_2020_2025_lf = IBTRACS_lf.filter(
-        (pl.col("SEASON").cast(pl.Int32) >= 2020)
+        pl.col("SEASON").cast(pl.Int32) >= 2020
     ).select(ewb.inputs.IBTrACS_metadata_variable_mapping.values())
 
     schema = all_storms_2020_2025_lf.collect_schema()
@@ -518,7 +515,7 @@ def find_storm_bounds_for_case(storm_name, storm_bounds, all_storms_df):
         storm_data = all_storms_df[all_storms_df["tc_name"].isin(storm_names)]
         if len(storm_data) == 0:
             # Try to find with different name formats
-            for key in storm_bounds.keys():
+            for key in storm_bounds:
                 if any(name in key for name in storm_names):
                     storm_data = all_storms_df[all_storms_df["tc_name"] == key]
                     if len(storm_data) > 0:
@@ -663,20 +660,19 @@ def write_updated_yaml(cases_all, cases_new):
     # Note: Writing to the events.yaml file in the package data directory
     # This updates the installed package's events.yaml file
     events_yaml_file = resources.files(extremeweatherbench.data).joinpath("events.yaml")
-    with resources.as_file(events_yaml_file) as file_path:
-        with open(file_path, "w") as f:
-            # First, dump to YAML string
-            yaml_content = yaml.dump(
-                events_data_clean, default_flow_style=False, sort_keys=False, indent=2
-            )
+    with resources.as_file(events_yaml_file) as file_path, open(file_path, "w") as f:
+        # First, dump to YAML string
+        yaml_content = yaml.dump(
+            events_data_clean, default_flow_style=False, sort_keys=False, indent=2
+        )
 
-            # Pattern to match quoted datetime strings (YYYY-MM-DD HH:MM:SS)
-            datetime_pattern = r"'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'"
-            # Replace with unquoted version
-            yaml_content = re.sub(datetime_pattern, r"\1", yaml_content)
+        # Pattern to match quoted datetime strings (YYYY-MM-DD HH:MM:SS)
+        datetime_pattern = r"'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'"
+        # Replace with unquoted version
+        yaml_content = re.sub(datetime_pattern, r"\1", yaml_content)
 
-            # Write the processed content
-            f.write(yaml_content)
+        # Write the processed content
+        f.write(yaml_content)
 
     logger.info("\nUpdated %s cases in events.yaml", len(updated_cases))
 

@@ -7,6 +7,7 @@ import pathlib
 import queue
 import tempfile
 import warnings
+from typing import ClassVar
 from unittest import mock
 
 import numpy as np
@@ -925,20 +926,20 @@ class TestRunParallel:
 
     def test_run_parallel_evaluation_empty_list(self):
         """Test _run_parallel_evaluation with empty case operator list."""
-        with mock.patch(
-            "extremeweatherbench.utils.ParallelTqdm"
-        ) as mock_parallel_class:
-            with mock.patch("tqdm.auto.tqdm") as mock_tqdm:
-                mock_tqdm.return_value = []
-                mock_parallel_instance = mock.Mock()
-                mock_parallel_class.return_value = mock_parallel_instance
-                mock_parallel_instance.return_value = []
+        with (
+            mock.patch("extremeweatherbench.utils.ParallelTqdm") as mock_parallel_class,
+            mock.patch("tqdm.auto.tqdm") as mock_tqdm,
+        ):
+            mock_tqdm.return_value = []
+            mock_parallel_instance = mock.Mock()
+            mock_parallel_class.return_value = mock_parallel_instance
+            mock_parallel_instance.return_value = []
 
-                result = evaluate._run_parallel_evaluation(
-                    [], parallel_config={"backend": "threading", "n_jobs": 2}
-                )
+            result = evaluate._run_parallel_evaluation(
+                [], parallel_config={"backend": "threading", "n_jobs": 2}
+            )
 
-                assert result == []
+            assert result == []
 
     @mock.patch("extremeweatherbench.evaluate.multiprocessing.Manager")
     @mock.patch("extremeweatherbench.evaluate.progress_module.supports_nested_bars")
@@ -1374,7 +1375,7 @@ class TestComputeCaseOperatorWithProgress:
         """Falls back gracefully when neither input has a name attribute."""
 
         class Nameless:
-            variables: list = []
+            variables: ClassVar[list] = []
 
         case_operator = cases.CaseOperator(
             case_metadata=sample_case_operator.case_metadata,
@@ -1660,7 +1661,7 @@ class TestPipelineFunctions:
         # Set up the mock to return a dataset that will trigger the warning
         # by having no valid times in the date range
         empty_dataset = xr.Dataset()
-        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset  # noqa: E501
+        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             empty_dataset
         )
@@ -1676,7 +1677,8 @@ class TestPipelineFunctions:
 
             # Should log a warning
             mock_warning.assert_called()
-            warning_message = mock_warning.call_args[0][0]
+            warning_args = mock_warning.call_args[0]
+            warning_message = warning_args[0] % warning_args[1:]
             assert "has no data for case time range" in warning_message
             assert (
                 str(sample_case_operator.case_metadata.case_id_number)
@@ -1688,17 +1690,18 @@ class TestPipelineFunctions:
         zero-length dimensions."""
         # Set up the mock to return a dataset that will trigger the warning
         empty_dataset = xr.Dataset()
-        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset  # noqa: E501
+        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             empty_dataset
         )
 
         with mock.patch("extremeweatherbench.evaluate.logger.warning") as mock_warning:
-            forecast_ds, target_ds = evaluate._build_datasets(sample_case_operator)
+            _forecast_ds, _target_ds = evaluate._build_datasets(sample_case_operator)
 
             # Verify warning message contains expected information
             mock_warning.assert_called()
-            warning_message = mock_warning.call_args[0][0]
+            warning_args = mock_warning.call_args[0]
+            warning_message = warning_args[0] % warning_args[1:]
 
             # Check all expected components are in the warning message
             assert (
@@ -1713,7 +1716,7 @@ class TestPipelineFunctions:
         """Test _build_datasets when forecast has multiple zero-length dimensions."""
         # Set up the mock to return a dataset that will trigger the warning
         empty_dataset = xr.Dataset()
-        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset  # noqa: E501
+        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = empty_dataset
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             empty_dataset
         )
@@ -1727,7 +1730,8 @@ class TestPipelineFunctions:
 
             # Should log a warning
             mock_warning.assert_called()
-            warning_message = mock_warning.call_args[0][0]
+            warning_args = mock_warning.call_args[0]
+            warning_message = warning_args[0] % warning_args[1:]
             assert "has no data for case time range" in warning_message
             assert (
                 str(sample_case_operator.case_metadata.case_id_number)
@@ -1776,7 +1780,7 @@ class TestPipelineFunctions:
     ):
         """Test run_pipeline function for forecast data."""
         # Mock the pipeline methods
-        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = sample_forecast_dataset  # noqa: E501
+        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.return_value = sample_forecast_dataset
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
@@ -1797,7 +1801,7 @@ class TestPipelineFunctions:
         )
 
         assert isinstance(result, xr.Dataset)
-        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.assert_called_once()  # noqa: E501
+        sample_case_operator.forecast.open_and_maybe_preprocess_data_from_source.assert_called_once()
         sample_case_operator.forecast.maybe_map_variable_names.assert_called_once()
         mock_maybe_subset_variables.assert_called_once()
         # The method is called with data as first arg, case_metadata as second arg
@@ -1818,7 +1822,7 @@ class TestPipelineFunctions:
     ):
         """Test run_pipeline function for target data."""
         # Mock the pipeline methods
-        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset  # noqa: E501
+        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset
         sample_case_operator.target.maybe_map_variable_names.return_value = (
             sample_target_dataset
         )
@@ -1839,7 +1843,7 @@ class TestPipelineFunctions:
         )
 
         assert isinstance(result, xr.Dataset)
-        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.assert_called_once()  # noqa: E501
+        sample_case_operator.target.open_and_maybe_preprocess_data_from_source.assert_called_once()
 
     def test_run_pipeline_invalid_source(self, sample_case_operator):
         """Test run_pipeline function with invalid input source."""
@@ -1892,7 +1896,7 @@ class TestPipelineFunctions:
 
         assert isinstance(result, xr.Dataset)
         # Should still be lazy
-        first_var = list(result.data_vars)[0]
+        first_var = next(iter(result.data_vars))
         assert hasattr(result.data_vars[first_var].data, "chunks")
 
 
@@ -2287,9 +2291,7 @@ class TestIntegration:
         )
 
         # Mock the pipeline methods to return our test datasets
-        sample_evaluation_object.forecast.open_and_maybe_preprocess_data_from_source.return_value = (  # noqa: E501
-            sample_forecast_dataset
-        )
+        sample_evaluation_object.forecast.open_and_maybe_preprocess_data_from_source.return_value = sample_forecast_dataset
         sample_evaluation_object.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
@@ -2304,7 +2306,7 @@ class TestIntegration:
             sample_forecast_dataset
         )
 
-        sample_evaluation_object.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset  # noqa: E501
+        sample_evaluation_object.target.open_and_maybe_preprocess_data_from_source.return_value = sample_target_dataset
         sample_evaluation_object.target.maybe_map_variable_names.return_value = (
             sample_target_dataset
         )
@@ -2670,32 +2672,32 @@ class TestIntegration:
             assert isinstance(result, list)
 
             # Test parallel kwargs propagation
-            with mock.patch(
-                "extremeweatherbench.utils.ParallelTqdm"
-            ) as mock_parallel_class:
-                with mock.patch("joblib.delayed") as mock_delayed:
-                    mock_delayed.return_value = mock_compute_with_kwargs
-                    mock_parallel_instance = mock.Mock()
-                    mock_parallel_class.return_value = mock_parallel_instance
-                    mock_parallel_instance.return_value = [
-                        pd.DataFrame({"value": [1.0]})
-                    ]
+            with (
+                mock.patch(
+                    "extremeweatherbench.utils.ParallelTqdm"
+                ) as mock_parallel_class,
+                mock.patch("joblib.delayed") as mock_delayed,
+            ):
+                mock_delayed.return_value = mock_compute_with_kwargs
+                mock_parallel_instance = mock.Mock()
+                mock_parallel_class.return_value = mock_parallel_instance
+                mock_parallel_instance.return_value = [pd.DataFrame({"value": [1.0]})]
 
-                    # Reset captured kwargs
-                    mock_compute_with_kwargs.captured_kwargs = {}
+                # Reset captured kwargs
+                mock_compute_with_kwargs.captured_kwargs = {}
 
-                    result = evaluate._run_parallel_evaluation(
-                        [case_operator],
-                        parallel_config={"backend": "threading", "n_jobs": 2},
-                        custom_param="parallel_test",
-                        threshold=0.8,
-                    )
+                result = evaluate._run_parallel_evaluation(
+                    [case_operator],
+                    parallel_config={"backend": "threading", "n_jobs": 2},
+                    custom_param="parallel_test",
+                    threshold=0.8,
+                )
 
-                    # Verify parallel execution was set up correctly
-                    mock_parallel_class.assert_called_once_with(
-                        pre_close=mock.ANY, total_tasks=1
-                    )
-                    assert isinstance(result, list)
+                # Verify parallel execution was set up correctly
+                mock_parallel_class.assert_called_once_with(
+                    pre_close=mock.ANY, total_tasks=1
+                )
+                assert isinstance(result, list)
 
     def test_empty_case_operators_all_methods(self):
         """Test that all execution methods handle empty case operator lists."""
@@ -2777,7 +2779,7 @@ class TestIntegration:
 class MockDerivedVariableWithOutputs(derived.DerivedVariable):
     """Mock DerivedVariable for testing output_variables."""
 
-    variables = ["input_var"]
+    variables: ClassVar[list[str]] = ["input_var"]
 
     def derive_variable(self, data: xr.Dataset, **kwargs) -> xr.Dataset:
         """Return a dataset with multiple output variables."""

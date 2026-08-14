@@ -83,7 +83,7 @@ dev = [
     "pytest>=8.3.4",
     "pytest-cov>=6.0.0",
     "pytest-mock>=3.14.0",
-    "ruff>=0.9.4",
+    "ruff>=0.16.2",
     "types-pytz>=2025.2.0.20250809",
     "types-pyyaml>=6.0.12.20241230",
     "types-tqdm>=4.67.0.20250809",
@@ -124,7 +124,12 @@ extremeweatherbench = { workspace = true }
 [tool.ruff]
 line-length = 88
 indent-width = 4
-lint.ignore = []
+# Naive UTC datetimes match CF / xarray climate conventions.
+lint.ignore = ["DTZ001", "DTZ007"]
+
+[tool.ruff.lint.per-file-ignores]
+# Batch scripts catch Exception to keep processing on bad files.
+"data_prep/**" = ["BLE001", "S110"]
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.

@@ -36,10 +36,7 @@ at individual stations are operationally important.
 import extremeweatherbench as ewb
 
 forecast = ewb.ZarrForecast(
-    source=(
-        "gs://weatherbench2/datasets/hres/"
-        "2016-2022-0012-1440x721.zarr"
-    ),
+    source=("gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr"),
     name="HRES",
     variable_mapping=ewb.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
@@ -87,10 +84,7 @@ DataFrame:
 import extremeweatherbench as ewb
 
 forecast = ewb.ZarrForecast(
-    source=(
-        "gs://weatherbench2/datasets/hres/"
-        "2016-2022-0012-1440x721.zarr"
-    ),
+    source=("gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr"),
     name="HRES",
     variable_mapping=ewb.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
@@ -178,10 +172,11 @@ ghcn = pl.scan_parquet(
 
 # Stations within the 2021 Pacific Northwest heat dome bounding box
 pnw_stations = (
-    ghcn
-    .filter(
-        (pl.col("latitude")  >= 42.0) & (pl.col("latitude")  <= 52.0)
-        & (pl.col("longitude") >= -126.0) & (pl.col("longitude") <= -113.0)
+    ghcn.filter(
+        (pl.col("latitude") >= 42.0)
+        & (pl.col("latitude") <= 52.0)
+        & (pl.col("longitude") >= -126.0)
+        & (pl.col("longitude") <= -113.0)
         & (pl.col("valid_time") >= "2021-06-26")
         & (pl.col("valid_time") <= "2021-07-02")
     )
@@ -217,10 +212,7 @@ demo_case = IndividualCase(
 cases = [demo_case]
 
 forecast = ewb.ZarrForecast(
-    source=(
-        "gs://weatherbench2/datasets/hres/"
-        "2016-2022-0012-1440x721.zarr"
-    ),
+    source=("gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr"),
     name="HRES",
     variable_mapping=ewb.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},

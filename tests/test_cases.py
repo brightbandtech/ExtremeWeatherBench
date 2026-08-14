@@ -421,27 +421,27 @@ class TestLoadEventsYaml:
             }
         ]
 
-        with mock.patch("importlib.resources.as_file") as mock_as_file:
-            with mock.patch(
-                "extremeweatherbench.cases.read_incoming_yaml"
-            ) as mock_read:
-                mock_read.return_value = mock_yaml_content
-                mock_as_file.return_value.__enter__.return_value = "/mock/file"
+        with (
+            mock.patch("importlib.resources.as_file") as mock_as_file,
+            mock.patch("extremeweatherbench.cases.read_incoming_yaml") as mock_read,
+        ):
+            mock_read.return_value = mock_yaml_content
+            mock_as_file.return_value.__enter__.return_value = "/mock/file"
 
-                result = cases.load_ewb_events_yaml_into_case_list()
+            result = cases.load_ewb_events_yaml_into_case_list()
 
-                # Should return a list of IndividualCase objects, not the raw dict
-                assert isinstance(result, list)
-                assert all(isinstance(case, cases.IndividualCase) for case in result)
-                assert len(result) == 1
+            # Should return a list of IndividualCase objects, not the raw dict
+            assert isinstance(result, list)
+            assert all(isinstance(case, cases.IndividualCase) for case in result)
+            assert len(result) == 1
 
-                # Verify the case was loaded correctly
-                case = result[0]
-                assert case.case_id_number == 999
-                assert case.title == "Mock Event"
-                assert case.event_type == "test_event"
+            # Verify the case was loaded correctly
+            case = result[0]
+            assert case.case_id_number == 999
+            assert case.title == "Mock Event"
+            assert case.event_type == "test_event"
 
-                mock_read.assert_called_once()
+            mock_read.assert_called_once()
 
 
 class TestReadIncomingYaml:

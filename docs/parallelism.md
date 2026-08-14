@@ -26,14 +26,14 @@ case_yaml = cases.load_ewb_events_yaml_into_case_list()
 evaluation_objects = defaults.get_brightband_evaluation_objects()
 
 # Instantiate EWB runner class
-ewb = evaluate.ExtremeWeatherBench(    
+ewb = evaluate.ExtremeWeatherBench(
     case_metadata=case_yaml,
     evaluation_objects=evaluation_objects,
-    )
+)
 
 # Define parallel_config for runner with n_jobs set to the number of EvaluationObjects
 # The larger the machine, the larger n_jobs can be (a bit of an oversimplification)
-parallel_config = {"backend":"loky","n_jobs":len(evaluation_objects)}
+parallel_config = {"backend": "loky", "n_jobs": len(evaluation_objects)}
 
 outputs = ewb.run_evaluation(parallel_config=parallel_config)
 ```
