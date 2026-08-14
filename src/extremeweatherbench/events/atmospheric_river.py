@@ -1,8 +1,90 @@
+from collections.abc import Sequence
+
 import numpy as np
+import numpy.typing as npt
 import xarray as xr
 from scipy import ndimage
 
 from extremeweatherbench import calc
+
+
+def _label_time_linked_tyx(mask_tyx: npt.NDArray[np.bool_]) -> npt.NDArray[np.int32]:
+    """Label a (time, lat, lon) mask with 6-connectivity.
+
+    2D connected components plus union-find across consecutive times.
+    Matches ndimage.label with generate_binary_structure(3, 1).
+    """
+    n_t = mask_tyx.shape[0]
+    labeled = np.empty(mask_tyx.shape, dtype=np.int32)
+    n_feat = np.empty(n_t, dtype=np.int32)
+    for t in range(n_t):
+        labeled[t], n_feat[t] = ndimage.label(mask_tyx[t])
+    total = int(n_feat.sum())
+    if total == 0:
+        return labeled
+
+    glob = np.where(
+        labeled > 0, labeled + (np.cumsum(n_feat) - n_feat)[:, None, None], 0
+    ).astype(np.int32)
+    parent = np.arange(total + 1, dtype=np.int32)
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = int(parent[x])
+        return x
+
+    for t in range(n_t - 1):
+        both = (glob[t] > 0) & (glob[t + 1] > 0)
+        if not both.any():
+            continue
+        pairs = np.unique(np.stack((glob[t][both], glob[t + 1][both]), axis=1), axis=0)
+        for a, b in pairs:
+            ra, rb = find(int(a)), find(int(b))
+            if ra != rb:
+                parent[rb] = ra
+
+    remap = np.zeros(total + 1, dtype=np.int32)
+    n = 0
+    for i in range(1, total + 1):
+        root = find(i)
+        if remap[root] == 0:
+            n += 1
+            remap[root] = n
+        remap[i] = remap[root]
+    return remap[glob]
+
+
+def _label_objects_time_linked(
+    mask: npt.NDArray[np.bool_],
+    dims: Sequence[str],
+    time_dimension: str,
+) -> npt.NDArray[np.int32]:
+    """Label True pixels, linking through time but not across other dims."""
+    keep = {time_dimension, "latitude", "longitude"}
+    if not keep <= set(dims):
+        labeled, _ = ndimage.label(mask)
+        return np.asarray(labeled, dtype=np.int32)
+
+    order = (
+        [dims.index(time_dimension)]
+        + [i for i, name in enumerate(dims) if name not in keep]
+        + [dims.index("latitude"), dims.index("longitude")]
+    )
+    moved = np.transpose(mask, order)
+    n_t, *extra, n_y, n_x = moved.shape
+    n_extra = int(np.prod(extra, initial=1))
+    moved = moved.reshape(n_t, n_extra, n_y, n_x)
+    out = np.empty_like(moved, dtype=np.int32)
+    next_id = 1
+    for i in range(n_extra):
+        lab = _label_time_linked_tyx(moved[:, i])
+        n_lab = int(lab.max())
+        if n_lab:
+            lab = np.where(lab, lab + (next_id - 1), 0)
+            next_id += n_lab
+        out[:, i] = lab
+    return np.transpose(out.reshape(n_t, *extra, n_y, n_x), np.argsort(order))
 
 
 def atmospheric_river_mask(
@@ -66,8 +148,12 @@ def atmospheric_river_mask(
     # Combine conditions without tropical restriction initially
     initial_intersection = xr.where(dilated_laplacian & has_high_ivt, 1, 0)
 
-    # Label connected components and get their sizes
-    labeled_array, _ = ndimage.label(initial_intersection)
+    # Label 2D slices and merge across consecutive valid_time only.
+    labeled_array = _label_objects_time_linked(
+        np.asarray(initial_intersection, dtype=bool),
+        list(initial_intersection.dims),
+        time_dimension,
+    )
     unique_labels, label_counts = np.unique(labeled_array, return_counts=True)
 
     # Filter by size first (excluding background label 0)
@@ -82,11 +168,11 @@ def atmospheric_river_mask(
     lat_shape = [1] * labeled_array.ndim
     lat_shape[lat_axis] = len(latitudes)
     lat_grid = np.broadcast_to(latitudes.reshape(lat_shape), labeled_array.shape)
-    valid_labels = [
-        label
-        for label in size_valid_labels
-        if abs(lat_grid[labeled_array == label].mean()) > 15
-    ]
+    if size_valid_labels.size == 0:
+        valid_labels = size_valid_labels
+    else:
+        mean_lat = ndimage.mean(lat_grid, labels=labeled_array, index=size_valid_labels)
+        valid_labels = size_valid_labels[np.abs(mean_lat) > 15]
 
     # Create final mask using valid features
     feature_mask = np.isin(labeled_array, valid_labels)

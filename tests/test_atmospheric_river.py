@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
+from scipy import ndimage
 
 from extremeweatherbench import calc
 from extremeweatherbench.events import atmospheric_river
@@ -1009,3 +1010,52 @@ class TestBuildMaskAndLandIntersection:
 
         # Values should be 0 or 1 (boolean mask)
         assert set(ar_mask.values.flatten()).issubset({0, 1})
+
+
+def _assert_same_cc_partition(a: np.ndarray, b: np.ndarray) -> None:
+    """True pixels must form the same connected components in a and b."""
+    a, b = np.asarray(a), np.asarray(b)
+    np.testing.assert_array_equal(a > 0, b > 0)
+    for lab in np.unique(a[a > 0]):
+        assert len(np.unique(b[a == lab])) == 1
+    for lab in np.unique(b[b > 0]):
+        assert len(np.unique(a[b == lab])) == 1
+
+
+class TestTimeLinkedLabeling:
+    """Tests for 2D labels plus union-find across valid_time."""
+
+    def test_3d_matches_ndimage_label_partition(self):
+        """3D (valid_time, lat, lon) matches scipy 6-connectivity labeling."""
+        rng_local = np.random.default_rng(0)
+        mask = rng_local.random((8, 12, 10)) > 0.65
+        mask[2:6, 4, 5] = True
+        expected, _ = ndimage.label(mask)
+        got = atmospheric_river._label_objects_time_linked(
+            mask, ["valid_time", "latitude", "longitude"], "valid_time"
+        )
+        _assert_same_cc_partition(expected, got)
+
+    def test_init_time_does_not_merge_across_inits(self):
+        """Objects at the same lat/lon in adjacent inits stay separate."""
+        mask = np.zeros((2, 3, 5, 5), dtype=bool)
+        mask[:, 0, 2, 2] = True
+        mask[:, 0, 2, 3] = True
+        labeled = atmospheric_river._label_objects_time_linked(
+            mask,
+            ["init_time", "valid_time", "latitude", "longitude"],
+            "valid_time",
+        )
+        labs0 = set(np.unique(labeled[0][labeled[0] > 0]))
+        labs1 = set(np.unique(labeled[1][labeled[1] > 0]))
+        assert labs0 and labs1
+        assert labs0.isdisjoint(labs1)
+
+    def test_time_adjacent_pixels_are_linked(self):
+        """The same grid cell at consecutive times is one object."""
+        mask = np.zeros((4, 3, 3), dtype=bool)
+        mask[:, 1, 1] = True
+        labeled = atmospheric_river._label_objects_time_linked(
+            mask, ["valid_time", "latitude", "longitude"], "valid_time"
+        )
+        assert len(np.unique(labeled[labeled > 0])) == 1
