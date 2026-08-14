@@ -926,28 +926,25 @@ def _create_spatial_mask(
         Spatial mask as a boolean array
     """
 
-    # Create meshgrid of all lat/lon coordinates
     lat_grid, lon_grid = np.meshgrid(lat_coords, lon_coords, indexing="ij")
+    if nearby_tc_track_data.empty:
+        return np.zeros_like(lat_grid, dtype=bool)
 
-    # Initialize mask
+    tc_lats = nearby_tc_track_data["latitude"].to_numpy(dtype=float)
+    tc_lons = nearby_tc_track_data["longitude"].to_numpy(dtype=float)
     spatial_mask = np.zeros_like(lat_grid, dtype=bool)
-
-    # For each tropical cyclone track data point, compute distances to all grid points
-    # vectorized
-    for _, tc_track_data_row in nearby_tc_track_data.iterrows():
-        tc_track_data_lat = tc_track_data_row["latitude"]
-        tc_track_data_lon = tc_track_data_row["longitude"]
-
-        # Vectorized distance calculation
+    # Chunk track points so (n_tracks, nlat, nlon) stays bounded.
+    for start in range(0, len(tc_lats), 32):
+        stop = start + 32
         distances = calc.haversine_distance(
-            [lat_grid, lon_grid],
-            [tc_track_data_lat, tc_track_data_lon],
+            [lat_grid[np.newaxis], lon_grid[np.newaxis]],
+            [
+                tc_lats[start:stop, np.newaxis, np.newaxis],
+                tc_lons[start:stop, np.newaxis, np.newaxis],
+            ],
             units="degrees",
         )
-
-        # Update mask where distance is within threshold
-        spatial_mask |= distances <= max_distance_degrees
-
+        spatial_mask |= np.any(distances <= max_distance_degrees, axis=0)
     return spatial_mask
 
 
