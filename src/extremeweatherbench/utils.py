@@ -785,19 +785,13 @@ def convert_day_yearofday_to_time(
     Returns:
         The dataset or dataarray with a new time coordinate.
     """
-    # Create a new time coordinate by combining dayofyear and hour
-    time_dim = pd.date_range(
-        start=f"{year}-01-01",
-        periods=len(dataset["dayofyear"]) * len(dataset["hour"]),
-        freq="6h",
+    stacked = dataset.stack(valid_time=("dayofyear", "hour"))
+    times = pd.to_datetime(
+        year * 1000 + stacked.dayofyear.values.astype(int), format="%Y%j"
+    ) + pd.to_timedelta(stacked.hour.values.astype(int), unit="h")
+    return stacked.reset_index("valid_time", drop=True).assign_coords(
+        valid_time=("valid_time", times)
     )
-    dataset = dataset.stack(valid_time=("dayofyear", "hour")).drop_vars(
-        ["dayofyear", "hour"]
-    )
-    # Assign the new time coordinate to the dataset
-    dataset = dataset.assign_coords(valid_time=time_dim)
-
-    return dataset
 
 
 def interp_climatology_to_target(
