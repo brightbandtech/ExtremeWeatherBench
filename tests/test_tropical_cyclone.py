@@ -15,7 +15,7 @@ import pandas as pd
 import pytest
 import xarray as xr
 
-from extremeweatherbench import derived
+from extremeweatherbench import calc, derived
 from extremeweatherbench.events import tropical_cyclone
 
 
@@ -295,6 +295,17 @@ class TestUtilityFunctions:
         assert isinstance(mask, np.ndarray)
         assert mask.shape == (3, 3)  # lat x lon
         assert mask.dtype == bool
+
+        lat_grid, lon_grid = np.meshgrid(lat_coords, lon_coords, indexing="ij")
+        expected = np.zeros_like(lat_grid, dtype=bool)
+        for _, row in nearby_ibtracs.iterrows():
+            distances = calc.haversine_distance(
+                [lat_grid, lon_grid],
+                [row["latitude"], row["longitude"]],
+                units="degrees",
+            )
+            expected |= distances <= max_distance
+        np.testing.assert_array_equal(mask, expected)
 
 
 class TestDimensionHandling:
