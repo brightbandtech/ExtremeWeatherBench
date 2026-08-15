@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 OUTPUT_COLUMNS = outputs.OUTPUT_COLUMNS
 
 # Process-local reuse of forecast/target datasets within one evaluation.
-_pipeline_cache_var: contextvars.ContextVar[Optional[dict[tuple, xr.Dataset]]] = (
+_pipeline_cache_var: contextvars.ContextVar[dict[tuple, xr.Dataset] | None] = (
     contextvars.ContextVar("_pipeline_cache", default=None)
 )
 
@@ -109,7 +109,7 @@ class ExtremeWeatherBench:
         output_format: str = "pandas",
         sparse: bool = False,
         **kwargs,
-    ) -> Union[pd.DataFrame, xr.Dataset]:
+    ) -> pd.DataFrame | xr.Dataset:
         """Deprecated alias for :meth:`run_evaluation`."""
         logger.warning("The run method is deprecated. Use run_evaluation instead.")
         return self.run_evaluation(
@@ -129,7 +129,7 @@ class ExtremeWeatherBench:
         output_format: str = "pandas",
         sparse: bool = False,
         **kwargs,
-    ) -> Union[pd.DataFrame, xr.Dataset]:
+    ) -> pd.DataFrame | xr.Dataset:
         """Runs the ExtremeWeatherBench evaluation workflow.
 
         This method will run the evaluation workflow in the order of the case operators,
@@ -179,8 +179,7 @@ def _validate_output_format(output_format: str) -> None:
     """Raise ValueError unless output_format is pandas or xarray."""
     if output_format not in ("pandas", "xarray"):
         raise ValueError(
-            f"Unknown output_format '{output_format}'. Expected 'pandas' or "
-            "'xarray'."
+            f"Unknown output_format '{output_format}'. Expected 'pandas' or 'xarray'."
         )
 
 
@@ -188,7 +187,7 @@ def _convert_results(
     results: list[xr.DataArray],
     output_format: str,
     sparse: bool = False,
-) -> Union[pd.DataFrame, xr.Dataset]:
+) -> pd.DataFrame | xr.Dataset:
     """Convert a flat list of annotated metric results to output_format.
 
     Args:
@@ -415,9 +414,7 @@ def _run_parallel_evaluation(
                 )
                 for group in groups
             )
-        return _scatter_group_results(
-            groups, nested_results, len(case_operators)
-        )
+        return _scatter_group_results(groups, nested_results, len(case_operators))
     finally:
         _close_worker_progress()
         if manager is not None:
@@ -450,9 +447,7 @@ def _group_operators_sharing_forecast(
             op.forecast.name,
             op.forecast.source,
         )
-        groups.setdefault(key, []).append(
-            IndexedOperator(index=i, operator=op)
-        )
+        groups.setdefault(key, []).append(IndexedOperator(index=i, operator=op))
     return list(groups.values())
 
 
@@ -498,7 +493,7 @@ def _pipeline_cache_key(
 def _run_pipeline_maybe_cached(
     case_metadata: "cases.IndividualCase",
     input_data: "inputs.InputBase",
-    pipeline_cache: Optional[dict[tuple, xr.Dataset]],
+    pipeline_cache: dict[tuple, xr.Dataset] | None,
     extra_key: tuple = (),
     **kwargs,
 ) -> xr.Dataset:
@@ -521,7 +516,7 @@ def _run_pipeline_maybe_cached(
 
 def _compute_operator_group_with_progress(
     indexed_ops: list[IndexedOperator],
-    cache_dir: Optional[pathlib.Path] = None,
+    cache_dir: pathlib.Path | None = None,
     event_queue=None,
     log_queue=None,
     **kwargs,
@@ -660,7 +655,7 @@ def compute_case_operator(
     cache_dir: pathlib.Path | None = None,
     output_format: str = "pandas",
     **kwargs,
-) -> Union[pd.DataFrame, xr.Dataset]:
+) -> pd.DataFrame | xr.Dataset:
     """Compute the resulting evaluation of a case operator.
 
     This method will compute the results of a case operator. It validates
@@ -690,7 +685,7 @@ def compute_case_operator(
 
 def _compute_case_operator_results(
     case_operator: "cases.CaseOperator",
-    cache_dir: Optional[pathlib.Path] = None,
+    cache_dir: pathlib.Path | None = None,
     **kwargs,
 ) -> list[xr.DataArray]:
     """Compute the annotated metric results for a case operator.

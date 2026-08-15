@@ -501,7 +501,7 @@ class TestOutputFormats:
             sparse=False,
         )
         mock_write_results.assert_called_once()
-        args, kwargs = mock_write_results.call_args
+        args, _kwargs = mock_write_results.call_args
         assert str(args[1]).endswith("evaluation_results.csv")
         assert args[2] == "csv"
 
@@ -540,7 +540,7 @@ class TestOutputFormats:
         )
 
         assert result.exit_code == 0
-        args, kwargs = mock_write_results.call_args
+        args, _kwargs = mock_write_results.call_args
         assert str(args[1]).endswith("evaluation_results.csv")
         assert args[2] == "csv"
 

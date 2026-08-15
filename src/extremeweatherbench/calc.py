@@ -4,12 +4,10 @@ from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
-import regionmask
 import shapely
 import xarray as xr
 from numba import float64, guvectorize
 from scipy import ndimage
-from scores import categorical
 from skimage import filters
 
 from extremeweatherbench import utils

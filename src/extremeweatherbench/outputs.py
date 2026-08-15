@@ -2,7 +2,7 @@
 
 import logging
 import pathlib
-from typing import Union
+from typing import cast
 
 import dask.array as da
 import numpy as np
@@ -10,7 +10,7 @@ import pandas as pd
 import sparse
 import xarray as xr
 
-import extremeweatherbench.utils as utils
+from extremeweatherbench import utils
 
 logger = logging.getLogger(__name__)
 
@@ -154,10 +154,9 @@ def _safe_concat(
             for df in valid_dfs[1:]:
                 # Check if columns have different dtypes across DataFrames
                 for col in reference_df.columns:
-                    if col in df.columns:
-                        if reference_df[col].dtype != df[col].dtype:
-                            has_dtype_mismatch = True
-                            break
+                    if col in df.columns and reference_df[col].dtype != df[col].dtype:
+                        has_dtype_mismatch = True
+                        break
                 if has_dtype_mismatch:
                     break
 
@@ -177,6 +176,11 @@ def _variable_name(forecast_variable: str, target_variable: str) -> str:
     if forecast_variable == target_variable:
         return target_variable
     return f"{forecast_variable}_vs_{target_variable}"
+
+
+def _is_temporal_dtype(dtype: np.dtype) -> bool:
+    """Whether dtype is datetime64 or timedelta64."""
+    return np.issubdtype(dtype, np.datetime64) or np.issubdtype(dtype, np.timedelta64)
 
 
 def _sentinel_for_dtype(dtype: np.dtype) -> object:
@@ -223,17 +227,28 @@ def _scatter_peak_time_coord(result: xr.DataArray) -> xr.DataArray:
 
 
 def _collect_own_dim_dtypes(results: list[xr.DataArray]) -> dict[str, np.dtype]:
-    """Find every non-metadata dim used anywhere in the run, with its dtype."""
+    """Find every non-metadata dim used anywhere in the run, with its dtype.
+
+    Prefers a datetime or timedelta dtype when the same dim also appears
+    with an untyped coordinate, such as the int64 RangeIndex from an
+    empty fallback.
+    """
     dim_dtypes: dict[str, np.dtype] = {}
     for result in results:
         for dim in result.dims:
-            if dim in _METADATA_DIMS or dim in dim_dtypes:
+            if dim in _METADATA_DIMS:
                 continue
-            dim_dtypes[dim] = (
-                result.coords[dim].dtype
-                if dim in result.coords
+            dim_name = cast(str, dim)
+            dtype = (
+                result.coords[dim_name].dtype
+                if dim_name in result.coords
                 else np.dtype("float64")
             )
+            existing = dim_dtypes.get(dim_name)
+            if existing is None or (
+                _is_temporal_dtype(dtype) and not _is_temporal_dtype(existing)
+            ):
+                dim_dtypes[dim_name] = dtype
     return dim_dtypes
 
 
@@ -246,7 +261,9 @@ def _result_to_padded_dataset(
     otherwise conflict across results that share a dim label but not the
     coord's value, e.g. landfall coords riding along init_time), pads in
     any dim used elsewhere in the run but absent from this result (so
-    xarray can't silently broadcast this result's values across it), then
+    xarray can't silently broadcast this result's values across it),
+    rewrites a size-1 untyped dim to a temporal sentinel when the run
+    already has a datetime or timedelta dtype for that dim, then
     expand_dims the scalar metadata coords into length-1 dims.
 
     Args:
@@ -272,9 +289,17 @@ def _result_to_padded_dataset(
         ds = ds.reset_coords(extra_coords)
     ds = ds.drop_vars(["target_variable", "forecast_variable"])
 
-    for dim in own_dim_dtypes:
+    for dim, dtype in own_dim_dtypes.items():
         if dim not in ds.dims:
-            ds = ds.expand_dims({dim: [_sentinel_for_dtype(own_dim_dtypes[dim])]})
+            ds = ds.expand_dims({dim: [_sentinel_for_dtype(dtype)]})
+            continue
+        current = ds.coords[dim].dtype if dim in ds.coords else np.dtype("float64")
+        if (
+            ds.sizes[dim] == 1
+            and _is_temporal_dtype(dtype)
+            and not _is_temporal_dtype(current)
+        ):
+            ds = ds.assign_coords({dim: [_sentinel_for_dtype(dtype)]})
 
     ds = ds.expand_dims(list(_METADATA_DIMS))
     return ds.assign_coords(event_type=("case_id_number", [event_type]))
@@ -316,7 +341,10 @@ def _collect_data_var_info(
     for ds in datasets:
         for name, variable in ds.data_vars.items():
             if name not in info:
-                info[name] = (variable.dims, variable.dtype)
+                info[cast(str, name)] = (
+                    cast(tuple[str, ...], variable.dims),
+                    variable.dtype,
+                )
     return info
 
 
@@ -326,7 +354,7 @@ def _positions_in_union(index: pd.Index, values: np.ndarray) -> np.ndarray:
     get_indexer can't match a null placeholder (NaT/NaN) by value, so an
     unmatched query is pointed at index's own (unique) null entry.
     """
-    positions = index.get_indexer(values)
+    positions = index.get_indexer(values)  # type: ignore[arg-type]
     unmatched = positions == -1
     if unmatched.any():
         positions[unmatched] = np.flatnonzero(index.isna())[0]
@@ -339,7 +367,7 @@ def _scatter_variable(
     name: str,
     datasets: list[xr.Dataset],
     dim_index: dict[str, pd.Index],
-) -> Union[sparse.COO, np.ndarray]:
+) -> sparse.COO | np.ndarray:
     """Scatter one data variable's values from every slab that has it.
 
     Positions are resolved per slab, per dim, straight into the run-wide
@@ -355,7 +383,7 @@ def _scatter_variable(
             continue
         variable = ds.data_vars[name]
         positions = {
-            d: _positions_in_union(dim_index[d], ds.indexes[d].values)
+            d: _positions_in_union(dim_index[cast(str, d)], ds.indexes[d].values)
             for d in variable.dims
         }
         grids = np.meshgrid(*(positions[d] for d in variable.dims), indexing="ij")
@@ -396,7 +424,7 @@ def _scatter_to_sparse_dataset(datasets: list[xr.Dataset]) -> xr.Dataset:
     dense_slabs = [ds.drop_vars(sparsifiable, errors="ignore") for ds in datasets]
     dense_ds = xr.merge(dense_slabs, join="outer", compat="no_conflicts")
 
-    dim_index = {dim: dense_ds.indexes[dim] for dim in dense_ds.dims}
+    dim_index = {cast(str, dim): dense_ds.indexes[dim] for dim in dense_ds.dims}
     scattered = {
         name: (dims, _scatter_variable(dims, dtype, name, datasets, dim_index))
         for name, (dims, dtype) in var_info.items()
@@ -450,7 +478,7 @@ def results_to_dataset(results: list[xr.DataArray], sparse: bool = False) -> xr.
     return xr.merge(datasets, join="outer", compat="no_conflicts")
 
 
-def _label_has_data(obj: Union[xr.Dataset, xr.DataArray], dim: str) -> xr.DataArray:
+def _label_has_data(obj: xr.Dataset | xr.DataArray, dim: str) -> xr.DataArray:
     """Find which labels along dim have at least one non-NaN value."""
     other_dims = [d for d in obj.dims if d != dim]
     reduced = obj.notnull().any(other_dims) if other_dims else obj.notnull()
@@ -460,8 +488,8 @@ def _label_has_data(obj: Union[xr.Dataset, xr.DataArray], dim: str) -> xr.DataAr
 
 
 def drop_empty_slices(
-    obj: Union[xr.Dataset, xr.DataArray],
-) -> Union[xr.Dataset, xr.DataArray]:
+    obj: xr.Dataset | xr.DataArray,
+) -> xr.Dataset | xr.DataArray:
     """Collapse the placeholder padding results_to_dataset introduces.
 
     Meant to be called after selecting down to a single metric (and,
@@ -491,7 +519,7 @@ def drop_empty_slices(
     """
     result = obj
     for dim in list(result.dims):
-        has_data = _label_has_data(result, dim)
+        has_data = _label_has_data(result, cast(str, dim))
         result = result.isel({dim: has_data.compute().values})
 
     placeholder_dims = [
@@ -503,8 +531,8 @@ def drop_empty_slices(
 
 
 def write_results(
-    results: Union[list[xr.DataArray], pd.DataFrame, xr.Dataset],
-    path: Union[str, pathlib.Path],
+    results: list[xr.DataArray] | pd.DataFrame | xr.Dataset,
+    path: str | pathlib.Path,
     output_format: str = "csv",
     sparse: bool = False,
 ) -> None:
@@ -523,20 +551,18 @@ def write_results(
         ValueError: If output_format is not "csv", "netcdf", or "zarr".
     """
     if output_format == "csv":
-        df = (
-            results
-            if isinstance(results, pd.DataFrame)
-            else results_to_dataframe(results)
-        )
+        if isinstance(results, pd.DataFrame):
+            df = results
+        else:
+            df = results_to_dataframe(cast(list[xr.DataArray], results))
         df.to_csv(path, index=False)
         return
 
     if output_format in ("netcdf", "zarr"):
-        ds = (
-            results
-            if isinstance(results, xr.Dataset)
-            else results_to_dataset(results, sparse=sparse)
-        )
+        if isinstance(results, xr.Dataset):
+            ds = results
+        else:
+            ds = results_to_dataset(cast(list[xr.DataArray], results), sparse=sparse)
         # netCDF/zarr can't store sparse.COO directly; dask stays lazy.
         ds = ds.map(utils.maybe_densify_dataarray)
         # Coords are cheap to materialize and avoid a dtype-inference

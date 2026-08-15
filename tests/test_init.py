@@ -48,6 +48,12 @@ class TestModuleImports:
 
         assert isinstance(cases, types.ModuleType)
 
+    def test_outputs_is_module(self):
+        """Test that outputs is an actual module, not a SimpleNamespace."""
+        from extremeweatherbench import outputs
+
+        assert isinstance(outputs, types.ModuleType)
+
 
 class TestModuleAccessPatterns:
     """Test both import patterns work identically."""
@@ -72,6 +78,13 @@ class TestModuleAccessPatterns:
         from extremeweatherbench import utils
 
         assert ewb.utils is utils
+
+    def test_ewb_dot_notation_equals_direct_import_outputs(self):
+        """Test ewb.outputs is the same object as direct import."""
+        import extremeweatherbench as ewb
+        from extremeweatherbench import outputs
+
+        assert ewb.outputs is outputs
 
 
 class TestModuleLevelConstants:

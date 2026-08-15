@@ -895,14 +895,10 @@ class TestGroupOperatorsSharingForecast:
         sample_case_operator.forecast.source = "hres://x"
         op2.forecast.name = "HRES"
         op2.forecast.source = "hres://x"
-        groups = evaluate._group_operators_sharing_forecast(
-            [sample_case_operator, op2]
-        )
+        groups = evaluate._group_operators_sharing_forecast([sample_case_operator, op2])
         assert len(groups) == 1
         assert [item.index for item in groups[0]] == [0, 1]
-        assert all(
-            isinstance(item, evaluate.IndexedOperator) for item in groups[0]
-        )
+        assert all(isinstance(item, evaluate.IndexedOperator) for item in groups[0])
         assert groups[0][0].operator is sample_case_operator
         assert groups[0][1].operator is op2
 
@@ -914,16 +910,12 @@ class TestGroupOperatorsSharingForecast:
         sample_case_operator.forecast.name = "HRES"
         sample_case_operator.forecast.source = "hres://x"
         op2 = dataclasses.replace(sample_case_operator, forecast=other_forecast)
-        groups = evaluate._group_operators_sharing_forecast(
-            [sample_case_operator, op2]
-        )
+        groups = evaluate._group_operators_sharing_forecast([sample_case_operator, op2])
         assert len(groups) == 2
         assert [item.index for item in groups[0]] == [0]
         assert [item.index for item in groups[1]] == [1]
 
-    def test_interleaved_operators_keep_original_indices(
-        self, sample_case_operator
-    ):
+    def test_interleaved_operators_keep_original_indices(self, sample_case_operator):
         """Non-adjacent shared-forecast operators keep their input indices."""
         shared = sample_case_operator.forecast
         shared.name = "HRES"
@@ -2156,9 +2148,7 @@ class TestPipelineFunctions:
         sample_case_operator.forecast.maybe_convert_to_dataset.assert_called_once()
         sample_case_operator.forecast.add_source_to_dataset_attrs.assert_called_once()
         sample_case_operator.forecast.preprocess.assert_called_once()
-        method_names = [
-            name for name, *_ in sample_case_operator.forecast.method_calls
-        ]
+        method_names = [name for name, *_ in sample_case_operator.forecast.method_calls]
         assert method_names.index("subset_data_to_case") < method_names.index(
             "preprocess"
         )
@@ -2284,8 +2274,8 @@ class TestPipelineFunctions:
         assert mock_evaluate_metric.called
         forecast_ds = mock_evaluate_metric.call_args.kwargs["forecast_ds"]
         target_ds = mock_evaluate_metric.call_args.kwargs["target_ds"]
-        first_fc = list(forecast_ds.data_vars)[0]
-        first_tg = list(target_ds.data_vars)[0]
+        first_fc = next(iter(forecast_ds.data_vars))
+        first_tg = next(iter(target_ds.data_vars))
         assert not hasattr(forecast_ds[first_fc].data, "chunks")
         assert not hasattr(target_ds[first_tg].data, "chunks")
 
@@ -2953,9 +2943,7 @@ class TestIntegration:
         ) as mock_parallel_class:
             mock_parallel_instance = mock.Mock()
             mock_parallel_class.return_value = mock_parallel_instance
-            mock_parallel_instance.return_value = [
-                [row] for row in mock_results
-            ]
+            mock_parallel_instance.return_value = [[row] for row in mock_results]
 
             start_time = time.time()
             parallel_result = evaluate._run_parallel_evaluation(
@@ -3085,9 +3073,7 @@ class TestIntegration:
                 mock_delayed.return_value = mock_compute_with_kwargs
                 mock_parallel_instance = mock.Mock()
                 mock_parallel_class.return_value = mock_parallel_instance
-                mock_parallel_instance.return_value = [
-                    [[_annotated_result(value=1.0)]]
-                ]
+                mock_parallel_instance.return_value = [[[_annotated_result(value=1.0)]]]
 
                 # Reset captured kwargs
                 mock_compute_with_kwargs.captured_kwargs = {}
@@ -3168,9 +3154,7 @@ class TestIntegration:
         ) as mock_parallel_class:
             mock_parallel_instance = mock.Mock()
             mock_parallel_class.return_value = mock_parallel_instance
-            mock_parallel_instance.return_value = [
-                [row] for row in mock_results
-            ]
+            mock_parallel_instance.return_value = [[row] for row in mock_results]
 
             parallel_results = evaluate._run_parallel_evaluation(
                 case_operators, parallel_config={"backend": "threading", "n_jobs": 4}

@@ -4,9 +4,10 @@
 
 There are two main ways to use ExtremeWeatherBench, by script or by command line.
 
-To run the Brightband-based evaluation on an existing AIWP model (FCN v2), which 
-includes the default 337 cases for heat waves, freezes, severe convection, 
-tropical cyclones, and atmospheric rivers:
+To run the Brightband-based evaluation on an existing AIWP model (FCN v2), which
+includes the default cases for heat waves, freezes, severe convection,
+tropical cyclones, and atmospheric rivers (see
+[Case Studies](events/case_studies.md)):
 
 
 ```python
@@ -66,6 +67,11 @@ ewb.cases.load_cases()
 # Defaults (pre-built targets, forecasts, and helpers)
 ewb.defaults.era5_heatwave_target
 ewb.defaults.get_climatology(quantile=0.85)
+
+# Outputs (optional xarray Dataset helpers; pandas remains the default)
+ewb.outputs.results_to_dataset(...)
+ewb.outputs.write_results(...)
+ewb.outputs.drop_empty_slices(...)
 ```
 ## Running an Evaluation for a Single Event Type
 
@@ -207,7 +213,7 @@ Dimensions:                  (lead_time: 4, init_time: 3, metric: 2,
                               forecast_source: 1, target_source: 1,
                               case_id_number: 1)
 Coordinates:
-  * lead_time                (lead_time) float64 32B 0.0 6.0 12.0 nan
+  * lead_time                (lead_time) timedelta64[ns] 32B 00:00:00 ... NaT
   * init_time                (init_time) datetime64[ns] 24B 2021-06-25 ... NaT
   * metric                   (metric) <U20 160B 'OnsetError' 'RootMeanSquared...
   * forecast_source          (forecast_source) <U11 44B 'my_forecast'
@@ -251,7 +257,7 @@ array([[       nan,        nan,        nan,        nan],
        [0.41520745, 0.48798442, 0.4550809 ,        nan]])
 Coordinates:
   * init_time        (init_time) datetime64[ns] 24B 2021-06-25 2021-06-26 NaT
-  * lead_time        (lead_time) float64 32B 0.0 6.0 12.0 nan
+  * lead_time        (lead_time) timedelta64[ns] 32B 00:00:00 06:00:00 ... NaT
     ...
 ```
 
@@ -261,15 +267,13 @@ entirely missing, then drops any dimension left with only a single
 placeholder label remaining.
 
 ```python
-from extremeweatherbench import outputs as ewb_outputs
-
-ewb_outputs.drop_empty_slices(rmse)
+ewb.outputs.drop_empty_slices(rmse)
 ```
 ```
 <xarray.DataArray 'surface_air_temperature' (lead_time: 3)> Size: 24B
 array([0.41520745, 0.48798442, 0.4550809 ])
 Coordinates:
-  * lead_time        (lead_time) float64 24B 0.0 6.0 12.0
+  * lead_time        (lead_time) timedelta64[ns] 24B 00:00:00 06:00:00 12:00:00
     ...
 ```
 
@@ -323,10 +327,8 @@ to `"netcdf"` or `"zarr"`; `"csv"` needs the raw results list or a
 DataFrame instead, since a flat cube doesn't round-trip to CSV:
 
 ```python
-from extremeweatherbench import outputs as ewb_outputs
-
-ewb_outputs.write_results(outputs, "results.nc", output_format="netcdf")
-ewb_outputs.write_results(outputs, "results.zarr", output_format="zarr")
+ewb.outputs.write_results(outputs, "results.nc", output_format="netcdf")
+ewb.outputs.write_results(outputs, "results.zarr", output_format="zarr")
 ```
 
 The CLI exposes the same choices with `--output-format {csv,netcdf,zarr}`
@@ -346,7 +348,7 @@ import extremeweatherbench as ewb
 
 ewb.inputs.ERA5(...)
 
-from extremeweatherbench import inputs, metrics, cases, evaluate
+from extremeweatherbench import inputs, metrics, cases, evaluate, outputs
 from extremeweatherbench.inputs import ERA5
 from extremeweatherbench.evaluate import ExtremeWeatherBench
 ```
