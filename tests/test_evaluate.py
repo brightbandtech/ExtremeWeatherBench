@@ -21,6 +21,7 @@ from extremeweatherbench import (
     evaluate,
     inputs,
     metrics,
+    outputs,
     regions,
     utils,
 )
@@ -217,6 +218,34 @@ def sample_target_dataset():
     )
 
 
+def _annotated_result(value=1.0, lead_time=0, **metadata):
+    """Build a minimal annotated metric result DataArray for mocking."""
+    result = xr.DataArray(
+        data=[value], dims=["lead_time"], coords={"lead_time": [lead_time]}
+    )
+    return result.assign_coords(metadata)
+
+
+def _fully_annotated_result(value=1.0, lead_time=0, **metadata):
+    """Build an annotated result with every outputs.METADATA_COORDS field.
+
+    Real pipeline results always carry all of these (see
+    evaluate._extract_standard_metadata), which results_to_dataset relies
+    on; _annotated_result alone is too sparse for xarray-output tests.
+    """
+    full_metadata = {
+        "metric": "MockMetric",
+        "target_variable": "2m_temperature",
+        "forecast_variable": "2m_temperature",
+        "forecast_source": "test_forecast",
+        "target_source": "test_target",
+        "case_id_number": 1,
+        "event_type": "heat_wave",
+        **metadata,
+    }
+    return _annotated_result(value=value, lead_time=lead_time, **full_metadata)
+
+
 class TestOutputColumns:
     """Test the OUTPUT_COLUMNS constant."""
 
@@ -350,15 +379,9 @@ class TestExtremeWeatherBench:
         with mock.patch.object(
             evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
         ):
-            # Mock _run_evaluation to return a list of DataFrames
+            # Mock _run_evaluation to return per-case-operator result lists
             mock_result = [
-                pd.DataFrame(
-                    {
-                        "value": [1.0],
-                        "metric": ["MockMetric"],
-                        "case_id_number": [1],
-                    }
-                )
+                [_annotated_result(value=1.0, metric="MockMetric", case_id_number=1)]
             ]
             mock_run_evaluation.return_value = mock_result
 
@@ -392,13 +415,7 @@ class TestExtremeWeatherBench:
             evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
         ):
             mock_result = [
-                pd.DataFrame(
-                    {
-                        "value": [1.0],
-                        "metric": ["MockMetric"],
-                        "case_id_number": [1],
-                    }
-                )
+                [_annotated_result(value=1.0, metric="MockMetric", case_id_number=1)]
             ]
             mock_run_evaluation.return_value = mock_result
 
@@ -430,7 +447,7 @@ class TestExtremeWeatherBench:
         with mock.patch.object(
             evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
         ):
-            mock_result = [pd.DataFrame({"value": [1.0]})]
+            mock_result = [[_annotated_result(value=1.0)]]
             mock_run_evaluation.return_value = mock_result
 
             ewb = evaluate.ExtremeWeatherBench(
@@ -467,10 +484,10 @@ class TestExtremeWeatherBench:
             assert len(result) == 0
             assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_case_operator_results")
     def test_run_with_caching(
         self,
-        mock_compute_case_operator,
+        mock_compute_case_operator_results,
         sample_cases_list,
         sample_evaluation_object,
         sample_case_operator,
@@ -484,13 +501,9 @@ class TestExtremeWeatherBench:
                 "case_operators",
                 new=[sample_case_operator],
             ):
-                mock_result = pd.DataFrame(
-                    {
-                        "value": [1.0],
-                        "metric": ["MockMetric"],
-                        "case_id_number": [1],
-                    }
-                )
+                mock_result = [
+                    _annotated_result(value=1.0, metric="MockMetric", case_id_number=1)
+                ]
 
                 # Make the mock also perform caching like the real function would
                 def mock_compute_with_caching(case_operator, cache_dir_arg, **kwargs):
@@ -500,10 +513,14 @@ class TestExtremeWeatherBench:
                             if isinstance(cache_dir_arg, str)
                             else cache_dir_arg
                         )
-                        mock_result.to_pickle(cache_path / "case_results.pkl")
+                        outputs.results_to_dataframe(mock_result).to_pickle(
+                            cache_path / "case_results.pkl"
+                        )
                     return mock_result
 
-                mock_compute_case_operator.side_effect = mock_compute_with_caching
+                mock_compute_case_operator_results.side_effect = (
+                    mock_compute_with_caching
+                )
 
                 ewb = evaluate.ExtremeWeatherBench(
                     case_metadata=sample_cases_list,
@@ -520,9 +537,12 @@ class TestExtremeWeatherBench:
                 cache_file = cache_dir / "case_results.pkl"
                 assert cache_file.exists()
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_case_operator_results")
     def test_run_multiple_cases(
-        self, mock_compute_case_operator, sample_cases_list, sample_evaluation_object
+        self,
+        mock_compute_case_operator_results,
+        sample_cases_list,
+        sample_evaluation_object,
     ):
         """Test the run method with multiple case operators."""
         # Create multiple case operators
@@ -536,10 +556,10 @@ class TestExtremeWeatherBench:
             "case_operators",
             new=[case_operator_1, case_operator_2],
         ):
-            # Mock compute_case_operator to return different DataFrames
-            mock_compute_case_operator.side_effect = [
-                pd.DataFrame({"value": [1.0], "case_id_number": [1]}),
-                pd.DataFrame({"value": [2.0], "case_id_number": [2]}),
+            # Mock to return different per-case-operator result lists
+            mock_compute_case_operator_results.side_effect = [
+                [_annotated_result(value=1.0, case_id_number=1)],
+                [_annotated_result(value=2.0, case_id_number=2)],
             ]
 
             ewb = evaluate.ExtremeWeatherBench(
@@ -549,30 +569,145 @@ class TestExtremeWeatherBench:
 
             result = ewb.run_evaluation()
 
-            assert mock_compute_case_operator.call_count == 2
+            assert mock_compute_case_operator_results.call_count == 2
             assert len(result) == 2
             assert result["case_id_number"].tolist() == [1, 2]
+
+
+class TestOutputFormatWiring:
+    """Test the output_format kwarg on run_evaluation and the deprecated run."""
+
+    @mock.patch("extremeweatherbench.evaluate._run_evaluation")
+    def test_run_evaluation_output_format_pandas_returns_dataframe(
+        self,
+        mock_run_evaluation,
+        sample_cases_list,
+        sample_evaluation_object,
+        sample_case_operator,
+    ):
+        with mock.patch.object(
+            evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
+        ):
+            mock_run_evaluation.return_value = [
+                [_annotated_result(value=1.0, metric="MockMetric", case_id_number=1)]
+            ]
+            ewb = evaluate.ExtremeWeatherBench(
+                case_metadata=sample_cases_list,
+                evaluation_objects=[sample_evaluation_object],
+            )
+
+            result = ewb.run_evaluation(n_jobs=1, output_format="pandas")
+
+            assert isinstance(result, pd.DataFrame)
+
+    @mock.patch("extremeweatherbench.evaluate._run_evaluation")
+    def test_run_evaluation_output_format_xarray_returns_dataset(
+        self,
+        mock_run_evaluation,
+        sample_cases_list,
+        sample_evaluation_object,
+        sample_case_operator,
+    ):
+        with mock.patch.object(
+            evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
+        ):
+            mock_run_evaluation.return_value = [[_fully_annotated_result()]]
+            ewb = evaluate.ExtremeWeatherBench(
+                case_metadata=sample_cases_list,
+                evaluation_objects=[sample_evaluation_object],
+            )
+
+            result = ewb.run_evaluation(n_jobs=1, output_format="xarray")
+
+            assert isinstance(result, xr.Dataset)
+
+    @mock.patch("extremeweatherbench.evaluate._run_evaluation")
+    def test_run_evaluation_unknown_output_format_raises_value_error(
+        self,
+        mock_run_evaluation,
+        sample_cases_list,
+        sample_evaluation_object,
+        sample_case_operator,
+    ):
+        with mock.patch.object(
+            evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
+        ):
+            mock_run_evaluation.return_value = [
+                [_annotated_result(value=1.0, case_id_number=1)]
+            ]
+            ewb = evaluate.ExtremeWeatherBench(
+                case_metadata=sample_cases_list,
+                evaluation_objects=[sample_evaluation_object],
+            )
+
+            with pytest.raises(ValueError, match="pandas"):
+                ewb.run_evaluation(output_format="geojson")
+
+    @mock.patch("extremeweatherbench.evaluate._run_evaluation")
+    def test_run_deprecated_output_format_xarray_returns_dataset(
+        self,
+        mock_run_evaluation,
+        sample_cases_list,
+        sample_evaluation_object,
+        sample_case_operator,
+    ):
+        with mock.patch.object(
+            evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
+        ):
+            mock_run_evaluation.return_value = [[_fully_annotated_result()]]
+            ewb = evaluate.ExtremeWeatherBench(
+                case_metadata=sample_cases_list,
+                evaluation_objects=[sample_evaluation_object],
+            )
+
+            result = ewb.run(n_jobs=1, output_format="xarray")
+
+            assert isinstance(result, xr.Dataset)
+
+    @mock.patch("extremeweatherbench.evaluate._run_evaluation")
+    def test_run_deprecated_unknown_output_format_raises_value_error(
+        self,
+        mock_run_evaluation,
+        sample_cases_list,
+        sample_evaluation_object,
+        sample_case_operator,
+    ):
+        with mock.patch.object(
+            evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
+        ):
+            mock_run_evaluation.return_value = [
+                [_annotated_result(value=1.0, case_id_number=1)]
+            ]
+            ewb = evaluate.ExtremeWeatherBench(
+                case_metadata=sample_cases_list,
+                evaluation_objects=[sample_evaluation_object],
+            )
+
+            with pytest.raises(ValueError, match="pandas"):
+                ewb.run(output_format="geojson")
 
 
 class TestRunCaseOperators:
     """Test the _run_evaluation function."""
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_case_operator_results")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_evaluation_serial(
-        self, mock_tqdm, mock_compute_case_operator, sample_case_operator
+        self, mock_tqdm, mock_compute_case_operator_results, sample_case_operator
     ):
         """Test _run_evaluation executes serially when parallel_config=None."""
         mock_tqdm.return_value = [sample_case_operator]
-        mock_results = pd.DataFrame({"value": [1.0]})
-        mock_compute_case_operator.return_value = mock_results
+        mock_results = [_annotated_result(value=1.0)]
+        mock_compute_case_operator_results.return_value = mock_results
 
         # Serial mode: don't pass parallel_config
         result = evaluate._run_evaluation([sample_case_operator], cache_dir=None)
 
-        mock_compute_case_operator.assert_called_once_with(sample_case_operator, None)
+        mock_compute_case_operator_results.assert_called_once_with(
+            sample_case_operator, None
+        )
         assert len(result) == 1
-        assert result[0].equals(mock_results)
+        assert result[0] is mock_results
 
     @mock.patch("extremeweatherbench.evaluate._run_parallel_evaluation")
     def test_run_evaluation_parallel(
@@ -596,15 +731,15 @@ class TestRunCaseOperators:
         )
         assert result == mock_results
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_case_operator_results")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_evaluation_with_kwargs(
-        self, mock_tqdm, mock_compute_case_operator, sample_case_operator
+        self, mock_tqdm, mock_compute_case_operator_results, sample_case_operator
     ):
         """Test _run_evaluation passes kwargs correctly in serial mode."""
         mock_tqdm.return_value = [sample_case_operator]
-        mock_results = pd.DataFrame({"value": [1.0]})
-        mock_compute_case_operator.return_value = mock_results
+        mock_results = [_annotated_result(value=1.0)]
+        mock_compute_case_operator_results.return_value = mock_results
 
         # Serial mode: don't pass parallel_config
         result = evaluate._run_evaluation(
@@ -613,7 +748,7 @@ class TestRunCaseOperators:
             threshold=0.5,
         )
 
-        call_args = mock_compute_case_operator.call_args
+        call_args = mock_compute_case_operator_results.call_args
         assert call_args[0][0] == sample_case_operator
         assert call_args[0][1] is None  # cache_dir
         assert call_args[1]["threshold"] == 0.5
@@ -653,9 +788,11 @@ class TestRunCaseOperators:
 
         def warn_and_compute(case_operator, cache_dir=None, **kwargs):
             warnings.warn("serial run warning", RuntimeWarning)
-            return pd.DataFrame({"value": [1.0]})
+            return [_annotated_result(value=1.0)]
 
-        monkeypatch.setattr(evaluate, "compute_case_operator", warn_and_compute)
+        monkeypatch.setattr(
+            evaluate, "_compute_case_operator_results", warn_and_compute
+        )
 
         with caplog.at_level(logging.WARNING, logger="py.warnings"):
             evaluate._run_evaluation([sample_case_operator], parallel_config=None)
@@ -689,27 +826,29 @@ class TestRunCaseOperators:
 class TestRunSerial:
     """Test the serial execution path of _run_evaluation."""
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_case_operator_results")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_serial_evaluation_basic(
-        self, mock_tqdm, mock_compute_case_operator, sample_case_operator
+        self, mock_tqdm, mock_compute_case_operator_results, sample_case_operator
     ):
         """Test basic serial execution functionality."""
         # Setup mocks
         mock_tqdm.return_value = [sample_case_operator]  # tqdm returns iterable
-        mock_result = pd.DataFrame({"value": [1.0], "case_id_number": [1]})
-        mock_compute_case_operator.return_value = mock_result
+        mock_result = [_annotated_result(value=1.0, case_id_number=1)]
+        mock_compute_case_operator_results.return_value = mock_result
 
         result = evaluate._run_evaluation([sample_case_operator], parallel_config=None)
 
-        mock_compute_case_operator.assert_called_once_with(sample_case_operator, None)
+        mock_compute_case_operator_results.assert_called_once_with(
+            sample_case_operator, None
+        )
         assert len(result) == 1
-        assert result[0].equals(mock_result)
+        assert result[0] is mock_result
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_case_operator_results")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_serial_evaluation_multiple_cases(
-        self, mock_tqdm, mock_compute_case_operator
+        self, mock_tqdm, mock_compute_case_operator_results
     ):
         """Test serial execution with multiple case operators."""
         case_op_1 = mock.Mock()
@@ -719,27 +858,27 @@ class TestRunSerial:
         case_operators = [case_op_1, case_op_2]
 
         mock_tqdm.return_value = case_operators
-        mock_compute_case_operator.side_effect = [
-            pd.DataFrame({"value": [1.0], "case_id_number": [1]}),
-            pd.DataFrame({"value": [2.0], "case_id_number": [2]}),
+        mock_compute_case_operator_results.side_effect = [
+            [_annotated_result(value=1.0, case_id_number=1)],
+            [_annotated_result(value=2.0, case_id_number=2)],
         ]
 
         result = evaluate._run_evaluation(case_operators, parallel_config=None)
 
-        assert mock_compute_case_operator.call_count == 2
+        assert mock_compute_case_operator_results.call_count == 2
         assert len(result) == 2
-        assert result[0]["case_id_number"].iloc[0] == 1
-        assert result[1]["case_id_number"].iloc[0] == 2
+        assert result[0][0].coords["case_id_number"].item() == 1
+        assert result[1][0].coords["case_id_number"].item() == 2
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_case_operator_results")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_serial_evaluation_with_kwargs(
-        self, mock_tqdm, mock_compute_case_operator, sample_case_operator
+        self, mock_tqdm, mock_compute_case_operator_results, sample_case_operator
     ):
         """Test serial execution passes kwargs to compute_case_operator."""
         mock_tqdm.return_value = [sample_case_operator]
-        mock_result = pd.DataFrame({"value": [1.0]})
-        mock_compute_case_operator.return_value = mock_result
+        mock_result = [_annotated_result(value=1.0)]
+        mock_compute_case_operator_results.return_value = mock_result
 
         result = evaluate._run_evaluation(
             [sample_case_operator],
@@ -748,7 +887,7 @@ class TestRunSerial:
             custom_param="test",
         )
 
-        call_args = mock_compute_case_operator.call_args
+        call_args = mock_compute_case_operator_results.call_args
         assert call_args[0][0] == sample_case_operator
         assert call_args[1]["threshold"] == 0.7
         assert call_args[1]["custom_param"] == "test"
@@ -1247,9 +1386,9 @@ class TestComputeCaseOperatorWithProgress:
         def fake_compute(case_operator, cache_dir=None, **kwargs):
             logging.getLogger("extremeweatherbench.derived").warning("worker warn")
             warnings.warn("worker user warning", RuntimeWarning)
-            return pd.DataFrame({"value": [1.0]})
+            return [_annotated_result(value=1.0)]
 
-        monkeypatch.setattr(evaluate, "compute_case_operator", fake_compute)
+        monkeypatch.setattr(evaluate, "_compute_case_operator_results", fake_compute)
 
         evaluate._compute_case_operator_with_progress(
             sample_case_operator,
@@ -1277,7 +1416,7 @@ class TestComputeCaseOperatorWithProgress:
         def failing_compute(case_operator, cache_dir=None, **kwargs):
             raise ValueError("boom")
 
-        monkeypatch.setattr(evaluate, "compute_case_operator", failing_compute)
+        monkeypatch.setattr(evaluate, "_compute_case_operator_results", failing_compute)
 
         with pytest.raises(ValueError):
             evaluate._compute_case_operator_with_progress(
@@ -1300,9 +1439,9 @@ class TestComputeCaseOperatorWithProgress:
 
         def fake_compute(case_operator, cache_dir=None, **kwargs):
             seen_handlers.append(root.handlers[:])
-            return pd.DataFrame({"value": [1.0]})
+            return [_annotated_result(value=1.0)]
 
-        monkeypatch.setattr(evaluate, "compute_case_operator", fake_compute)
+        monkeypatch.setattr(evaluate, "_compute_case_operator_results", fake_compute)
 
         evaluate._compute_case_operator_with_progress(
             sample_case_operator,
@@ -1387,9 +1526,9 @@ class TestComputeCaseOperatorWithProgress:
 
         def fake_compute(case_operator, cache_dir=None, **kwargs):
             evaluate.progress_module.set_phase("target pipeline")
-            return pd.DataFrame({"value": [1.0]})
+            return [_annotated_result(value=1.0)]
 
-        monkeypatch.setattr(evaluate, "compute_case_operator", fake_compute)
+        monkeypatch.setattr(evaluate, "_compute_case_operator_results", fake_compute)
 
         evaluate._compute_case_operator_with_progress(
             case_operator, cache_dir=None, event_queue=event_queue, dispatch_id=0
@@ -1410,7 +1549,7 @@ class TestComputeCaseOperator:
 
     @mock.patch("extremeweatherbench.evaluate._build_datasets")
     @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
-    @mock.patch("extremeweatherbench.evaluate._evaluate_metric_and_return_df")
+    @mock.patch("extremeweatherbench.evaluate._evaluate_metric")
     def test_compute_case_operator_basic(
         self,
         mock_evaluate_metric,
@@ -1430,13 +1569,7 @@ class TestComputeCaseOperator:
             lambda ds, variables, **kwargs: ds  # Return unchanged
         )
 
-        mock_result = pd.DataFrame(
-            {
-                "value": [1.0],
-                "metric": ["MockMetric"],
-                "case_id_number": [1],
-            }
-        )
+        mock_result = _annotated_result(metric="MockMetric", case_id_number=1)
         mock_evaluate_metric.return_value = mock_result
 
         # Setup the case operator mocks
@@ -1449,6 +1582,9 @@ class TestComputeCaseOperator:
 
         mock_build_datasets.assert_called_once_with(sample_case_operator)
         assert isinstance(result, pd.DataFrame)
+        assert list(result.columns) == evaluate.OUTPUT_COLUMNS
+        assert result["metric"].iloc[0] == "MockMetric"
+        assert result["case_id_number"].iloc[0] == 1
 
     @mock.patch("extremeweatherbench.evaluate._build_datasets")
     @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
@@ -1493,9 +1629,9 @@ class TestComputeCaseOperator:
             ]
 
             with mock.patch(
-                "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
+                "extremeweatherbench.evaluate._evaluate_metric"
             ) as mock_evaluate:
-                mock_evaluate.return_value = pd.DataFrame({"value": [1.0]})
+                mock_evaluate.return_value = _annotated_result()
 
                 result = evaluate.compute_case_operator(
                     sample_case_operator, cache_dir=cache_dir
@@ -1543,9 +1679,9 @@ class TestComputeCaseOperator:
             mock_derive.side_effect = lambda ds, variables, **kwargs: ds
 
             with mock.patch(
-                "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
+                "extremeweatherbench.evaluate._evaluate_metric"
             ) as mock_evaluate:
-                mock_evaluate.return_value = pd.DataFrame({"value": [1.0]})
+                mock_evaluate.return_value = _annotated_result()
 
                 result = evaluate.compute_case_operator(sample_case_operator)
 
@@ -1632,6 +1768,93 @@ class TestComputeCaseOperator:
         assert list(result.columns) == evaluate.OUTPUT_COLUMNS
 
         mock_build_datasets.assert_called_once_with(sample_case_operator)
+
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
+    def test_compute_case_operator_results_zero_length_dataset_returns_empty_list(
+        self, mock_build_datasets, sample_case_operator
+    ):
+        """_compute_case_operator_results returns [] for zero-length dims."""
+        empty_forecast_ds = xr.Dataset(coords={"valid_time": pd.DatetimeIndex([])})
+        empty_target_ds = xr.Dataset(coords={"valid_time": pd.DatetimeIndex([])})
+        mock_build_datasets.return_value = (empty_forecast_ds, empty_target_ds)
+
+        result = evaluate._compute_case_operator_results(sample_case_operator)
+
+        assert result == []
+
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
+    def test_compute_case_operator_results_dimensionless_dataset_returns_empty_list(
+        self, mock_build_datasets, sample_case_operator
+    ):
+        """_compute_case_operator_results returns [] for dimensionless data."""
+        empty_forecast_ds = xr.Dataset()
+        empty_target_ds = xr.Dataset()
+        mock_build_datasets.return_value = (empty_forecast_ds, empty_target_ds)
+
+        result = evaluate._compute_case_operator_results(sample_case_operator)
+
+        assert result == []
+
+
+class TestComputeCaseOperatorOutputFormat:
+    """Test the output_format kwarg on compute_case_operator."""
+
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
+    @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
+    @mock.patch("extremeweatherbench.evaluate._evaluate_metric")
+    def test_output_format_xarray_returns_dataset(
+        self,
+        mock_evaluate_metric,
+        mock_derive_variables,
+        mock_build_datasets,
+        sample_case_operator,
+        sample_forecast_dataset,
+        sample_target_dataset,
+    ):
+        mock_build_datasets.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+        mock_derive_variables.side_effect = lambda ds, variables, **kwargs: ds
+        mock_evaluate_metric.return_value = _fully_annotated_result()
+        sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+
+        result = evaluate.compute_case_operator(
+            sample_case_operator, output_format="xarray"
+        )
+
+        assert isinstance(result, xr.Dataset)
+
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
+    @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
+    @mock.patch("extremeweatherbench.evaluate._evaluate_metric")
+    def test_unknown_output_format_raises_value_error(
+        self,
+        mock_evaluate_metric,
+        mock_derive_variables,
+        mock_build_datasets,
+        sample_case_operator,
+        sample_forecast_dataset,
+        sample_target_dataset,
+    ):
+        mock_build_datasets.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+        mock_derive_variables.side_effect = lambda ds, variables, **kwargs: ds
+        mock_evaluate_metric.return_value = _annotated_result(
+            metric="MockMetric", case_id_number=1
+        )
+        sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+
+        with pytest.raises(ValueError, match="pandas"):
+            evaluate.compute_case_operator(sample_case_operator, output_format="csv")
 
 
 class TestPipelineFunctions:
@@ -1903,21 +2126,21 @@ class TestPipelineFunctions:
 class TestMetricEvaluation:
     """Test metric evaluation functionality."""
 
-    def test_evaluate_metric_and_return_df(
+    def test_evaluate_metric(
         self,
         sample_forecast_dataset,
         sample_target_dataset,
         sample_case_operator,
         mock_base_metric,
     ):
-        """Test _evaluate_metric_and_return_df function."""
+        """Test _evaluate_metric function."""
         # Setup the metric mock
         mock_result = xr.DataArray(
             data=[1.5], dims=["lead_time"], coords={"lead_time": [0]}
         )
         mock_base_metric.name = "TestMetric"
         mock_base_metric.compute_metric.return_value = mock_result
-        result = evaluate._evaluate_metric_and_return_df(
+        result = evaluate._evaluate_metric(
             forecast_ds=sample_forecast_dataset,
             target_ds=sample_target_dataset,
             forecast_variable="surface_air_temperature",
@@ -1926,30 +2149,29 @@ class TestMetricEvaluation:
             case_operator=sample_case_operator,
         )
 
-        assert isinstance(result, pd.DataFrame)
-        assert "value" in result.columns
-        assert "metric" in result.columns
-        assert "case_id_number" in result.columns
-        assert "event_type" in result.columns
-        assert result["metric"].iloc[0] == "TestMetric"
-        assert result["case_id_number"].iloc[0] == 1
-        assert result["event_type"].iloc[0] == "heat_wave"
+        assert isinstance(result, xr.DataArray)
+        assert "metric" in result.coords
+        assert "case_id_number" in result.coords
+        assert "event_type" in result.coords
+        assert result.coords["metric"].item() == "TestMetric"
+        assert result.coords["case_id_number"].item() == 1
+        assert result.coords["event_type"].item() == "heat_wave"
 
-    def test_evaluate_metric_and_return_df_with_kwargs(
+    def test_evaluate_metric_with_kwargs(
         self,
         sample_forecast_dataset,
         sample_target_dataset,
         sample_case_operator,
         mock_base_metric,
     ):
-        """Test _evaluate_metric_and_return_df with additional kwargs."""
+        """Test _evaluate_metric with additional kwargs."""
         mock_result = xr.DataArray(
             data=[2.0], dims=["lead_time"], coords={"lead_time": [6]}
         )
         mock_base_metric.name = "TestMetric"
         mock_base_metric.compute_metric.return_value = mock_result
 
-        evaluate._evaluate_metric_and_return_df(
+        evaluate._evaluate_metric(
             forecast_ds=sample_forecast_dataset,
             target_ds=sample_target_dataset,
             forecast_variable="surface_air_temperature",
@@ -1965,10 +2187,10 @@ class TestMetricEvaluation:
         assert "threshold" in call_kwargs
         assert call_kwargs["threshold"] == 0.5
 
-    def test_evaluate_metric_and_return_df_with_derived_variables(
+    def test_evaluate_metric_with_derived_variables(
         self, mock_base_metric, sample_case_operator
     ):
-        """Test _evaluate_metric_and_return_df with derived variables."""
+        """Test _evaluate_metric with derived variables."""
         # Create datasets with derived variables included
         forecast_ds = xr.Dataset(
             {
@@ -2016,7 +2238,7 @@ class TestMetricEvaluation:
         mock_base_metric.name = "TestDerivedMetric"
         mock_base_metric.compute_metric.return_value = mock_result
 
-        result = evaluate._evaluate_metric_and_return_df(
+        result = evaluate._evaluate_metric(
             forecast_ds=forecast_ds,
             target_ds=target_ds,
             forecast_variable="derived_forecast_var",
@@ -2026,18 +2248,17 @@ class TestMetricEvaluation:
         )
 
         # Verify the result structure
-        assert isinstance(result, pd.DataFrame)
-        assert "value" in result.columns
-        assert "metric" in result.columns
-        assert "target_variable" in result.columns
-        assert "case_id_number" in result.columns
-        assert "event_type" in result.columns
+        assert isinstance(result, xr.DataArray)
+        assert "metric" in result.coords
+        assert "target_variable" in result.coords
+        assert "case_id_number" in result.coords
+        assert "event_type" in result.coords
 
         # Check the values
-        assert result["metric"].iloc[0] == "TestDerivedMetric"
-        assert result["case_id_number"].iloc[0] == 1
-        assert result["event_type"].iloc[0] == "heat_wave"
-        assert result["value"].iloc[0] == 2.5
+        assert result.coords["metric"].item() == "TestDerivedMetric"
+        assert result.coords["case_id_number"].item() == 1
+        assert result.coords["event_type"].item() == "heat_wave"
+        assert result.item() == 2.5
 
         # Verify that compute_metric was called with the derived variables
         mock_base_metric.compute_metric.assert_called_once()
@@ -2104,7 +2325,7 @@ class TestErrorHandling:
         )
 
         with pytest.raises(Exception, match="Metric computation failed"):
-            evaluate._evaluate_metric_and_return_df(
+            evaluate._evaluate_metric(
                 forecast_ds=sample_forecast_dataset,
                 target_ds=sample_target_dataset,
                 forecast_variable="surface_air_temperature",
@@ -2113,14 +2334,16 @@ class TestErrorHandling:
                 case_operator=sample_case_operator,
             )
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_case_operator_results")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_evaluation_serial_exception(
-        self, mock_tqdm, mock_compute_case_operator, sample_case_operator
+        self, mock_tqdm, mock_compute_case_operator_results, sample_case_operator
     ):
         """Test _run_evaluation handles exceptions in serial execution."""
         mock_tqdm.return_value = [sample_case_operator]
-        mock_compute_case_operator.side_effect = Exception("Serial execution failed")
+        mock_compute_case_operator_results.side_effect = Exception(
+            "Serial execution failed"
+        )
 
         with pytest.raises(Exception, match="Serial execution failed"):
             # Serial mode: don't pass parallel_config
@@ -2141,14 +2364,16 @@ class TestErrorHandling:
                 parallel_config={"backend": "threading", "n_jobs": 2},
             )
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_case_operator_results")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_serial_evaluation_case_operator_exception(
-        self, mock_tqdm, mock_compute_case_operator, sample_case_operator
+        self, mock_tqdm, mock_compute_case_operator_results, sample_case_operator
     ):
         """Test serial execution handles exceptions from individual case operators."""
         mock_tqdm.return_value = [sample_case_operator]
-        mock_compute_case_operator.side_effect = Exception("Case operator failed")
+        mock_compute_case_operator_results.side_effect = Exception(
+            "Case operator failed"
+        )
 
         with pytest.raises(Exception, match="Case operator failed"):
             evaluate._run_evaluation([sample_case_operator], parallel_config=None)
@@ -2216,10 +2441,10 @@ class TestErrorHandling:
         with pytest.raises(Exception, match="Execution failed"):
             ewb.run_evaluation()
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_case_operator_results")
     @mock.patch("tqdm.auto.tqdm")
     def test_run_serial_evaluation_partial_failure(
-        self, mock_tqdm, mock_compute_case_operator
+        self, mock_tqdm, mock_compute_case_operator_results
     ):
         """Test serial execution behavior when some case operators fail."""
         case_op_1 = mock.Mock()
@@ -2233,10 +2458,10 @@ class TestErrorHandling:
         mock_tqdm.return_value = case_operators
 
         # First succeeds, second fails, third never reached
-        mock_compute_case_operator.side_effect = [
-            pd.DataFrame({"value": [1.0], "case_id_number": [1]}),
+        mock_compute_case_operator_results.side_effect = [
+            [_annotated_result(value=1.0, case_id_number=1)],
             Exception("Case operator 2 failed"),
-            pd.DataFrame({"value": [3.0], "case_id_number": [3]}),
+            [_annotated_result(value=3.0, case_id_number=3)],
         ]
 
         # Should fail on the second case operator
@@ -2244,7 +2469,7 @@ class TestErrorHandling:
             evaluate._run_evaluation(case_operators, parallel_config=None)
 
         # Should have tried only the first two
-        assert mock_compute_case_operator.call_count == 2
+        assert mock_compute_case_operator_results.call_count == 2
 
     @mock.patch("extremeweatherbench.utils.ParallelTqdm")
     @mock.patch("joblib.delayed")
@@ -2320,23 +2545,19 @@ class TestIntegration:
             sample_target_dataset
         )
 
-        # Mock the metric evaluation to return a proper DataFrame
-        mock_result_df = pd.DataFrame(
-            {
-                "value": [1.0],
-                "target_variable": ["2m_temperature"],
-                "metric": ["MockMetric"],
-                "target_source": ["test_target"],
-                "forecast_source": ["test_forecast"],
-                "case_id_number": [1],
-                "event_type": ["heat_wave"],
-            }
+        # Mock the metric evaluation to return a proper annotated result
+        mock_result = _annotated_result(
+            value=1.0,
+            target_variable="2m_temperature",
+            metric="MockMetric",
+            target_source="test_target",
+            forecast_source="test_forecast",
+            case_id_number=1,
+            event_type="heat_wave",
         )
 
-        with mock.patch(
-            "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
-        ) as mock_eval:
-            mock_eval.return_value = mock_result_df
+        with mock.patch("extremeweatherbench.evaluate._evaluate_metric") as mock_eval:
+            mock_eval.return_value = mock_result
 
             # Create and run the workflow
             ewb = evaluate.ExtremeWeatherBench(
@@ -2420,17 +2641,15 @@ class TestIntegration:
             sample_target_dataset,
         )
 
-        # Mock the metric evaluation to return proper DataFrames
-        mock_result_df = pd.DataFrame(
-            {
-                "value": [1.0],
-                "target_variable": ["2m_temperature"],
-                "metric": ["TestMetric"],
-                "target_source": ["test_target"],
-                "forecast_source": ["test_forecast"],
-                "case_id_number": [1],
-                "event_type": ["heat_wave"],
-            }
+        # Mock the metric evaluation to return proper annotated results
+        mock_result = _annotated_result(
+            value=1.0,
+            target_variable="2m_temperature",
+            metric="TestMetric",
+            target_source="test_target",
+            forecast_source="test_forecast",
+            case_id_number=1,
+            event_type="heat_wave",
         )
 
         with mock.patch(
@@ -2439,9 +2658,9 @@ class TestIntegration:
             mock_derive.side_effect = lambda ds, variables, **kwargs: ds
 
             with mock.patch(
-                "extremeweatherbench.evaluate._evaluate_metric_and_return_df"
+                "extremeweatherbench.evaluate._evaluate_metric"
             ) as mock_eval:
-                mock_eval.return_value = mock_result_df
+                mock_eval.return_value = mock_result
 
                 ewb = evaluate.ExtremeWeatherBench(
                     case_metadata=sample_cases_list,
@@ -2453,9 +2672,12 @@ class TestIntegration:
                 # Should have results for each metric combination
                 assert len(result) >= 2  # At least 2 metrics * 1 case
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_case_operator_results")
     def test_serial_vs_parallel_results_consistency(
-        self, mock_compute_case_operator, sample_cases_list, sample_evaluation_object
+        self,
+        mock_compute_case_operator_results,
+        sample_cases_list,
+        sample_evaluation_object,
     ):
         """Test that serial and parallel execution produce identical results."""
         # Setup mock case operators
@@ -2466,22 +2688,22 @@ class TestIntegration:
         case_operators = [case_op_1, case_op_2]
 
         # Define consistent results
-        result_1 = pd.DataFrame(
-            {
-                "value": [1.5],
-                "metric": ["TestMetric"],
-                "case_id_number": [1],
-                "event_type": ["heat_wave"],
-            }
-        )
-        result_2 = pd.DataFrame(
-            {
-                "value": [2.3],
-                "metric": ["TestMetric"],
-                "case_id_number": [2],
-                "event_type": ["heat_wave"],
-            }
-        )
+        result_1 = [
+            _annotated_result(
+                value=1.5,
+                metric="TestMetric",
+                case_id_number=1,
+                event_type="heat_wave",
+            )
+        ]
+        result_2 = [
+            _annotated_result(
+                value=2.3,
+                metric="TestMetric",
+                case_id_number=2,
+                event_type="heat_wave",
+            )
+        ]
 
         ewb = evaluate.ExtremeWeatherBench(
             case_metadata=sample_cases_list,
@@ -2492,15 +2714,15 @@ class TestIntegration:
             mock_build.return_value = case_operators
 
             # Test serial execution
-            mock_compute_case_operator.side_effect = [result_1, result_2]
+            mock_compute_case_operator_results.side_effect = [result_1, result_2]
             serial_result = ewb.run_evaluation(n_jobs=1)
 
             # Reset mock and test parallel execution. Threading (rather than
             # the default loky) keeps this in-process, since the mocked
-            # compute_case_operator can't be pickled across process
-            # boundaries by the progress-reporting wrapper.
-            mock_compute_case_operator.reset_mock()
-            mock_compute_case_operator.side_effect = [result_1, result_2]
+            # compute results can't be pickled across process boundaries by
+            # the progress-reporting wrapper.
+            mock_compute_case_operator_results.reset_mock()
+            mock_compute_case_operator_results.side_effect = [result_1, result_2]
             parallel_result = ewb.run_evaluation(
                 parallel_config={"backend": "threading", "n_jobs": 2}
             )
@@ -2512,10 +2734,10 @@ class TestIntegration:
             assert len(parallel_result) == 2
             assert list(serial_result.columns) == list(parallel_result.columns)
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_case_operator_results")
     @mock.patch("tqdm.auto.tqdm")
     def test_execution_method_performance_comparison(
-        self, mock_tqdm, mock_compute_case_operator
+        self, mock_tqdm, mock_compute_case_operator_results
     ):
         """Test that both execution methods handle the same workload."""
         import time
@@ -2528,27 +2750,27 @@ class TestIntegration:
 
         # Mock results
         mock_results = [
-            pd.DataFrame(
-                {
-                    "value": [i * 0.1],
-                    "metric": ["TestMetric"],
-                    "case_id_number": [i],
-                    "event_type": ["heat_wave"],
-                }
-            )
+            [
+                _annotated_result(
+                    value=i * 0.1,
+                    metric="TestMetric",
+                    case_id_number=i,
+                    event_type="heat_wave",
+                )
+            ]
             for i in range(10)
         ]
 
         # Test serial execution timing - call _run_evaluation in serial mode
-        mock_compute_case_operator.side_effect = mock_results
+        mock_compute_case_operator_results.side_effect = mock_results
         start_time = time.time()
         serial_result = evaluate._run_evaluation(case_operators, parallel_config=None)
         serial_time = time.time() - start_time
 
         # Test parallel execution timing - call _run_parallel_evaluation directly with mocked
         # Parallel
-        serial_call_count = mock_compute_case_operator.call_count
-        mock_compute_case_operator.side_effect = mock_results
+        serial_call_count = mock_compute_case_operator_results.call_count
+        mock_compute_case_operator_results.side_effect = mock_results
 
         with mock.patch(
             "extremeweatherbench.utils.ParallelTqdm"
@@ -2569,22 +2791,24 @@ class TestIntegration:
         # Serial execution should have called compute_case_operator
         assert serial_call_count == 10  # Serial execution
         # Parallel execution is mocked, so the call count doesn't increase
-        assert mock_compute_case_operator.call_count == 10  # Only serial calls
+        assert mock_compute_case_operator_results.call_count == 10  # Only serial calls
         # Verify timing variables are used (avoid unused variable warnings)
         assert serial_time >= 0
         assert parallel_time >= 0
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_case_operator_results")
     @mock.patch("tqdm.auto.tqdm")
-    def test_mixed_execution_parameters(self, mock_tqdm, mock_compute_case_operator):
+    def test_mixed_execution_parameters(
+        self, mock_tqdm, mock_compute_case_operator_results
+    ):
         """Test various parameter combinations for execution methods."""
         case_operators = [mock.Mock(), mock.Mock()]
         for case_operator in case_operators:
             case_operator.metric_list = []
         mock_tqdm.return_value = case_operators
         mock_results = [
-            pd.DataFrame({"value": [1.0], "case_id_number": [1]}),
-            pd.DataFrame({"value": [2.0], "case_id_number": [2]}),
+            [_annotated_result(value=1.0, case_id_number=1)],
+            [_annotated_result(value=2.0, case_id_number=2)],
         ]
 
         # Test different execution methods directly
@@ -2600,15 +2824,15 @@ class TestIntegration:
         ]
 
         for config in test_configs:
-            mock_compute_case_operator.reset_mock()
-            mock_compute_case_operator.side_effect = mock_results
+            mock_compute_case_operator_results.reset_mock()
+            mock_compute_case_operator_results.side_effect = mock_results
 
             if config["method"] == "serial":
                 result = evaluate._run_evaluation(*config["args"], parallel_config=None)
                 # All configurations should produce valid results
                 assert isinstance(result, list)
                 assert len(result) == 2
-                assert mock_compute_case_operator.call_count == 2
+                assert mock_compute_case_operator_results.call_count == 2
             else:
                 # Mock parallel execution to avoid serialization issues
                 with mock.patch(
@@ -2634,26 +2858,26 @@ class TestIntegration:
                     # All configurations should produce valid results
                     assert isinstance(result, list)
                     assert len(result) == 2
-                    # Parallel execution is mocked, so compute_case_operator is not
-                    # called
-                    assert mock_compute_case_operator.call_count == 0
+                    # Parallel execution is mocked, so compute results are not
+                    # gathered via the serial path
+                    assert mock_compute_case_operator_results.call_count == 0
 
     def test_execution_method_kwargs_propagation(self):
         """Test that kwargs are properly propagated through execution methods."""
         case_operator = mock.Mock()
         case_operator.metric_list = []
 
-        # Mock compute_case_operator to capture kwargs
+        # Mock _compute_case_operator_results to capture kwargs
         def mock_compute_with_kwargs(case_op, cache_dir, **kwargs):
             # Store kwargs for verification
             mock_compute_with_kwargs.captured_kwargs = kwargs
-            return pd.DataFrame({"value": [1.0]})
+            return [_annotated_result(value=1.0)]
 
         mock_compute_with_kwargs.captured_kwargs = {}
 
         with (
             mock.patch(
-                "extremeweatherbench.evaluate.compute_case_operator",
+                "extremeweatherbench.evaluate._compute_case_operator_results",
                 side_effect=mock_compute_with_kwargs,
             ),
             mock.patch("tqdm.auto.tqdm", return_value=[case_operator]),
@@ -2681,7 +2905,9 @@ class TestIntegration:
                 mock_delayed.return_value = mock_compute_with_kwargs
                 mock_parallel_instance = mock.Mock()
                 mock_parallel_class.return_value = mock_parallel_instance
-                mock_parallel_instance.return_value = [pd.DataFrame({"value": [1.0]})]
+                mock_parallel_instance.return_value = [
+                    [_annotated_result(value=1.0)]
+                ]
 
                 # Reset captured kwargs
                 mock_compute_with_kwargs.captured_kwargs = {}
@@ -2727,10 +2953,10 @@ class TestIntegration:
             )
             assert result == []
 
-    @mock.patch("extremeweatherbench.evaluate.compute_case_operator")
+    @mock.patch("extremeweatherbench.evaluate._compute_case_operator_results")
     @mock.patch("tqdm.auto.tqdm")
     def test_large_case_operator_list_handling(
-        self, mock_tqdm, mock_compute_case_operator
+        self, mock_tqdm, mock_compute_case_operator_results
     ):
         """Test handling of large numbers of case operators."""
         # Create a large list of case operators
@@ -2742,22 +2968,20 @@ class TestIntegration:
 
         # Create mock results
         mock_results = [
-            pd.DataFrame(
-                {"value": [i * 0.01], "case_id_number": [i], "metric": ["TestMetric"]}
-            )
+            [_annotated_result(value=i * 0.01, case_id_number=i, metric="TestMetric")]
             for i in range(num_cases)
         ]
 
         # Test serial execution
-        mock_compute_case_operator.side_effect = mock_results
+        mock_compute_case_operator_results.side_effect = mock_results
         serial_results = evaluate._run_evaluation(case_operators, parallel_config=None)
 
         assert len(serial_results) == num_cases
-        assert mock_compute_case_operator.call_count == num_cases
+        assert mock_compute_case_operator_results.call_count == num_cases
 
         # Test parallel execution
-        mock_compute_case_operator.reset_mock()
-        mock_compute_case_operator.side_effect = mock_results
+        mock_compute_case_operator_results.reset_mock()
+        mock_compute_case_operator_results.side_effect = mock_results
 
         with mock.patch(
             "extremeweatherbench.utils.ParallelTqdm"

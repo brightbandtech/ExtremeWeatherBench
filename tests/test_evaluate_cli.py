@@ -6,6 +6,7 @@ from unittest import mock
 
 import pandas as pd
 import pytest
+import xarray as xr
 
 from extremeweatherbench import evaluate_cli
 
@@ -211,6 +212,8 @@ class TestParallelExecution:
             n_jobs=3,
             parallel_config=None,
             progress=True,
+            output_format="pandas",
+            sparse=False,
         )
 
     @mock.patch(
@@ -445,6 +448,306 @@ class TestResultsSaving:
 
         assert result.exit_code == 0
         # Output suppressed - only check exit code
+
+
+def _sample_results_dataset():
+    """Build a small flat results Dataset matching the run's output shape."""
+    return xr.Dataset(
+        {"surface_air_temperature": (("case_id_number", "metric"), [[1.5, 2.3]])},
+        coords={
+            "case_id_number": [1],
+            "metric": ["rmse", "mae"],
+            "event_type": ("case_id_number", ["heat_wave"]),
+        },
+    )
+
+
+class TestOutputFormats:
+    """Test --output-format and --sparse CLI options."""
+
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    @mock.patch("extremeweatherbench.evaluate_cli.outputs.write_results")
+    def test_default_output_format_writes_csv(
+        self,
+        mock_write_results,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
+    ):
+        """Test that omitting --output-format still writes a csv via csv path."""
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = []
+        mock_ewb.run_evaluation.return_value = pd.DataFrame({"value": [1.0]})
+        mock_ewb_class.return_value = mock_ewb
+        mock_load_cases.return_value = []
+
+        result = runner.invoke(
+            evaluate_cli.cli_runner, ["--default", "--output-dir", str(temp_config_dir)]
+        )
+
+        assert result.exit_code == 0
+        mock_ewb.run_evaluation.assert_called_once_with(
+            n_jobs=1,
+            parallel_config=None,
+            progress=True,
+            output_format="pandas",
+            sparse=False,
+        )
+        mock_write_results.assert_called_once()
+        args, kwargs = mock_write_results.call_args
+        assert str(args[1]).endswith("evaluation_results.csv")
+        assert args[2] == "csv"
+
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    @mock.patch("extremeweatherbench.evaluate_cli.outputs.write_results")
+    def test_explicit_csv_output_format(
+        self,
+        mock_write_results,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
+    ):
+        """Test that --output-format csv writes the same csv filename."""
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = []
+        mock_ewb.run_evaluation.return_value = pd.DataFrame({"value": [1.0]})
+        mock_ewb_class.return_value = mock_ewb
+        mock_load_cases.return_value = []
+
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            [
+                "--default",
+                "--output-dir",
+                str(temp_config_dir),
+                "--output-format",
+                "csv",
+            ],
+        )
+
+        assert result.exit_code == 0
+        args, kwargs = mock_write_results.call_args
+        assert str(args[1]).endswith("evaluation_results.csv")
+        assert args[2] == "csv"
+
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    def test_netcdf_output_format_writes_real_file(
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
+    ):
+        """Test --output-format netcdf writes a reopenable .nc file."""
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = []
+        mock_ewb.run_evaluation.return_value = _sample_results_dataset()
+        mock_ewb_class.return_value = mock_ewb
+        mock_load_cases.return_value = []
+
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            [
+                "--default",
+                "--output-dir",
+                str(temp_config_dir),
+                "--output-format",
+                "netcdf",
+            ],
+        )
+
+        assert result.exit_code == 0
+        mock_ewb.run_evaluation.assert_called_once_with(
+            n_jobs=1,
+            parallel_config=None,
+            progress=True,
+            output_format="xarray",
+            sparse=False,
+        )
+
+        output_file = temp_config_dir / "evaluation_results.nc"
+        assert output_file.exists()
+        with xr.open_dataset(output_file) as reopened:
+            assert list(reopened["case_id_number"].values) == [1]
+            assert reopened["surface_air_temperature"].values.tolist() == [[1.5, 2.3]]
+
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    def test_zarr_output_format_writes_real_store(
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
+    ):
+        """Test --output-format zarr writes a reopenable .zarr store."""
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = []
+        mock_ewb.run_evaluation.return_value = _sample_results_dataset()
+        mock_ewb_class.return_value = mock_ewb
+        mock_load_cases.return_value = []
+
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            [
+                "--default",
+                "--output-dir",
+                str(temp_config_dir),
+                "--output-format",
+                "zarr",
+            ],
+        )
+
+        assert result.exit_code == 0
+        output_store = temp_config_dir / "evaluation_results.zarr"
+        assert output_store.exists()
+        with xr.open_zarr(output_store) as reopened:
+            assert list(reopened["case_id_number"].values) == [1]
+
+    def test_sparse_with_csv_raises_usage_error(self, runner):
+        """Test --sparse with --output-format csv fails with a usage error."""
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            ["--default", "--output-format", "csv", "--sparse"],
+        )
+
+        assert result.exit_code != 0
+        assert "--sparse" in result.output
+
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    @mock.patch("extremeweatherbench.evaluate_cli.outputs.write_results")
+    def test_sparse_forwarded_for_netcdf(
+        self,
+        mock_write_results,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
+    ):
+        """Test --sparse is forwarded to run_evaluation for netcdf output."""
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = []
+        mock_ewb.run_evaluation.return_value = _sample_results_dataset()
+        mock_ewb_class.return_value = mock_ewb
+        mock_load_cases.return_value = []
+
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            [
+                "--default",
+                "--output-dir",
+                str(temp_config_dir),
+                "--output-format",
+                "netcdf",
+                "--sparse",
+            ],
+        )
+
+        assert result.exit_code == 0
+        mock_ewb.run_evaluation.assert_called_once_with(
+            n_jobs=1,
+            parallel_config=None,
+            progress=True,
+            output_format="xarray",
+            sparse=True,
+        )
+        args, kwargs = mock_write_results.call_args
+        assert kwargs.get("sparse") is True or args[-1] is True
+
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    def test_empty_dataframe_results_not_written(
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
+    ):
+        """Test the empty-results path is unchanged for output_format csv."""
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = []
+        mock_ewb.run_evaluation.return_value = pd.DataFrame()
+        mock_ewb_class.return_value = mock_ewb
+        mock_load_cases.return_value = []
+
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            ["--default", "--output-dir", str(temp_config_dir)],
+        )
+
+        assert result.exit_code == 0
+        assert not (temp_config_dir / "evaluation_results.csv").exists()
+
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    def test_empty_dataset_results_not_written(
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
+    ):
+        """Test the empty-results path works for an empty xarray Dataset."""
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = []
+        mock_ewb.run_evaluation.return_value = xr.Dataset()
+        mock_ewb_class.return_value = mock_ewb
+        mock_load_cases.return_value = []
+
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            [
+                "--default",
+                "--output-dir",
+                str(temp_config_dir),
+                "--output-format",
+                "netcdf",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert not (temp_config_dir / "evaluation_results.nc").exists()
 
 
 class TestHelperFunctions:

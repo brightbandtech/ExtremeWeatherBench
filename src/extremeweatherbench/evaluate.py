@@ -17,25 +17,23 @@ import xarray as xr
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 import extremeweatherbench.progress as progress_module
-from extremeweatherbench import cases, derived, inputs, metrics, sources, utils
+from extremeweatherbench import (
+    cases,
+    derived,
+    inputs,
+    metrics,
+    outputs,
+    sources,
+    utils,
+)
 
 if TYPE_CHECKING:
     from extremeweatherbench import regions
 
 logger = logging.getLogger(__name__)
 
-# Columns for the evaluation output dataframe
-OUTPUT_COLUMNS = [
-    "value",
-    "lead_time",
-    "init_time",
-    "target_variable",
-    "metric",
-    "forecast_source",
-    "target_source",
-    "case_id_number",
-    "event_type",
-]
+# Re-exported for backwards compatibility.
+OUTPUT_COLUMNS = outputs.OUTPUT_COLUMNS
 
 
 class ExtremeWeatherBench:
@@ -101,8 +99,10 @@ class ExtremeWeatherBench:
         n_jobs: int | None = None,
         parallel_config: dict | None = None,
         progress: bool = True,
+        output_format: str = "pandas",
+        sparse: bool = False,
         **kwargs,
-    ) -> pd.DataFrame:
+    ) -> Union[pd.DataFrame, xr.Dataset]:
         """Runs the ExtremeWeatherBench evaluation workflow.
 
         This method will run the evaluation workflow in the order of the case operators,
@@ -117,12 +117,25 @@ class ExtremeWeatherBench:
                 If provided, this takes precedence over n_jobs. If not provided and
                 n_jobs is specified, a default config with the loky backend is used.
             progress: Whether to display progress bars. Defaults to True.
+            output_format: "pandas" for the long-form DataFrame, or "xarray"
+                for the flat Dataset from outputs.results_to_dataset.
+            sparse: Forwarded to outputs.results_to_dataset when
+                output_format is "xarray".
             **kwargs: Additional arguments to pass to compute_case_operator.
         Returns:
-            A concatenated dataframe of the evaluation results.
+            The evaluation results in the requested output_format.
+
+        Raises:
+            ValueError: If output_format is not "pandas" or "xarray".
         """
         logger.warning("The run method is deprecated. Use run_evaluation instead.")
         logger.info("Running ExtremeWeatherBench evaluations...")
+
+        if output_format not in ("pandas", "xarray"):
+            raise ValueError(
+                f"Unknown output_format '{output_format}'. Expected 'pandas' or "
+                "'xarray'."
+            )
 
         # Check for serial or parallel configuration
         parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
@@ -135,20 +148,20 @@ class ExtremeWeatherBench:
             **kwargs,
         )
 
-        # If there are results, concatenate them and return, else return an empty
-        # DataFrame with the expected columns
-        if run_results:
-            return _safe_concat(run_results, ignore_index=True)
-        else:
-            return pd.DataFrame(columns=OUTPUT_COLUMNS)
+        flattened_results = [
+            result for case_results in run_results for result in case_results
+        ]
+        return _convert_results(flattened_results, output_format, sparse=sparse)
 
     def run_evaluation(
         self,
         n_jobs: int | None = None,
         parallel_config: dict | None = None,
         progress: bool = True,
+        output_format: str = "pandas",
+        sparse: bool = False,
         **kwargs,
-    ) -> pd.DataFrame:
+    ) -> Union[pd.DataFrame, xr.Dataset]:
         """Runs the ExtremeWeatherBench evaluation workflow.
 
         This method will run the evaluation workflow in the order of the case operators,
@@ -163,11 +176,24 @@ class ExtremeWeatherBench:
                 If provided, this takes precedence over n_jobs. If not provided and
                 n_jobs is specified, a default config with the loky backend is used.
             progress: Whether to display progress bars. Defaults to True.
+            output_format: "pandas" for the long-form DataFrame, or "xarray"
+                for the flat Dataset from outputs.results_to_dataset.
+            sparse: Forwarded to outputs.results_to_dataset when
+                output_format is "xarray".
             **kwargs: Additional arguments to pass to compute_case_operator.
         Returns:
-            A concatenated dataframe of the evaluation results.
+            The evaluation results in the requested output_format.
+
+        Raises:
+            ValueError: If output_format is not "pandas" or "xarray".
         """
         logger.info("Running ExtremeWeatherBench evaluations...")
+
+        if output_format not in ("pandas", "xarray"):
+            raise ValueError(
+                f"Unknown output_format '{output_format}'. Expected 'pandas' or "
+                "'xarray'."
+            )
 
         # Check for serial or parallel configuration
         parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
@@ -180,12 +206,39 @@ class ExtremeWeatherBench:
             **kwargs,
         )
 
-        # If there are results, concatenate them and return, else return an empty
-        # DataFrame with the expected columns
-        if run_results:
-            return _safe_concat(run_results, ignore_index=True)
-        else:
-            return pd.DataFrame(columns=OUTPUT_COLUMNS)
+        flattened_results = [
+            result for case_results in run_results for result in case_results
+        ]
+        return _convert_results(flattened_results, output_format, sparse=sparse)
+
+
+def _convert_results(
+    results: list[xr.DataArray],
+    output_format: str,
+    sparse: bool = False,
+) -> Union[pd.DataFrame, xr.Dataset]:
+    """Convert a flat list of annotated metric results to output_format.
+
+    Args:
+        results: A flat list of annotated metric results.
+        output_format: "pandas" for the long-form DataFrame, or "xarray"
+            for the flat Dataset from outputs.results_to_dataset.
+        sparse: Forwarded to outputs.results_to_dataset when output_format
+            is "xarray".
+
+    Returns:
+        The results converted to the requested output_format.
+
+    Raises:
+        ValueError: If output_format is not "pandas" or "xarray".
+    """
+    if output_format == "pandas":
+        return outputs.results_to_dataframe(results)
+    if output_format == "xarray":
+        return outputs.results_to_dataset(results, sparse=sparse)
+    raise ValueError(
+        f"Unknown output_format '{output_format}'. Expected 'pandas' or 'xarray'."
+    )
 
 
 def _parallel_serial_config_check(
@@ -235,7 +288,7 @@ def _run_evaluation(
     parallel_config: dict | None = None,
     progress: bool = True,
     **kwargs,
-) -> list[pd.DataFrame]:
+) -> list[list[xr.DataArray]]:
     """Run the case operators in parallel or serial.
 
     Args:
@@ -246,7 +299,7 @@ def _run_evaluation(
         **kwargs: Additional keyword arguments passed to case operators.
 
     Returns:
-        List of result DataFrames.
+        List of per-case-operator lists of annotated metric results.
     """
     with progress_module.captured_warnings(), logging_redirect_tqdm():
         if parallel_config is not None:
@@ -278,7 +331,9 @@ def _run_evaluation(
                     progress_module.register_step_bar(step_bar)
                     try:
                         run_results.append(
-                            compute_case_operator(case_operator, cache_dir, **kwargs)
+                            _compute_case_operator_results(
+                                case_operator, cache_dir, **kwargs
+                            )
                         )
                     finally:
                         progress_module.register_step_bar(None)
@@ -296,7 +351,7 @@ def _run_parallel_evaluation(
     cache_dir: pathlib.Path | None = None,
     progress: bool = True,
     **kwargs,
-) -> list[pd.DataFrame]:
+) -> list[list[xr.DataArray]]:
     """Run the case operators in parallel.
 
     Args:
@@ -307,7 +362,7 @@ def _run_parallel_evaluation(
         **kwargs: Additional arguments, must include 'parallel_config' dict.
 
     Returns:
-        List of result DataFrames.
+        List of per-case-operator lists of annotated metric results.
     """
     if parallel_config.get("n_jobs") is None:
         logger.warning("No number of jobs provided, using joblib backend default.")
@@ -504,8 +559,9 @@ def _count_case_steps(
 def compute_case_operator(
     case_operator: "cases.CaseOperator",
     cache_dir: pathlib.Path | None = None,
+    output_format: str = "pandas",
     **kwargs,
-) -> pd.DataFrame:
+) -> Union[pd.DataFrame, xr.Dataset]:
     """Compute the resulting evaluation of a case operator.
 
     This method will compute the results of a case operator. It validates
@@ -517,9 +573,40 @@ def compute_case_operator(
     Args:
         case_operator: The case operator to compute the results of.
         cache_dir: The directory to cache mid-flight outputs (serial mode).
+        output_format: "pandas" for the long-form DataFrame, or "xarray"
+            for the flat Dataset from outputs.results_to_dataset.
 
     Returns:
-        A pd.DataFrame of results from the case operator.
+        The case operator's results in the requested output_format.
+
+    Raises:
+        TypeError: If any metric is not properly instantiated (i.e. isn't an
+            instance or child class of BaseMetric).
+        ValueError: If output_format is not "pandas" or "xarray".
+    """
+    results = _compute_case_operator_results(case_operator, cache_dir, **kwargs)
+    return _convert_results(results, output_format)
+
+
+def _compute_case_operator_results(
+    case_operator: "cases.CaseOperator",
+    cache_dir: Optional[pathlib.Path] = None,
+    **kwargs,
+) -> list[xr.DataArray]:
+    """Compute the annotated metric results for a case operator.
+
+    This method validates that all metrics are properly instantiated, builds
+    the target and forecast datasets, aligns them, and computes each metric
+    with appropriate variable pairs. Metrics with their own forecast_variable
+    and target_variable use only those variables; metrics without will use
+    all InputBase variable pairs.
+
+    Args:
+        case_operator: The case operator to compute the results of.
+        cache_dir: The directory to cache mid-flight outputs (serial mode).
+
+    Returns:
+        A list of annotated metric result DataArrays.
 
     Raises:
         TypeError: If any metric is not properly instantiated (i.e. isn't an
@@ -547,7 +634,7 @@ def compute_case_operator(
         or len(forecast_ds.sizes) == 0
         or len(target_ds.sizes) == 0
     ):
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+        return []
 
     # spatiotemporally align the target and forecast datasets dependent on the target
     aligned_forecast_ds, aligned_target_ds = (
@@ -568,7 +655,7 @@ def compute_case_operator(
     logger.info(
         "Datasets built for case %s.", case_operator.case_metadata.case_id_number
     )
-    results = []
+    results: list[xr.DataArray] = []
 
     for metric, metrics_to_evaluate, variable_pairs in _plan_metric_evaluations(
         case_operator
@@ -588,7 +675,7 @@ def compute_case_operator(
             # Evaluate each expanded metric
             for single_metric in metrics_to_evaluate:
                 results.append(
-                    _evaluate_metric_and_return_df(
+                    _evaluate_metric(
                         forecast_ds=aligned_forecast_ds,
                         target_ds=aligned_target_ds,
                         forecast_variable=forecast_var,
@@ -604,14 +691,14 @@ def compute_case_operator(
             cache_path = (
                 pathlib.Path(cache_dir) if isinstance(cache_dir, str) else cache_dir
             )
-            concatenated = _safe_concat(results, ignore_index=True)
+            concatenated = outputs.results_to_dataframe(results)
             if not concatenated.empty:
                 concatenated.to_pickle(
                     cache_path
                     / f"case_{case_operator.case_metadata.case_id_number}_results.pkl"
                 )
 
-    return _safe_concat(results, ignore_index=True)
+    return results
 
 
 def _compute_case_operator_with_progress(
@@ -621,7 +708,7 @@ def _compute_case_operator_with_progress(
     log_queue=None,
     dispatch_id=None,
     **kwargs,
-) -> pd.DataFrame:
+) -> list[xr.DataArray]:
     """Compute a case operator, publishing progress to event_queue.
 
     Runs inside a worker process. Falls back to plain computation when no
@@ -641,10 +728,10 @@ def _compute_case_operator_with_progress(
         **kwargs: Additional arguments for compute_case_operator.
 
     Returns:
-        A pd.DataFrame of results from the case operator.
+        A list of annotated metric result DataArrays.
     """
     if event_queue is None:
-        return compute_case_operator(case_operator, cache_dir, **kwargs)
+        return _compute_case_operator_results(case_operator, cache_dir, **kwargs)
 
     case_id = case_operator.case_metadata.case_id_number
     slot_key = dispatch_id if dispatch_id is not None else case_id
@@ -669,7 +756,7 @@ def _compute_case_operator_with_progress(
     )
     try:
         with log_context, progress_module.DaskTaskSink(sink, case_id):
-            return compute_case_operator(case_operator, cache_dir, **kwargs)
+            return _compute_case_operator_results(case_operator, cache_dir, **kwargs)
     finally:
         sink(
             progress_module.ProgressEvent(
@@ -680,26 +767,29 @@ def _compute_case_operator_with_progress(
 
 
 def _extract_standard_metadata(
+    forecast_variable: Union[str, "derived.DerivedVariable"],
     target_variable: Union[str, "derived.DerivedVariable"],
     metric: "metrics.BaseMetric",
     case_operator: "cases.CaseOperator",
 ) -> dict:
-    """Extract standard metadata for output dataframe.
+    """Extract standard metadata for an annotated metric result.
 
     This function centralizes the logic for extracting metadata from the
     evaluation context. Makes it easy to modify how metadata is extracted
     without changing the schema enforcement logic.
 
     Args:
+        forecast_variable: The forecast variable
         target_variable: The target variable
         metric: The metric instance
         case_operator: The CaseOperator holding associated case metadata
 
     Returns:
-        Dictionary of metadata for the output dataframe
+        Dictionary of metadata for the metric result
     """
     return {
         "target_variable": target_variable,
+        "forecast_variable": forecast_variable,
         "metric": metric.name,
         "target_source": case_operator.target.name,
         "forecast_source": case_operator.forecast.name,
@@ -708,62 +798,7 @@ def _extract_standard_metadata(
     }
 
 
-def _ensure_output_schema(df: pd.DataFrame, **metadata) -> pd.DataFrame:
-    """Ensure dataframe conforms to OUTPUT_COLUMNS schema.
-
-    This function adds any provided metadata columns to the dataframe and validates
-    that all OUTPUT_COLUMNS are present. Any missing columns will be filled with NaN
-    and a warning will be logged.
-
-    Args:
-        df: Base dataframe (typically with 'value' column from metric result)
-        **metadata: Key-value pairs for metadata columns (e.g., target_variable='temp')
-
-    Returns:
-        DataFrame with columns matching OUTPUT_COLUMNS specification
-
-    Example:
-        df = _ensure_output_schema(
-            metric_df,
-            target_variable=target_var,
-            metric=metric.name,
-            case_id_number=case_id,
-            event_type=event_type
-        )
-    """
-    # Add metadata columns
-    for col, value in metadata.items():
-        df[col] = value
-
-    # Check for missing columns and warn
-    missing_cols = set(OUTPUT_COLUMNS) - set(df.columns)
-
-    # An output requires one of init_time or lead_time. init_time will be present for a
-    # metric that assesses something in an entire model run, such as the onset error of
-    # an event. Lead_time will be present for a metric that assesses something at a
-    # specific forecast hour, such as RMSE. If neither are present, the output is
-    # invalid, so a metric supplying only one of them is intended behavior. Peak metrics
-    # supply both, because they reduce over a run and then report against the lead time
-    # at which that run verified against the target's extreme.
-    init_time_missing = "init_time" in missing_cols
-    lead_time_missing = "lead_time" in missing_cols
-
-    # Check if exactly one of init_time or lead_time is missing
-    if init_time_missing != lead_time_missing:
-        missing_cols.discard("init_time")
-        missing_cols.discard("lead_time")
-
-    if missing_cols:
-        logger.warning("Missing expected columns: %s.", missing_cols)
-
-    # Ensure all OUTPUT_COLUMNS are present (missing ones will be NaN),
-    # reorder to match OUTPUT_COLUMNS specification, and preserve any
-    # extra columns (e.g. landfall metadata) appended at the end.
-    extra_cols = [c for c in df.columns if c not in OUTPUT_COLUMNS]
-    return df.reindex(columns=OUTPUT_COLUMNS + extra_cols)
-
-
-def _evaluate_metric_and_return_df(
+def _evaluate_metric(
     forecast_ds: xr.Dataset,
     target_ds: xr.Dataset,
     forecast_variable: Union[str, "derived.DerivedVariable"],
@@ -771,8 +806,8 @@ def _evaluate_metric_and_return_df(
     metric: "metrics.BaseMetric",
     case_operator: "cases.CaseOperator",
     **kwargs,
-) -> pd.DataFrame:
-    """Evaluate a metric and return a dataframe of the results.
+) -> xr.DataArray:
+    """Evaluate a metric and return the annotated result.
 
     Args:
         forecast_ds: The forecast dataset.
@@ -785,8 +820,7 @@ def _evaluate_metric_and_return_df(
             computation.
 
     Returns:
-        A dataframe of the results with standard output schema
-        columns.
+        The metric result with standard metadata attached as coords.
     """
 
     # Normalize variables to their string names if needed
@@ -835,12 +869,16 @@ def _evaluate_metric_and_return_df(
         metric_result.data = metric_result.data.map_blocks(
             lambda x: x.maybe_densify(), dtype=metric_result.data.dtype
         )
-    # Convert to DataFrame and add metadata, ensuring OUTPUT_COLUMNS compliance
 
-    df = metric_result.to_dataframe(name="value").reset_index()
     # TODO: add functionality for custom metadata columns
-    metadata = _extract_standard_metadata(target_variable, metric, case_operator)
-    return _ensure_output_schema(df, **metadata)
+    metadata = _extract_standard_metadata(
+        forecast_variable, target_variable, metric, case_operator
+    )
+    annotated_result = outputs.annotate_metric_result(metric_result, **metadata)
+    # Avoid pickling dask graphs back from worker processes.
+    if isinstance(annotated_result.data, da.Array):
+        annotated_result = annotated_result.compute()
+    return annotated_result
 
 
 def _maybe_expand_derived_variable_to_output_variables(
@@ -1097,68 +1135,3 @@ def run_pipeline(
             case_metadata.end_date.strftime("%Y-%m-%d %H:%M:%S"),
         )
         return xr.Dataset()
-
-
-def _safe_concat(
-    dataframes: list[pd.DataFrame], ignore_index: bool = True
-) -> pd.DataFrame:
-    """Safely concatenate DataFrames, filtering out empty ones.
-
-    This function prevents FutureWarnings from pd.concat when dealing with
-    empty or all-NA DataFrames by filtering them out before concatenation.
-    It also handles dtype mismatches by converting to object dtype only when
-    necessary to prevent concatenation warnings.
-
-    Args:
-        dataframes: List of DataFrames to concatenate
-        ignore_index: Whether to ignore index during concatenation
-
-    Returns:
-        Concatenated DataFrame, or empty DataFrame with OUTPUT_COLUMNS if all
-        input DataFrames are empty. Preserves original dtypes when consistent
-        across DataFrames, converts to object dtype only when there are
-        dtype mismatches.
-    """
-    # Filter out problematic DataFrames that would trigger FutureWarning
-    valid_dfs = []
-    for i, df in enumerate(dataframes):
-        # Skip empty DataFrames
-        if df.empty:
-            logger.debug("Skipping empty DataFrame %s", i)
-            continue
-        # Skip DataFrames where all values are NA
-        if df.isna().all().all():
-            logger.debug("Skipping all-NA DataFrame %s", i)
-            continue
-        # Skip DataFrames where all columns are empty/NA
-        if len(df.columns) > 0 and all(df[col].isna().all() for col in df.columns):
-            logger.debug("Skipping DataFrame %s with all-NA columns", i)
-            continue
-
-        valid_dfs.append(df)
-
-    if valid_dfs:
-        # Check for dtype inconsistencies that cause FutureWarning
-        if len(valid_dfs) > 1:
-            # Check if there are dtype mismatches between DataFrames
-            reference_df = valid_dfs[0]
-            has_dtype_mismatch = False
-
-            for df in valid_dfs[1:]:
-                # Check if columns have different dtypes across DataFrames
-                for col in reference_df.columns:
-                    if col in df.columns and reference_df[col].dtype != df[col].dtype:
-                        has_dtype_mismatch = True
-                        break
-                if has_dtype_mismatch:
-                    break
-
-            if has_dtype_mismatch:
-                # Only convert to object dtype if there are mismatches
-                consistent_dfs = [df.astype(object) for df in valid_dfs]
-                return pd.concat(consistent_dfs, ignore_index=ignore_index)
-
-        # No dtype mismatches, concatenate normally
-        return pd.concat(valid_dfs, ignore_index=ignore_index)
-    else:
-        return pd.DataFrame(columns=OUTPUT_COLUMNS)

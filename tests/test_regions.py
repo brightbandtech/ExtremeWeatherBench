@@ -1523,6 +1523,62 @@ class TestRegionSubsetter:
         case_ids = set(subset_results["case_id_number"])
         assert case_ids == {1, 2}
 
+    def test_subset_results_to_region_dataset(self, target_region, sample_cases):
+        """Test subsetting results Dataset by case_id_number."""
+        results_ds = xr.Dataset(
+            {
+                "rmse": (
+                    ("case_id_number", "metric"),
+                    [[0.1, 0.4], [0.2, 0.5], [0.3, 0.6]],
+                )
+            },
+            coords={"case_id_number": [1, 2, 3], "metric": ["mae", "rmse"]},
+        )
+
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
+
+        subset_results = regions.subset_results_to_region(
+            subsetter, results_ds, sample_cases
+        )
+
+        assert isinstance(subset_results, xr.Dataset)
+        assert list(subset_results["case_id_number"].values) == [1, 2]
+        assert subset_results.sizes["metric"] == 2
+
+    def test_subset_results_to_region_dataset_preserves_order(
+        self, target_region, sample_cases
+    ):
+        """Test that Dataset case_id_number ordering is preserved after subsetting."""
+        results_ds = xr.Dataset(
+            {"rmse": (("case_id_number",), [0.3, 0.1, 0.2])},
+            coords={"case_id_number": [3, 1, 2]},
+        )
+
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
+
+        subset_results = regions.subset_results_to_region(
+            subsetter, results_ds, sample_cases
+        )
+
+        assert list(subset_results["case_id_number"].values) == [1, 2]
+
+    def test_subset_results_to_region_dataset_missing_case_id(
+        self, target_region, sample_cases
+    ):
+        """Test Dataset missing an in-region case_id_number doesn't raise."""
+        results_ds = xr.Dataset(
+            {"rmse": (("case_id_number",), [0.1])},
+            coords={"case_id_number": [1]},
+        )
+
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
+
+        subset_results = regions.subset_results_to_region(
+            subsetter, results_ds, sample_cases
+        )
+
+        assert list(subset_results["case_id_number"].values) == [1]
+
     def test_invalid_method_raises_error(self, target_region):
         """Test that invalid method raises ValueError."""
         subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
