@@ -81,9 +81,9 @@ def preprocess_cira_icechunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     Returns:
         The forecast dataset with geopotential thickness.
     """
-    # Calculate the geopotential thickness required for tropical cyclone tracks
     ds["geopotential_thickness"] = (
-        calc.geopotential_thickness(ds["z"], top_level=300, bottom_level=500) / 9.81
+        calc.geopotential_thickness(ds["geopotential"], top_level=300, bottom_level=500)
+        / 9.81
     )
     return ds
 
@@ -172,7 +172,8 @@ def preprocess_cira_kerchunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """
     ds = _set_cira_kerchunk_lead_time(ds)
     ds["geopotential_thickness"] = (
-        calc.geopotential_thickness(ds["z"], top_level=300, bottom_level=500) / 9.81
+        calc.geopotential_thickness(ds["geopotential"], top_level=300, bottom_level=500)
+        / 9.81
     )
     return ds
 
