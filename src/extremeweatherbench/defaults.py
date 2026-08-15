@@ -71,12 +71,6 @@ def preprocess_heatwave_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-def _geopotential_thickness(ds: xr.Dataset) -> xr.DataArray:
-    """300-500 hPa thickness in meters from geopotential or z."""
-    z = ds["geopotential"] if "geopotential" in ds else ds["z"]
-    return calc.geopotential_thickness(z, top_level=300, bottom_level=500) / 9.81
-
-
 def preprocess_cira_icechunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """A preprocess function for CIRA icechunk data that includes geopotential thickness
     calculation required for tropical cyclone tracks.
@@ -87,7 +81,10 @@ def preprocess_cira_icechunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     Returns:
         The forecast dataset with geopotential thickness.
     """
-    ds["geopotential_thickness"] = _geopotential_thickness(ds)
+    ds["geopotential_thickness"] = (
+        calc.geopotential_thickness(ds["geopotential"], top_level=300, bottom_level=500)
+        / 9.81
+    )
     return ds
 
 
@@ -174,7 +171,10 @@ def preprocess_cira_kerchunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
         The renamed forecast dataset.
     """
     ds = _set_cira_kerchunk_lead_time(ds)
-    ds["geopotential_thickness"] = _geopotential_thickness(ds)
+    ds["geopotential_thickness"] = (
+        calc.geopotential_thickness(ds["geopotential"], top_level=300, bottom_level=500)
+        / 9.81
+    )
     return ds
 
 
