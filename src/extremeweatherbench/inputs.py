@@ -714,11 +714,23 @@ class LSR(TargetBase):
         default_factory=lambda: ["report_type"]
     )
 
-    def _open_data_from_source(self) -> IncomingDataInput:
+    def _open_data_from_source(
+        self, case_metadata: Optional["cases.IndividualCase"] = None
+    ) -> IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
-        target_data = pd.read_parquet(self.source, storage_options=self.storage_options)
-
-        return target_data
+        kwargs: dict[str, Any] = {"storage_options": self.storage_options}
+        if case_metadata is not None:
+            kwargs["filters"] = [
+                ("valid_time", ">=", pd.Timestamp(case_metadata.start_date)),
+                ("valid_time", "<=", pd.Timestamp(case_metadata.end_date)),
+            ]
+        try:
+            return pd.read_parquet(self.source, **kwargs)
+        except Exception as exc:
+            if "filters" not in kwargs:
+                raise
+            logger.debug("LSR parquet filters failed (%s); reading full file", exc)
+            return pd.read_parquet(self.source, storage_options=self.storage_options)
 
     def subset_data_to_case(
         self,
