@@ -181,6 +181,162 @@ Running locally is feasible but is typically bottlenecked heavily by IO and netw
 
 The outputs are returned as a pandas DataFrame and can be manipulated in the script, a notebook, etc.
 
+## Xarray Output
+
+`run_evaluation()` defaults to the long-form pandas DataFrame shown above
+(`output_format="pandas"`). Pass `output_format="xarray"` instead to get an
+`xarray.Dataset` with the same information, unflattened:
+
+```python
+outputs = runner.run_evaluation(output_format="xarray")
+```
+
+The Dataset has one dimension per metadata field (`case_id_number`,
+`metric`, `forecast_source`, `target_source`), plus whatever dimensions
+the metrics themselves preserved (`lead_time`, `init_time`, and/or
+spatial dims such as `latitude`, `longitude`, `level`). There is one
+data variable per forecast/target variable pair, named after the
+variable if the forecast and target names match, or
+`f"{forecast_variable}_vs_{target_variable}"` otherwise. `event_type`
+rides along as a non-dim coordinate on `case_id_number` rather than a
+dimension of its own:
+
+```
+<xarray.Dataset> Size: 532B
+Dimensions:                  (lead_time: 4, init_time: 3, metric: 2,
+                              forecast_source: 1, target_source: 1,
+                              case_id_number: 1)
+Coordinates:
+  * lead_time                (lead_time) float64 32B 0.0 6.0 12.0 nan
+  * init_time                (init_time) datetime64[ns] 24B 2021-06-25 ... NaT
+  * metric                   (metric) <U20 160B 'OnsetError' 'RootMeanSquared...
+  * forecast_source          (forecast_source) <U11 44B 'my_forecast'
+  * target_source            (target_source) <U9 36B 'my_target'
+  * case_id_number           (case_id_number) int64 8B 1
+    event_type               (case_id_number) <U9 36B ...
+Data variables:
+    surface_air_temperature  (case_id_number, metric, forecast_source, target_source, init_time, lead_time) float64 ...
+```
+
+### Placeholder labels
+
+Metrics reduce to different dimensions: an RMSE-like metric preserves
+`lead_time`, while a metric like onset or duration error preserves
+`init_time` instead. A flat cube needs a slot for both, so
+`results_to_dataset` pads whichever dimension a given metric's result
+lacks with a single out-of-band placeholder label (`NaT` for
+datetime/timedelta dimensions, `NaN` otherwise). That's why the
+`lead_time` and `init_time` coordinates above each carry one extra,
+otherwise-unused label: it's where results lacking that dimension get
+parked. Peak metrics (e.g. `MaximumMeanAbsoluteError`) are the
+exception: they reduce over a run but report against the lead time at
+which it verified, so their values genuinely occupy both `init_time`
+and `lead_time` rather than needing either one padded. The values are
+correct, and this mirrors the CSV, where an RMSE row already has an
+empty `init_time` column, but selecting a single metric leaves that
+placeholder label behind as an awkward extra row:
+
+```python
+rmse = outputs["surface_air_temperature"].sel(
+    metric="RootMeanSquaredError",
+    forecast_source="my_forecast",
+    target_source="my_target",
+    case_id_number=1,
+)
+```
+```
+<xarray.DataArray 'surface_air_temperature' (init_time: 3, lead_time: 4)> Size: 96B
+array([[       nan,        nan,        nan,        nan],
+       [       nan,        nan,        nan,        nan],
+       [0.41520745, 0.48798442, 0.4550809 ,        nan]])
+Coordinates:
+  * init_time        (init_time) datetime64[ns] 24B 2021-06-25 2021-06-26 NaT
+  * lead_time        (lead_time) float64 32B 0.0 6.0 12.0 nan
+    ...
+```
+
+Use `drop_empty_slices` to collapse it back down to the clean series
+you'd expect: it drops every label along a dimension where the data is
+entirely missing, then drops any dimension left with only a single
+placeholder label remaining.
+
+```python
+from extremeweatherbench import outputs as ewb_outputs
+
+ewb_outputs.drop_empty_slices(rmse)
+```
+```
+<xarray.DataArray 'surface_air_temperature' (lead_time: 3)> Size: 24B
+array([0.41520745, 0.48798442, 0.4550809 ])
+Coordinates:
+  * lead_time        (lead_time) float64 24B 0.0 6.0 12.0
+    ...
+```
+
+`drop_empty_slices` is meant to be used after selecting down to a
+single metric (and typically a single case); on the full, unselected
+Dataset every dimension mixes real and placeholder labels, so nothing
+is entirely missing and it is close to a no-op.
+
+### `sparse=True`
+
+For unaggregated spatial results (e.g. a metric that preserves
+`latitude`/`longitude` per case), the dense, padded hypercube can
+become unmanageably large: every case ends up padding out to the union
+of every other case's spatial grid. Pass `sparse=True` to back the
+Dataset's floating-point and datetime/timedelta data variables with
+`sparse.COO` arrays instead of densifying them:
+
+```python
+outputs = runner.run_evaluation(output_format="xarray", sparse=True)
+```
+
+This also covers a run whose metrics preserve different dimensions on
+the same variable (e.g. `RootMeanSquaredError`'s `lead_time` alongside
+`DurationMeanError`'s `init_time`): `results_to_dataset` builds each
+sparse data variable directly, without materializing the padded
+hypercube or routing `sparse.COO` arrays through `xr.merge`.
+
+Data variables that aren't floating-point, datetime64, or timedelta64
+can't be given a well-defined `sparse.COO` fill value, so they stay
+densely backed even under `sparse=True`. In practice this only
+matters for non-dim coords promoted to data variables by metrics like
+landfall displacement: `forecast_landfall_latitude`/`_longitude`/
+`_valid_time` and the `target_landfall_*` equivalents are float or
+datetime64 and do sparsify (with a `NaN`/`NaT` fill, respectively);
+anything with an incompatible dtype would not.
+
+`results_to_dataset` also logs a warning (without requiring
+`sparse=True`) when the estimated dense element count for a run passes
+a threshold, as a hint to reach for it. The limitations: `sparse.COO`
+isn't a netCDF/zarr-representable format, so writing a sparse Dataset
+to disk densifies it first (`sparse=True` only helps while the Dataset
+stays in memory), and `drop_empty_slices` can't operate directly on
+`sparse.COO`-backed input -- densify a selection first, e.g. with
+`utils.maybe_densify_dataarray`, before calling it.
+
+### Saving results
+
+`write_results` writes a list of annotated results, or an
+already-converted DataFrame/Dataset, to disk. A Dataset can be written
+to `"netcdf"` or `"zarr"`; `"csv"` needs the raw results list or a
+DataFrame instead, since a flat cube doesn't round-trip to CSV:
+
+```python
+from extremeweatherbench import outputs as ewb_outputs
+
+ewb_outputs.write_results(outputs, "results.nc", output_format="netcdf")
+ewb_outputs.write_results(outputs, "results.zarr", output_format="zarr")
+```
+
+The CLI exposes the same choices with `--output-format {csv,netcdf,zarr}`
+(default `csv`) and `--sparse` (valid only alongside `--output-format
+netcdf` or `zarr`):
+
+```bash
+ewb --default --output-format zarr --sparse
+```
+
 ## Import Patterns
 
 All of the following import styles work:
