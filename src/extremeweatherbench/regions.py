@@ -613,9 +613,9 @@ def subset_cases_to_region(
 
 def subset_results_to_region(
     region: RegionSubsetter,
-    results: Union[pd.DataFrame, xr.Dataset],
+    results: pd.DataFrame | xr.Dataset,
     case_list: "list[cases.IndividualCase]",
-) -> Union[pd.DataFrame, xr.Dataset]:
+) -> pd.DataFrame | xr.Dataset:
     """Subset results by region using case_id_number.
 
     This is a convenience function that creates a RegionSubsetter and applies it to

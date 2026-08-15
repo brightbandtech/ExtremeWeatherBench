@@ -260,6 +260,4 @@ class TestMaybeAddSpecificHumidity:
         ds = self._column_ds("air_temperature", "relative_humidity")
         ds["specific_humidity"] = (["level"], np.array([0.01, 0.02]))
         result = defaults._maybe_add_specific_humidity(ds)
-        np.testing.assert_array_equal(
-            result["specific_humidity"].values, [0.01, 0.02]
-        )
+        np.testing.assert_array_equal(result["specific_humidity"].values, [0.01, 0.02])

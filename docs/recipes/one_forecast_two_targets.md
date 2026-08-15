@@ -79,10 +79,11 @@ ghcn_results = outputs[outputs["target_source"] == "GHCN"]
 ```
 
 > **Detailed Explanation**: Each `EvaluationObject` expands into one
-> `CaseOperator` per case. With two `EvaluationObjects` and 337 cases
-> you get 674 operators; they share the forecast source, so IO is not
-> doubled. However, GHCN and ERA5 alignment happens independently for
-> each target — GHCN uses nearest-neighbour interpolation to match
+> `CaseOperator` per case. Two `EvaluationObjects` share the forecast
+> source, so IO is not doubled. Case counts live in
+> [Case Studies](../events/case_studies.md). GHCN and ERA5 alignment
+> happens independently for each target — GHCN uses nearest-neighbour
+> interpolation to match
 > station locations, while ERA5 uses spatial regridding to the forecast
 > grid. The `target_source` column is set from the `name` attribute on
 > the target object.

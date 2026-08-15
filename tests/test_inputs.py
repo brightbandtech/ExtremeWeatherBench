@@ -1074,9 +1074,7 @@ class TestERA5:
         )
         forecast = target.copy(deep=True)
         with mock.patch.object(xr.Dataset, "interp") as mock_interp:
-            aligned_fc, aligned_tg = inputs.align_forecast_to_target(
-                forecast, target
-            )
+            aligned_fc, aligned_tg = inputs.align_forecast_to_target(forecast, target)
             mock_interp.assert_not_called()
         np.testing.assert_array_equal(
             aligned_fc.latitude.values, aligned_tg.latitude.values

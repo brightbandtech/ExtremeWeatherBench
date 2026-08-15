@@ -95,9 +95,7 @@ def _maybe_add_specific_humidity(ds: xr.Dataset) -> xr.Dataset:
     """
     if "specific_humidity" in ds.variables or "q" in ds.variables:
         return ds
-    air_temperature = (
-        ds["air_temperature"] if "air_temperature" in ds else ds["t"]
-    )
+    air_temperature = ds["air_temperature"] if "air_temperature" in ds else ds["t"]
     relative_humidity = (
         ds["relative_humidity"] if "relative_humidity" in ds else ds["r"]
     )

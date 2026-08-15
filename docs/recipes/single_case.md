@@ -1,6 +1,6 @@
 # Single Case
 
-Running EWB across all 337 default cases is the standard workflow, but
+Running EWB across all default cases is the standard workflow, but
 sometimes you only need to evaluate one specific event — to debug a
 result, inspect a forecast failure, or prototype a new metric. This
 recipe shows two approaches: filtering from the default case list, and

@@ -137,8 +137,8 @@ outputs = runner.run_evaluation(parallel_config=parallel_config)
 ```
 
 > **Detailed Explanation**: Each `(case, EvaluationObject)` pair becomes
-> a `CaseOperator` that EWB can execute in parallel. With four models and
-> 337 cases you have up to 1 348 operators. Memory scales with `n_jobs`
+> a `CaseOperator` that EWB can execute in parallel. Case counts live in
+> [Case Studies](../events/case_studies.md). Memory scales with `n_jobs`
 > since each worker holds its own copy of the forecast slice for the
 > active case. Set `n_jobs` to the number of CPU cores available and
 > adjust downward if you run out of memory. On a cloud VM with a fast

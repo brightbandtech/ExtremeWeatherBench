@@ -976,6 +976,92 @@ class TestResultsToDatasetSparseLandfallExtras:
         )
         assert by_case == {1: "heat_wave", 2: "freeze"}
 
+    @pytest.mark.parametrize("sparse", [False, True])
+    def test_empty_lead_time_fallback_before_timedelta_rmse(self, sparse):
+        empty = outputs.annotate_metric_result(
+            utils._create_nan_dataarray("lead_time"),
+            metric="MaximumMeanAbsoluteError",
+            target_variable="2m_temperature",
+            forecast_variable="2m_temperature",
+            forecast_source="test_forecast",
+            target_source="test_target",
+            case_id_number=1,
+            event_type="heat_wave",
+        )
+        lead_times = pd.to_timedelta([0, 6], unit="h")
+        rmse = outputs.annotate_metric_result(
+            xr.DataArray(
+                [1.0, 2.0], dims=["lead_time"], coords={"lead_time": lead_times}
+            ),
+            metric="RootMeanSquaredError",
+            target_variable="2m_temperature",
+            forecast_variable="2m_temperature",
+            forecast_source="test_forecast",
+            target_source="test_target",
+            case_id_number=1,
+            event_type="heat_wave",
+        )
+
+        ds = outputs.results_to_dataset([empty, rmse], sparse=sparse)
+        var = ds["2m_temperature"]
+        if sparse:
+            var = utils.maybe_densify_dataarray(var)
+
+        assert np.issubdtype(ds.coords["lead_time"].dtype, np.timedelta64)
+        selected = var.sel(
+            metric="RootMeanSquaredError",
+            case_id_number=1,
+            forecast_source="test_forecast",
+            target_source="test_target",
+        )
+        collapsed = outputs.drop_empty_slices(selected)
+        np.testing.assert_array_equal(
+            collapsed.compute().sortby("lead_time").values, [1.0, 2.0]
+        )
+
+    @pytest.mark.parametrize("sparse", [False, True])
+    def test_empty_init_time_fallback_before_datetime_metric(self, sparse):
+        empty = outputs.annotate_metric_result(
+            utils._create_nan_dataarray("init_time"),
+            metric="LandfallDisplacement",
+            target_variable="2m_temperature",
+            forecast_variable="2m_temperature",
+            forecast_source="test_forecast",
+            target_source="test_target",
+            case_id_number=1,
+            event_type="tropical_cyclone",
+        )
+        init_times = pd.date_range("2021-06-20", periods=2, freq="D")
+        onset = outputs.annotate_metric_result(
+            xr.DataArray(
+                [5.0, 6.0], dims=["init_time"], coords={"init_time": init_times}
+            ),
+            metric="DurationMeanError",
+            target_variable="2m_temperature",
+            forecast_variable="2m_temperature",
+            forecast_source="test_forecast",
+            target_source="test_target",
+            case_id_number=1,
+            event_type="tropical_cyclone",
+        )
+
+        ds = outputs.results_to_dataset([empty, onset], sparse=sparse)
+        var = ds["2m_temperature"]
+        if sparse:
+            var = utils.maybe_densify_dataarray(var)
+
+        assert np.issubdtype(ds.coords["init_time"].dtype, np.datetime64)
+        selected = var.sel(
+            metric="DurationMeanError",
+            case_id_number=1,
+            forecast_source="test_forecast",
+            target_source="test_target",
+        )
+        collapsed = outputs.drop_empty_slices(selected)
+        np.testing.assert_array_equal(
+            collapsed.compute().sortby("init_time").values, [5.0, 6.0]
+        )
+
 
 class TestDropEmptySlices:
     """Test the drop_empty_slices helper for collapsing padding placeholders."""
