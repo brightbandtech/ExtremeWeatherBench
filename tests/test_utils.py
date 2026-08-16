@@ -454,6 +454,103 @@ def test_convert_init_time_to_valid_time():
     assert "init_time" not in result.dims or "valid_time" in result.dims
 
 
+def test_convert_init_time_to_valid_time_preserves_valid_time_mask():
+    """valid_time_mask must follow convert onto (lead_time, valid_time)."""
+    inits = pd.date_range("2020-01-01", periods=2, freq="12h")
+    leads = pd.to_timedelta([0, 6, 12], unit="h")
+    mask = np.array(
+        [
+            [True, True, False],
+            [True, False, True],
+        ]
+    )
+    ds = xr.Dataset(
+        {"temp": (["init_time", "lead_time"], np.arange(6).reshape(2, 3))},
+        coords={
+            "init_time": inits,
+            "lead_time": leads,
+            "valid_time_mask": (["init_time", "lead_time"], mask),
+        },
+    )
+    result = utils.convert_init_time_to_valid_time(ds)
+    assert result.valid_time_mask.dims == ("lead_time", "valid_time") or (
+        result.valid_time_mask.dims == ("valid_time", "lead_time")
+    )
+    mask_out = result.valid_time_mask.transpose("lead_time", "valid_time")
+    for i, lead in enumerate(leads):
+        for init, keep in zip(inits, mask[:, i]):
+            vt = init + lead
+            got = bool(mask_out.sel(lead_time=lead, valid_time=vt).values)
+            assert got is bool(keep)
+
+
+def test_stack_valid_time_pairs_keeps_only_true_mask_cells():
+    """Stack helper must drop reindex-fill (lead, valid_time) pairs."""
+    inits = pd.date_range("2020-01-01", periods=2, freq="12h")
+    leads = pd.to_timedelta([0, 6], unit="h")
+    values = np.arange(4, dtype=float).reshape(2, 2)
+    mask = np.array([[True, False], [True, True]])
+    ds = xr.Dataset(
+        {"temp": (["init_time", "lead_time"], values)},
+        coords={
+            "init_time": inits,
+            "lead_time": leads,
+            "valid_time_mask": (["init_time", "lead_time"], mask),
+        },
+    )
+    converted = utils.convert_init_time_to_valid_time(ds)
+    stacked = utils.stack_valid_time_pairs(converted)
+    assert stacked.sizes["sample"] == int(mask.sum())
+    expected = values[mask]
+    np.testing.assert_array_equal(
+        np.sort(stacked["temp"].values), np.sort(expected)
+    )
+
+
+def test_stack_valid_time_pairs_reduces_dask_chunks():
+    """Valid-pair stack must drop fill chunks from the dask graph."""
+    inits = pd.date_range("2020-01-01", periods=2, freq="12h")
+    leads = pd.to_timedelta([0, 6, 12], unit="h")
+    values = np.arange(6, dtype=float).reshape(2, 3)
+    mask = np.array([[True, False, True], [False, True, False]])
+    ds = xr.Dataset(
+        {"temp": (["init_time", "lead_time"], values)},
+        coords={
+            "init_time": inits,
+            "lead_time": leads,
+            "valid_time_mask": (["init_time", "lead_time"], mask),
+        },
+    ).chunk({"init_time": 1, "lead_time": 1})
+    converted = utils.convert_init_time_to_valid_time(ds)
+    stacked = utils.stack_valid_time_pairs(converted)
+    assert stacked["temp"].data.npartitions == int(mask.sum())
+
+
+def test_unstack_valid_time_pairs_restores_values():
+    """Unstack must restore valid cells and leave fills as NaN."""
+    inits = pd.date_range("2020-01-01", periods=2, freq="12h")
+    leads = pd.to_timedelta([0, 6], unit="h")
+    values = np.array([[1.0, 2.0], [3.0, 4.0]])
+    mask = np.array([[True, False], [True, True]])
+    ds = xr.Dataset(
+        {"temp": (["init_time", "lead_time"], values)},
+        coords={
+            "init_time": inits,
+            "lead_time": leads,
+            "valid_time_mask": (["init_time", "lead_time"], mask),
+        },
+    )
+    converted = utils.convert_init_time_to_valid_time(ds)
+    restored = utils.unstack_valid_time_pairs(
+        utils.stack_valid_time_pairs(converted), like=converted
+    )
+    keep = converted.valid_time_mask.astype(bool)
+    xr.testing.assert_equal(
+        restored["temp"].where(keep).reset_coords(drop=True),
+        converted["temp"].where(keep).reset_coords(drop=True),
+    )
+
+
 def test_convert_init_time_to_valid_time_matches_outer_concat():
     """Dense fixture must match concat of swapped leads with join='outer'."""
     inits = pd.date_range("2020-01-01", periods=4, freq="12h")

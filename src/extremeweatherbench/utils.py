@@ -482,7 +482,55 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
         compat="equals",
         join="outer",
     )
-    return out.assign_coords(lead_time=("lead_time", ds.lead_time.values))
+    out = out.assign_coords(lead_time=("lead_time", ds.lead_time.values))
+    if "valid_time_mask" in out.coords:
+        mask = out.valid_time_mask
+        out = out.assign_coords(
+            valid_time_mask=xr.where(mask.isnull(), False, mask).astype(bool)
+        )
+    return out
+
+
+def _valid_time_mask_as_bool(mask: xr.DataArray) -> npt.NDArray[np.bool_]:
+    """Treat reindex fills (NaN) as False without reading data vars."""
+    values = np.asarray(mask.values)
+    if np.issubdtype(values.dtype, np.floating):
+        return np.isfinite(values) & (values != 0)
+    return values.astype(bool)
+
+
+def stack_valid_time_pairs(
+    obj: xr.Dataset | xr.DataArray,
+) -> xr.Dataset | xr.DataArray:
+    """Keep only valid (lead_time, valid_time) pairs as a sample dim.
+
+    Uses the ``valid_time_mask`` coordinate so fill cells from
+    ``convert_init_time_to_valid_time`` never enter the dask graph.
+    """
+    if not {"lead_time", "valid_time"} <= set(obj.dims):
+        return obj
+    if "valid_time_mask" not in obj.coords:
+        return obj
+    stacked = obj.stack(sample=("lead_time", "valid_time"))
+    keep = _valid_time_mask_as_bool(stacked["valid_time_mask"]).ravel()
+    return stacked.isel(sample=np.flatnonzero(keep))
+
+
+def unstack_valid_time_pairs(
+    obj: xr.Dataset | xr.DataArray,
+    like: xr.Dataset | xr.DataArray | None = None,
+) -> xr.Dataset | xr.DataArray:
+    """Restore lead_time × valid_time from a valid-pair sample dim.
+
+    When ``like`` is given, reindex onto its lead_time and valid_time so
+    fill cells come back as NaN on the original dense grid.
+    """
+    if "sample" not in obj.dims:
+        return obj
+    out = obj.unstack("sample")
+    if like is not None and {"lead_time", "valid_time"} <= set(like.dims):
+        out = out.reindex(lead_time=like.lead_time, valid_time=like.valid_time)
+    return out
 
 
 def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:

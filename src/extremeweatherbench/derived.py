@@ -452,7 +452,9 @@ class AtmosphericRiverVariables(DerivedVariable):
         """Derive the atmospheric river mask and land intersection."""
 
         data = data.sel(level=data.level[data.level >= self.top_pressure_level])
-        return ar.build_atmospheric_river_mask_and_land_intersection(data)
+        return ar.build_atmospheric_river_mask_and_land_intersection(
+            data, output_variables=self.output_variables
+        )
 
 
 def maybe_derive_variables(

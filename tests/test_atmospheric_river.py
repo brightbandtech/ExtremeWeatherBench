@@ -1059,3 +1059,113 @@ class TestTimeLinkedLabeling:
             mask, ["valid_time", "latitude", "longitude"], "valid_time"
         )
         assert len(np.unique(labeled[labeled > 0])) == 1
+
+    def test_finalize_per_lead_matches_full_cube(self):
+        """Per-lead finalize must match a single full-cube 0/1 mask."""
+        rng_local = np.random.default_rng(1)
+        lead = [0, 6, 12]
+        time = pd.date_range("2023-01-01", periods=4, freq="6h")
+        lat = np.linspace(20, 50, 12)
+        lon = np.linspace(-130, -100, 10)
+        mask = rng_local.random((len(lead), len(time), len(lat), len(lon))) > 0.7
+        mask[:, :, 2:10, 2:8] = True
+        intersection = xr.DataArray(
+            mask,
+            dims=["lead_time", "valid_time", "latitude", "longitude"],
+            coords={
+                "lead_time": lead,
+                "valid_time": time,
+                "latitude": lat,
+                "longitude": lon,
+            },
+        )
+        coords = {dim: intersection.coords[dim] for dim in intersection.dims}
+        full = atmospheric_river._finalize_ar_mask(
+            mask, coords, min_size_gridpoints=20, time_dimension="valid_time"
+        )
+        streamed = atmospheric_river._finalize_ar_mask_by_lead(
+            intersection, min_size_gridpoints=20, time_dimension="valid_time"
+        )
+        np.testing.assert_array_equal(full.values, streamed.values)
+
+    def test_finalize_treats_unstacked_nan_as_false(self):
+        """Reindex fills are NaN and must not become True in the mask."""
+        lead = [0, 6]
+        time = pd.date_range("2023-01-01", periods=3, freq="6h")
+        lat = np.linspace(20, 50, 8)
+        lon = np.linspace(-130, -100, 8)
+        mask = np.zeros((2, 3, 8, 8), dtype=float)
+        mask[0, 0, 1:7, 1:7] = 1.0
+        mask[0, 1, :, :] = np.nan
+        mask[1, 2, 1:7, 1:7] = 1.0
+        intersection = xr.DataArray(
+            mask,
+            dims=["lead_time", "valid_time", "latitude", "longitude"],
+            coords={
+                "lead_time": lead,
+                "valid_time": time,
+                "latitude": lat,
+                "longitude": lon,
+            },
+        )
+        streamed = atmospheric_river._finalize_ar_mask_by_lead(
+            intersection, min_size_gridpoints=10, time_dimension="valid_time"
+        )
+        expected = atmospheric_river._finalize_ar_mask_by_lead(
+            intersection.fillna(False),
+            min_size_gridpoints=10,
+            time_dimension="valid_time",
+        )
+        np.testing.assert_array_equal(streamed.values, expected.values)
+        assert int(streamed.isel(lead_time=0, valid_time=1).sum()) == 0
+
+    def test_build_mask_stacks_invalid_pairs_before_ivt(self, monkeypatch):
+        """AR derive must stack to valid (lead, time) pairs before IVT."""
+        lead = pd.to_timedelta([0, 6], unit="h")
+        time = pd.date_range("2023-01-01", periods=3, freq="6h")
+        lat = np.linspace(20, 50, 8)
+        lon = np.linspace(-130, -100, 8)
+        level = [1000, 850, 700]
+        shape = (len(lead), len(time), len(level), len(lat), len(lon))
+        data = xr.Dataset(
+            {
+                "specific_humidity": (["lead_time", "valid_time", "level", "latitude", "longitude"], np.ones(shape)),
+                "eastward_wind": (["lead_time", "valid_time", "level", "latitude", "longitude"], np.ones(shape)),
+                "northward_wind": (["lead_time", "valid_time", "level", "latitude", "longitude"], np.ones(shape)),
+            },
+            coords={
+                "lead_time": lead,
+                "valid_time": time,
+                "level": level,
+                "latitude": lat,
+                "longitude": lon,
+                "valid_time_mask": (
+                    ["lead_time", "valid_time"],
+                    np.array(
+                        [[True, False, True], [False, True, False]],
+                    ),
+                ),
+            },
+        )
+        seen = {}
+
+        def fake_ivt(specific_humidity, eastward_wind, northward_wind):
+            seen["dims"] = specific_humidity.dims
+            seen["size"] = specific_humidity.sizes.get("sample")
+            ivt = xr.ones_like(specific_humidity.isel(level=0, drop=True))
+            ivt.name = "integrated_vapor_transport"
+            return ivt * 500
+
+        monkeypatch.setattr(
+            atmospheric_river, "integrated_vapor_transport", fake_ivt
+        )
+        monkeypatch.setattr(
+            atmospheric_river,
+            "_dilated_high_laplacian",
+            lambda ivt, **kwargs: xr.ones_like(ivt, dtype=np.int8),
+        )
+        atmospheric_river.build_atmospheric_river_mask_and_land_intersection(
+            data
+        )
+        assert "sample" in seen["dims"]
+        assert seen["size"] == 3

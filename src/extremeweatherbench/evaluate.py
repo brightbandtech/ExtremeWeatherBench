@@ -400,6 +400,20 @@ def _run_parallel_evaluation(
         # Group operators that share a case and forecast so one worker can
         # reuse the forecast dataset (PPH + LSR on the same HRES object).
         groups = _group_operators_sharing_forecast(case_operators)
+        # Targets are shared across forecast workers (ERA5 AR for HRES
+        # and Graphcast). Compute each unique target once in the parent.
+        kwargs = dict(kwargs)
+        real_ops = [
+            op
+            for op in case_operators
+            if isinstance(op, cases.CaseOperator)
+            and isinstance(op.target, inputs.InputBase)
+            and not type(op.target).__module__.startswith("unittest.mock")
+        ]
+        if real_ops:
+            kwargs["precomputed_targets"] = _precompute_unique_targets(
+                real_ops, **kwargs
+            )
         parallel_tqdm_kwargs["total_tasks"] = len(groups)
         with joblib.parallel_config(**parallel_config):
             nested_results = utils.ParallelTqdm(
@@ -488,6 +502,69 @@ def _pipeline_cache_key(
         input_data.source,
         var_key,
     )
+
+
+def _augment_operator_inputs(
+    case_operator: "cases.CaseOperator",
+) -> tuple["inputs.InputBase", "inputs.InputBase"]:
+    """Copy forecast/target inputs with metric variables folded in."""
+    metric_forecast_vars, metric_target_vars = _collect_metric_variables(
+        case_operator.metric_list
+    )
+    forecast_derived_outputs = _get_all_derived_output_variables(
+        case_operator.forecast.variables
+    )
+    target_derived_outputs = _get_all_derived_output_variables(
+        case_operator.target.variables
+    )
+    filtered_forecast_vars = {
+        v
+        for v in metric_forecast_vars
+        if not (isinstance(v, str) and v in forecast_derived_outputs)
+    }
+    filtered_target_vars = {
+        v
+        for v in metric_target_vars
+        if not (isinstance(v, str) and v in target_derived_outputs)
+    }
+    augmented_forecast = copy.copy(case_operator.forecast)
+    augmented_target = copy.copy(case_operator.target)
+    augmented_forecast.variables = list(
+        set(case_operator.forecast.variables) | filtered_forecast_vars
+    )
+    augmented_target.variables = list(
+        set(case_operator.target.variables) | filtered_target_vars
+    )
+    return augmented_forecast, augmented_target
+
+
+def _precompute_unique_targets(
+    case_operators: list["cases.CaseOperator"],
+    **kwargs,
+) -> dict[tuple, xr.Dataset]:
+    """Run each unique target pipeline once before parallel forecast work."""
+    kwargs = dict(kwargs)
+    kwargs.pop("precomputed_targets", None)
+    precomputed: dict[tuple, xr.Dataset] = {}
+    for case_operator in case_operators:
+        _, augmented_target = _augment_operator_inputs(case_operator)
+        key = _pipeline_cache_key(case_operator.case_metadata, augmented_target)
+        if key in precomputed:
+            continue
+        logger.info(
+            "Precomputing target %s for case %s",
+            augmented_target.name,
+            case_operator.case_metadata.case_id_number,
+        )
+        progress_module.set_phase(
+            f"case {case_operator.case_metadata.case_id_number} | "
+            "shared target pipeline"
+        )
+        target_ds = run_pipeline(
+            case_operator.case_metadata, augmented_target, **kwargs
+        )
+        precomputed[key] = target_ds.compute()
+    return precomputed
 
 
 def _run_pipeline_maybe_cached(
@@ -1074,43 +1151,9 @@ def _build_datasets(
         A tuple containing (forecast_dataset, target_dataset). If either dataset
         has no dimensions, both will be empty datasets.
     """
-    metric_forecast_vars, metric_target_vars = _collect_metric_variables(
-        case_operator.metric_list
-    )
-
-    # Get all output_variables from DerivedVariables in InputBase
-    # These should NOT be added separately as they'll be created by derivation
-    forecast_derived_outputs = _get_all_derived_output_variables(
-        case_operator.forecast.variables
-    )
-    target_derived_outputs = _get_all_derived_output_variables(
-        case_operator.target.variables
-    )
-
-    # Filter out string variables that are output_variables of existing DerivedVariables
-    # Only add metric variables that are not already covered by DerivedVariable outputs
-    filtered_forecast_vars = {
-        v
-        for v in metric_forecast_vars
-        if not (isinstance(v, str) and v in forecast_derived_outputs)
-    }
-    filtered_target_vars = {
-        v
-        for v in metric_target_vars
-        if not (isinstance(v, str) and v in target_derived_outputs)
-    }
-
-    # Create augmented copies of InputBase objects with combined variables
-    augmented_forecast = copy.copy(case_operator.forecast)
-    augmented_target = copy.copy(case_operator.target)
-
-    # Combine InputBase variables with metric-specific variables (filtered)
-    augmented_forecast.variables = list(
-        set(case_operator.forecast.variables) | filtered_forecast_vars
-    )
-    augmented_target.variables = list(
-        set(case_operator.target.variables) | filtered_target_vars
-    )
+    kwargs = dict(kwargs)
+    precomputed_targets = kwargs.pop("precomputed_targets", None)
+    augmented_forecast, augmented_target = _augment_operator_inputs(case_operator)
 
     logger.info(
         "Running target pipeline for case %s... ",
@@ -1120,12 +1163,19 @@ def _build_datasets(
         f"case {case_operator.case_metadata.case_id_number} | target pipeline"
     )
     pipeline_cache = _pipeline_cache_var.get()
-    target_ds = _run_pipeline_maybe_cached(
-        case_operator.case_metadata,
-        augmented_target,
-        pipeline_cache,
-        **kwargs,
-    )
+    target_ds = None
+    if precomputed_targets:
+        target_key = _pipeline_cache_key(
+            case_operator.case_metadata, augmented_target
+        )
+        target_ds = precomputed_targets.get(target_key)
+    if target_ds is None:
+        target_ds = _run_pipeline_maybe_cached(
+            case_operator.case_metadata,
+            augmented_target,
+            pipeline_cache,
+            **kwargs,
+        )
 
     # Pass target dataset to forecast pipeline only if needed
     # Check if any forecast variable requires target dataset
