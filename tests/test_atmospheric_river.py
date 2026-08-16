@@ -696,6 +696,49 @@ class TestComputeIVTLaplacian:
         # Should handle NaN values gracefully
         # Note: The result might contain NaNs depending on how the filter handles them
 
+    def test_laplacian_does_not_mix_unrelated_sample_fields(self):
+        """Sample-axis fields must match independently computed 2D slices."""
+        lat = np.linspace(20, 50, 16)
+        lon = np.linspace(-130, -100, 16)
+        field_a = np.zeros((16, 16), dtype=np.float64)
+        field_b = np.zeros((16, 16), dtype=np.float64)
+        field_a[3:8, 3:8] = 800.0
+        field_b[9:14, 9:14] = 800.0
+        stacked = xr.DataArray(
+            np.stack([field_a, field_b], axis=0),
+            dims=["sample", "latitude", "longitude"],
+            coords={"sample": [0, 1], "latitude": lat, "longitude": lon},
+            name="integrated_vapor_transport",
+        ).chunk({"sample": -1, "latitude": -1, "longitude": -1})
+        result = atmospheric_river.integrated_vapor_transport_laplacian(stacked)
+        expected = xr.concat(
+            [
+                atmospheric_river.integrated_vapor_transport_laplacian(
+                    stacked.isel(sample=i)
+                )
+                for i in range(2)
+            ],
+            dim="sample",
+        )
+        xr.testing.assert_allclose(result, expected)
+
+        fused = atmospheric_river._dilated_high_laplacian(
+            stacked, sigma=3, laplacian_threshold=2.5, dilation_radius=8
+        )
+        fused_expected = xr.concat(
+            [
+                atmospheric_river._dilated_high_laplacian(
+                    stacked.isel(sample=i),
+                    sigma=3,
+                    laplacian_threshold=2.5,
+                    dilation_radius=8,
+                )
+                for i in range(2)
+            ],
+            dim="sample",
+        )
+        np.testing.assert_array_equal(fused.values, fused_expected.values)
+
 
 class TestFindLandIntersection:
     """Test land intersection calculations."""

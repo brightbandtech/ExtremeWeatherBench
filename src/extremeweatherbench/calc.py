@@ -8,7 +8,6 @@ import shapely
 import xarray as xr
 from numba import float64, guvectorize, njit
 from scipy import ndimage
-from skimage import filters
 
 from extremeweatherbench import utils
 from extremeweatherbench._cape import EPSILON
@@ -1432,8 +1431,6 @@ def _laplace_2d(data: np.ndarray, out: np.ndarray) -> None:
 
 def _discrete_laplace(data: np.ndarray) -> np.ndarray:
     """Discrete Laplace matching skimage.filters.laplace (ksize=3)."""
-    if data.ndim != 2:
-        return filters.laplace(data)
     out = np.empty_like(data)
     _laplace_2d(data, out)
     return out
@@ -1442,8 +1439,10 @@ def _discrete_laplace(data: np.ndarray) -> np.ndarray:
 def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.DataArray:
     """Blurred Laplacian: discrete Laplace, then a Gaussian smooth.
 
+    Extra leading dims are filtered independently on lat/lon only.
+
     Args:
-        data: IVT data to filter. The apply_ufunc path passes 2D lat/lon.
+        data: IVT data of shape (..., lat, lon)
         sigma: the standard deviation for the Gaussian filter
 
     Returns:
@@ -1454,4 +1453,13 @@ def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.Dat
         arr = np.ascontiguousarray(arr)
     else:
         arr = np.ascontiguousarray(arr, dtype=np.float64)
-    return ndimage.gaussian_filter(_discrete_laplace(arr), sigma=float(sigma))
+    if arr.ndim < 2:
+        raise ValueError("blurred laplacian requires at least 2 dimensions")
+    sigma_f = float(sigma)
+    n_y, n_x = arr.shape[-2], arr.shape[-1]
+    n_lead = arr.size // (n_y * n_x)
+    src = arr.reshape(n_lead, n_y, n_x)
+    out = np.empty_like(src)
+    for i in range(n_lead):
+        out[i] = ndimage.gaussian_filter(_discrete_laplace(src[i]), sigma=sigma_f)
+    return out.reshape(arr.shape)
