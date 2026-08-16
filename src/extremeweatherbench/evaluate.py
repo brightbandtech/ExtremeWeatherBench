@@ -400,15 +400,13 @@ def _run_parallel_evaluation(
         # Group operators that share a case and forecast so one worker can
         # reuse the forecast dataset (PPH + LSR on the same HRES object).
         groups = _group_operators_sharing_forecast(case_operators)
-        # Targets are shared across forecast workers (ERA5 AR for HRES
-        # and Graphcast). Compute each unique target once in the parent.
         kwargs = dict(kwargs)
+        # Mock(spec=InputBase) passes isinstance; skip those test doubles.
         real_ops = [
             op
             for op in case_operators
-            if isinstance(op, cases.CaseOperator)
-            and isinstance(op.target, inputs.InputBase)
-            and not type(op.target).__module__.startswith("unittest.mock")
+            if isinstance(getattr(op, "target", None), inputs.InputBase)
+            and not type(op.target).__module__.startswith("unittest")
         ]
         if real_ops:
             kwargs["precomputed_targets"] = _precompute_unique_targets(
@@ -1165,9 +1163,7 @@ def _build_datasets(
     pipeline_cache = _pipeline_cache_var.get()
     target_ds = None
     if precomputed_targets:
-        target_key = _pipeline_cache_key(
-            case_operator.case_metadata, augmented_target
-        )
+        target_key = _pipeline_cache_key(case_operator.case_metadata, augmented_target)
         target_ds = precomputed_targets.get(target_key)
     if target_ds is None:
         target_ds = _run_pipeline_maybe_cached(

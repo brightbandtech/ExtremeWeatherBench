@@ -491,12 +491,12 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
     return out
 
 
-def _valid_time_mask_as_bool(mask: xr.DataArray) -> npt.NDArray[np.bool_]:
-    """Treat reindex fills (NaN) as False without reading data vars."""
-    values = np.asarray(mask.values)
-    if np.issubdtype(values.dtype, np.floating):
-        return np.isfinite(values) & (values != 0)
-    return values.astype(bool)
+def values_as_bool(values) -> npt.NDArray[np.bool_]:
+    """Coerce an array to bool; NaN / non-finite fills become False."""
+    arr = np.asarray(values)
+    if np.issubdtype(arr.dtype, np.floating):
+        return np.isfinite(arr) & (arr != 0)
+    return arr.astype(bool)
 
 
 def stack_valid_time_pairs(
@@ -512,7 +512,7 @@ def stack_valid_time_pairs(
     if "valid_time_mask" not in obj.coords:
         return obj
     stacked = obj.stack(sample=("lead_time", "valid_time"))
-    keep = _valid_time_mask_as_bool(stacked["valid_time_mask"]).ravel()
+    keep = values_as_bool(stacked["valid_time_mask"]).ravel()
     return stacked.isel(sample=np.flatnonzero(keep))
 
 

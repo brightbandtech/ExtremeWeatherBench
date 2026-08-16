@@ -32,6 +32,7 @@ def _label_time_linked_stack(mask: np.ndarray) -> np.ndarray:
         for i in range(n_pix):
             parent[i] = i
             remap[i] = 0
+        # Union True pixels with west, south, and previous-time neighbors.
         for t in range(n_t):
             for y in range(n_y):
                 for x in range(n_x):
@@ -53,6 +54,7 @@ def _label_time_linked_stack(mask: np.ndarray) -> np.ndarray:
                         rb = _ufind(parent, idx - stride_t)
                         if ra != rb:
                             parent[rb] = ra
+        # Assign dense labels; extras do not share IDs.
         next_local = 0
         for t in range(n_t):
             for y in range(n_y):
@@ -69,17 +71,6 @@ def _label_time_linked_stack(mask: np.ndarray) -> np.ndarray:
                     out[t, e, y, x] = lab + (next_id - 1)
         next_id += next_local
     return out
-
-
-def _label_time_linked_tyx(mask_tyx: npt.NDArray[np.bool_]) -> npt.NDArray[np.int32]:
-    """Label a (time, lat, lon) mask with 6-connectivity.
-
-    2D connected components plus union-find across consecutive times.
-    Matches ndimage.label with generate_binary_structure(3, 1).
-    """
-    mask = np.ascontiguousarray(mask_tyx)
-    stacked = mask.reshape(mask.shape[0], 1, mask.shape[1], mask.shape[2])
-    return _label_time_linked_stack(stacked)[:, 0]
 
 
 def _label_objects_time_linked(
@@ -106,29 +97,6 @@ def _label_objects_time_linked(
     return np.transpose(out.reshape(n_t, *extra, n_y, n_x), np.argsort(order))
 
 
-@njit(cache=True)
-def _accumulate_label_lat_neg2(
-    labeled: np.ndarray,
-    latitudes: np.ndarray,
-    counts: np.ndarray,
-    lat_sums: np.ndarray,
-) -> None:
-    """Sum counts and latitudes when latitude is the second-last axis."""
-    n_lead = 1
-    for s in labeled.shape[:-2]:
-        n_lead *= s
-    n_y = labeled.shape[-2]
-    n_x = labeled.shape[-1]
-    flat = labeled.reshape(n_lead, n_y, n_x)
-    for i in range(n_lead):
-        for y in range(n_y):
-            lat = latitudes[y]
-            for x in range(n_x):
-                lab = flat[i, y, x]
-                counts[lab] += 1
-                lat_sums[lab] += lat
-
-
 def _filter_labels_size_and_lat(
     labeled: npt.NDArray[np.int32],
     latitudes: npt.NDArray[np.floating],
@@ -139,23 +107,23 @@ def _filter_labels_size_and_lat(
     """Keep labels with enough pixels and |mean lat| above the tropics."""
     if labeled.size == 0:
         return np.zeros(labeled.shape, dtype=bool)
-    lab = np.ascontiguousarray(labeled)
-    n = int(lab.max()) + 1
-    counts = np.zeros(n, dtype=np.int64)
-    lat_sums = np.zeros(n, dtype=np.float64)
-    lats = np.ascontiguousarray(latitudes, dtype=np.float64)
-    if lat_axis == lab.ndim - 2:
-        _accumulate_label_lat_neg2(lab, lats, counts, lat_sums)
-    else:
-        moved = np.ascontiguousarray(np.moveaxis(lab, lat_axis, -2))
-        _accumulate_label_lat_neg2(moved, lats, counts, lat_sums)
+    n = int(labeled.max()) + 1
+    flat = labeled.ravel()
+    counts = np.bincount(flat, minlength=n)
+    lat_shape = [1] * labeled.ndim
+    lat_shape[lat_axis] = np.asarray(latitudes).size
+    weights = np.broadcast_to(
+        np.asarray(latitudes, dtype=np.float64).reshape(lat_shape),
+        labeled.shape,
+    )
+    lat_sums = np.bincount(flat, weights=weights.ravel(), minlength=n)
     valid = np.zeros(n, dtype=np.bool_)
     if n > 1:
         denom = np.maximum(counts[1:], 1)
         valid[1:] = (counts[1:] >= min_size) & (
             np.abs(lat_sums[1:] / denom) > min_abs_lat
         )
-    return valid[lab]
+    return valid[labeled]
 
 
 @guvectorize(
@@ -189,13 +157,7 @@ def _dilated_high_laplacian(
     laplacian_threshold: float,
     dilation_radius: int,
 ) -> xr.DataArray:
-    """Blurred Laplacian, threshold, and dilate on the same IVT chunks.
-
-    Uses the public laplacian ufunc on whatever array apply_ufunc passes
-    so chunk shapes (and therefore N-D filter axes) match develop.
-    Dilation uses axes=(-2, -1) and is spatially identical without a
-    time=1 rechunk.
-    """
+    """Threshold the blurred Laplacian and dilate on the same IVT chunks."""
 
     def _ufunc(data, sigma_, lap_thresh, radius):
         lap = calc._compute_blurred_laplacian_ufunc(data, sigma_)
@@ -234,18 +196,10 @@ def _finalize_ar_mask(
         labeled_array, latitudes, lat_axis, min_size_gridpoints
     )
     ar_mask = xr.DataArray(
-        np.where(feature_mask, 1, 0), coords=coords_dict, dims=coords_dict.keys()
+        feature_mask.astype(np.int8), coords=coords_dict, dims=coords_dict.keys()
     )
     ar_mask.name = "atmospheric_river_mask"
     return ar_mask
-
-
-def _intersection_as_bool(intersection: xr.DataArray) -> npt.NDArray[np.bool_]:
-    """Convert an intersection array to bool; NaN reindex fills are False."""
-    values = np.asarray(intersection)
-    if np.issubdtype(values.dtype, np.floating):
-        return np.isfinite(values) & (values != 0)
-    return values.astype(bool)
 
 
 def _finalize_ar_mask_by_lead(
@@ -253,30 +207,31 @@ def _finalize_ar_mask_by_lead(
     min_size_gridpoints: int,
     time_dimension: str,
 ) -> xr.DataArray:
-    """Compute and label each lead as its bool mask becomes available."""
-    if "lead_time" not in intersection.dims:
-        coords_dict = {dim: intersection.coords[dim] for dim in intersection.dims}
-        return _finalize_ar_mask(
-            _intersection_as_bool(intersection),
-            coords_dict,
-            min_size_gridpoints,
-            time_dimension,
-        )
+    """Label each lead independently so masks can stream as they compute."""
+    if "lead_time" in intersection.dims:
+        slices = [
+            intersection.isel(lead_time=i)
+            for i in range(intersection.sizes["lead_time"])
+        ]
+    else:
+        slices = [intersection]
     parts = []
-    for i in range(intersection.sizes["lead_time"]):
-        sl = intersection.isel(lead_time=i)
-        coords_dict = {dim: sl.coords[dim] for dim in sl.dims}
+    for sl in slices:
+        coords = {dim: sl.coords[dim] for dim in sl.dims}
         parts.append(
             _finalize_ar_mask(
-                _intersection_as_bool(sl),
-                coords_dict,
+                utils.values_as_bool(sl),
+                coords,
                 min_size_gridpoints,
                 time_dimension,
             )
         )
+    if "lead_time" not in intersection.dims:
+        return parts[0]
     out = xr.concat(parts, dim="lead_time")
-    out = out.assign_coords(lead_time=intersection.lead_time)
-    return out.transpose(*intersection.dims)
+    return out.assign_coords(lead_time=intersection.lead_time).transpose(
+        *intersection.dims
+    )
 
 
 def atmospheric_river_mask(
@@ -313,14 +268,8 @@ def atmospheric_river_mask(
         The atmospheric river mask as a DataArray
     """
 
-    # Create boolean masks for each condition
-    has_high_laplacian, has_high_ivt = (
-        np.abs(ivt_laplacian) >= laplacian_threshold,
-        ivt >= ivt_threshold,
-    )
-
-    # Dilate on existing chunks. The ufunc is lat/lon-only, so a
-    # time=1 rechunk is not required for identical spatial dilation.
+    has_high_laplacian = np.abs(ivt_laplacian) >= laplacian_threshold
+    has_high_ivt = ivt >= ivt_threshold
     dilated_laplacian = xr.apply_ufunc(
         calc._binary_dilation_ufunc,
         has_high_laplacian,
@@ -331,8 +280,6 @@ def atmospheric_river_mask(
         keep_attrs=True,
         output_dtypes=[np.int8],
     )
-
-    # Bool intersection only; avoid xr.where int cubes before labeling.
     initial_intersection = dilated_laplacian.astype(bool) & has_high_ivt.astype(bool)
     return _finalize_ar_mask_by_lead(
         initial_intersection,
@@ -357,8 +304,6 @@ def integrated_vapor_transport(
         Integrated vapor transport as a DataArray
     """
 
-    # Fuse u*q / v*q / trapezoid / hypot so q is read once and IVT is
-    # a single shared dask node for laplacian, mask, and returned IVT.
     q = specific_humidity.chunk({"level": -1})
     u = eastward_wind.chunk({"level": -1})
     v = northward_wind.chunk({"level": -1})
@@ -420,17 +365,12 @@ def build_atmospheric_river_mask_and_land_intersection(
     Returns:
         Dataset containing atmospheric river mask and land intersection.
     """
-    # Drop reindex-fill (lead, valid_time) pairs before the 3D IVT graph.
     working = utils.stack_valid_time_pairs(data)
-    # One shared IVT node for laplacian, IVT threshold, and optional output.
     ivt_data = integrated_vapor_transport(
         specific_humidity=working["specific_humidity"],
         eastward_wind=working["eastward_wind"],
         northward_wind=working["northward_wind"],
     )
-
-    # Fuse laplacian + threshold + dilation on the same IVT chunks so the
-    # N-D filter axes match develop and dilation stays spatial-only.
     dilated = _dilated_high_laplacian(
         ivt_data, sigma=3, laplacian_threshold=2.5, dilation_radius=8
     )

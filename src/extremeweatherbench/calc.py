@@ -1395,11 +1395,10 @@ def _dilate_square_last2(data: np.ndarray, radius: int) -> np.ndarray:
 
 
 def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataArray:
-    """Apply binary dilation along the last two (lat, lon) axes.
+    """Square binary dilation on the last two (lat, lon) axes.
 
-    Uses a separable chessboard (square) dilation of the given radius,
-    matching ndimage.binary_dilation with a (2r+1)^2 ones structure and
-    border_value=0. Leading dims (e.g. valid_time, lead_time) are loops.
+    Matches ndimage.binary_dilation with a (2r+1)^2 ones structure and
+    border_value=0. Extra leading dims are dilated independently.
 
     Args:
         data: Array of shape (..., lat, lon)
@@ -1419,7 +1418,7 @@ def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataA
 
 @njit(cache=True)
 def _laplace_2d(data: np.ndarray, out: np.ndarray) -> None:
-    """skimage-style 2D Laplace, scipy reflect (edge sample repeated)."""
+    """2D Laplace with reflect borders (edge sample repeated)."""
     n_y, n_x = data.shape
     for i in range(n_y):
         im = i if i == 0 else i - 1
@@ -1431,86 +1430,20 @@ def _laplace_2d(data: np.ndarray, out: np.ndarray) -> None:
             out[i, j] = 4.0 * c - data[im, j] - data[ip, j] - data[i, jm] - data[i, jp]
 
 
-@njit(cache=True)
-def _laplace_3d(data: np.ndarray, out: np.ndarray) -> None:
-    """skimage-style 3D Laplace, scipy reflect (edge sample repeated)."""
-    n0, n1, n2 = data.shape
-    for i0 in range(n0):
-        a0 = i0 if i0 == 0 else i0 - 1
-        b0 = i0 if i0 == n0 - 1 else i0 + 1
-        for i1 in range(n1):
-            a1 = i1 if i1 == 0 else i1 - 1
-            b1 = i1 if i1 == n1 - 1 else i1 + 1
-            for i2 in range(n2):
-                a2 = i2 if i2 == 0 else i2 - 1
-                b2 = i2 if i2 == n2 - 1 else i2 + 1
-                c = data[i0, i1, i2]
-                out[i0, i1, i2] = (
-                    6.0 * c
-                    - data[a0, i1, i2]
-                    - data[b0, i1, i2]
-                    - data[i0, a1, i2]
-                    - data[i0, b1, i2]
-                    - data[i0, i1, a2]
-                    - data[i0, i1, b2]
-                )
-
-
-@njit(cache=True)
-def _laplace_4d(data: np.ndarray, out: np.ndarray) -> None:
-    """skimage-style 4D Laplace, scipy reflect (edge sample repeated)."""
-    n0, n1, n2, n3 = data.shape
-    for i0 in range(n0):
-        a0 = i0 if i0 == 0 else i0 - 1
-        b0 = i0 if i0 == n0 - 1 else i0 + 1
-        for i1 in range(n1):
-            a1 = i1 if i1 == 0 else i1 - 1
-            b1 = i1 if i1 == n1 - 1 else i1 + 1
-            for i2 in range(n2):
-                a2 = i2 if i2 == 0 else i2 - 1
-                b2 = i2 if i2 == n2 - 1 else i2 + 1
-                for i3 in range(n3):
-                    a3 = i3 if i3 == 0 else i3 - 1
-                    b3 = i3 if i3 == n3 - 1 else i3 + 1
-                    c = data[i0, i1, i2, i3]
-                    out[i0, i1, i2, i3] = (
-                        8.0 * c
-                        - data[a0, i1, i2, i3]
-                        - data[b0, i1, i2, i3]
-                        - data[i0, a1, i2, i3]
-                        - data[i0, b1, i2, i3]
-                        - data[i0, i1, a2, i3]
-                        - data[i0, i1, b2, i3]
-                        - data[i0, i1, i2, a3]
-                        - data[i0, i1, i2, b3]
-                    )
-
-
 def _discrete_laplace(data: np.ndarray) -> np.ndarray:
     """Discrete Laplace matching skimage.filters.laplace (ksize=3)."""
-    if data.ndim == 2:
-        out = np.empty_like(data)
-        _laplace_2d(data, out)
-        return out
-    if data.ndim == 3:
-        out = np.empty_like(data)
-        _laplace_3d(data, out)
-        return out
-    if data.ndim == 4:
-        out = np.empty_like(data)
-        _laplace_4d(data, out)
-        return out
-    return filters.laplace(data)
+    if data.ndim != 2:
+        return filters.laplace(data)
+    out = np.empty_like(data)
+    _laplace_2d(data, out)
+    return out
 
 
 def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.DataArray:
-    """Compute blurred Laplacian using a numba stencil plus scipy gauss.
-
-    Filters all axes of the received array, matching the previous
-    skimage.filters.laplace + ndimage.gaussian_filter path.
+    """Blurred Laplacian: discrete Laplace, then a Gaussian smooth.
 
     Args:
-        data: IVT data to compute the blurred Laplacian of; data must be 2D
+        data: IVT data to filter. The apply_ufunc path passes 2D lat/lon.
         sigma: the standard deviation for the Gaussian filter
 
     Returns:
@@ -1521,5 +1454,4 @@ def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.Dat
         arr = np.ascontiguousarray(arr)
     else:
         arr = np.ascontiguousarray(arr, dtype=np.float64)
-    laplace_data = _discrete_laplace(arr)
-    return ndimage.gaussian_filter(laplace_data, sigma=float(sigma))
+    return ndimage.gaussian_filter(_discrete_laplace(arr), sigma=float(sigma))
