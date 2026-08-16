@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from typing import cast
 
 import numpy as np
 import numpy.typing as npt
@@ -363,7 +364,8 @@ def build_atmospheric_river_mask_and_land_intersection(
             IVT is still computed for the mask but dropped when omitted.
 
     Returns:
-        Dataset containing atmospheric river mask and land intersection.
+        Dataset with atmospheric_river_mask, land intersection, and IVT,
+        or only the names listed in output_variables.
     """
     working = utils.stack_valid_time_pairs(data)
     ivt_data = integrated_vapor_transport(
@@ -375,9 +377,10 @@ def build_atmospheric_river_mask_and_land_intersection(
         ivt_data, sigma=3, laplacian_threshold=2.5, dilation_radius=8
     )
     initial_intersection = dilated.astype(bool) & (ivt_data >= 400)
-    ivt_data = utils.unstack_valid_time_pairs(ivt_data, like=data)
-    initial_intersection = utils.unstack_valid_time_pairs(
-        initial_intersection, like=data
+    ivt_data = cast(xr.DataArray, utils.unstack_valid_time_pairs(ivt_data, like=data))
+    initial_intersection = cast(
+        xr.DataArray,
+        utils.unstack_valid_time_pairs(initial_intersection, like=data),
     )
     ar_mask_result = _finalize_ar_mask_by_lead(
         initial_intersection,

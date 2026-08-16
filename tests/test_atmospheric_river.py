@@ -6,7 +6,7 @@ import pytest
 import xarray as xr
 from scipy import ndimage
 
-from extremeweatherbench import calc
+from extremeweatherbench import calc, derived
 from extremeweatherbench.events import atmospheric_river
 
 # Set random seed for reproducible tests
@@ -924,6 +924,15 @@ class TestBuildMaskAndLandIntersection:
         assert list(land_intersection.dims) == ["valid_time", "latitude", "longitude"]
         # Values should be 0 or 1 (binary mask)
         assert set(land_intersection.values.flatten()).issubset({0, 1})
+        assert "integrated_vapor_transport" in result.data_vars
+
+    def test_derived_variable_emits_only_requested_outputs(self, sample_full_dataset):
+        """User-facing AR derive must keep only requested output variables."""
+        ar_var = derived.AtmosphericRiverVariables(
+            output_variables=["atmospheric_river_land_intersection"]
+        )
+        result = ar_var.derive_variable(sample_full_dataset)
+        assert list(result.data_vars) == ["atmospheric_river_land_intersection"]
 
     def test_build_mask_and_land_intersection_missing_variables(self):
         """Test integration with missing required variables."""
@@ -1172,9 +1181,18 @@ class TestTimeLinkedLabeling:
         shape = (len(lead), len(time), len(level), len(lat), len(lon))
         data = xr.Dataset(
             {
-                "specific_humidity": (["lead_time", "valid_time", "level", "latitude", "longitude"], np.ones(shape)),
-                "eastward_wind": (["lead_time", "valid_time", "level", "latitude", "longitude"], np.ones(shape)),
-                "northward_wind": (["lead_time", "valid_time", "level", "latitude", "longitude"], np.ones(shape)),
+                "specific_humidity": (
+                    ["lead_time", "valid_time", "level", "latitude", "longitude"],
+                    np.ones(shape),
+                ),
+                "eastward_wind": (
+                    ["lead_time", "valid_time", "level", "latitude", "longitude"],
+                    np.ones(shape),
+                ),
+                "northward_wind": (
+                    ["lead_time", "valid_time", "level", "latitude", "longitude"],
+                    np.ones(shape),
+                ),
             },
             coords={
                 "lead_time": lead,
@@ -1199,16 +1217,12 @@ class TestTimeLinkedLabeling:
             ivt.name = "integrated_vapor_transport"
             return ivt * 500
 
-        monkeypatch.setattr(
-            atmospheric_river, "integrated_vapor_transport", fake_ivt
-        )
+        monkeypatch.setattr(atmospheric_river, "integrated_vapor_transport", fake_ivt)
         monkeypatch.setattr(
             atmospheric_river,
             "_dilated_high_laplacian",
             lambda ivt, **kwargs: xr.ones_like(ivt, dtype=np.int8),
         )
-        atmospheric_river.build_atmospheric_river_mask_and_land_intersection(
-            data
-        )
+        atmospheric_river.build_atmospheric_river_mask_and_land_intersection(data)
         assert "sample" in seen["dims"]
         assert seen["size"] == 3

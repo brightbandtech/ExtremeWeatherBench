@@ -410,8 +410,8 @@ class AtmosphericRiverVariables(DerivedVariable):
     Newell et al. 1992 and elsewhere (e.g. Mo 2024).
 
     Output variables: integrated_vapor_transport, atmospheric_river_mask,
-    atmospheric_river_land_intersection. Users must declare at least one
-    output variable when calling the derived variable.
+    atmospheric_river_land_intersection. Defaults to all three; pass
+    output_variables to keep a subset.
 
     The Laplacian of IVT uses a Gaussian blurring kernel with sigma of 3
     grid points to smooth 0.25 degree grid scale features.

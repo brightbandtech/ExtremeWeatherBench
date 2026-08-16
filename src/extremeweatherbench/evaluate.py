@@ -1133,8 +1133,9 @@ def _build_datasets(
 ) -> tuple[xr.Dataset, xr.Dataset]:
     """Build the target and forecast datasets for a case operator.
 
-    This method will process through all stages of the pipeline for the target and
-    forecast datasets, including preprocessing, variable renaming, and subsetting.
+    Builds target and forecast datasets, including preprocessing, variable
+    renaming, and subsetting. Reuses a target from precomputed_targets in
+    kwargs when that cache has an entry for this operator.
     It augments the InputBase variables with any variables defined in metrics to
     ensure all required variables are loaded and derived.
 

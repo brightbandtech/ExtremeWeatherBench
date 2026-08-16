@@ -502,9 +502,7 @@ def test_stack_valid_time_pairs_keeps_only_true_mask_cells():
     stacked = utils.stack_valid_time_pairs(converted)
     assert stacked.sizes["sample"] == int(mask.sum())
     expected = values[mask]
-    np.testing.assert_array_equal(
-        np.sort(stacked["temp"].values), np.sort(expected)
-    )
+    np.testing.assert_array_equal(np.sort(stacked["temp"].values), np.sort(expected))
 
 
 def test_stack_valid_time_pairs_reduces_dask_chunks():

@@ -1393,7 +1393,7 @@ def _dilate_square_last2(data: np.ndarray, radius: int) -> np.ndarray:
     return out.reshape(data.shape)
 
 
-def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataArray:
+def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> np.ndarray:
     """Square binary dilation on the last two (lat, lon) axes.
 
     Matches ndimage.binary_dilation with a (2r+1)^2 ones structure and
@@ -1430,13 +1430,13 @@ def _laplace_2d(data: np.ndarray, out: np.ndarray) -> None:
 
 
 def _discrete_laplace(data: np.ndarray) -> np.ndarray:
-    """Discrete Laplace matching skimage.filters.laplace (ksize=3)."""
+    """2D discrete Laplace matching skimage.filters.laplace (ksize=3)."""
     out = np.empty_like(data)
     _laplace_2d(data, out)
     return out
 
 
-def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.DataArray:
+def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> np.ndarray:
     """Blurred Laplacian: discrete Laplace, then a Gaussian smooth.
 
     Extra leading dims are filtered independently on lat/lon only.
