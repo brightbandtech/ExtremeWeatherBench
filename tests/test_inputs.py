@@ -10,7 +10,7 @@ import pytest
 import sparse
 import xarray as xr
 
-from extremeweatherbench import inputs, utils
+from extremeweatherbench import cases, inputs, regions, utils
 
 
 class TestInputBase:
@@ -757,6 +757,52 @@ class TestForecastBase:
 
             # Should process normally without issues
             assert isinstance(result, xr.Dataset)
+
+    def test_forecast_subset_keeps_valid_time_mask_on_lead_valid_time(self):
+        """Subset must expose a (lead, valid_time) mask of overlapping pairs."""
+        inits = pd.date_range("2021-06-20", periods=3, freq="12h")
+        leads = pd.to_timedelta([0, 6, 12, 24], unit="h")
+        lats = np.array([44.0, 45.0, 46.0])
+        lons = np.array([-121.0, -120.0, -119.0])
+        data = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["init_time", "lead_time", "latitude", "longitude"],
+                    np.ones((3, 4, 3, 3)),
+                )
+            },
+            coords={
+                "init_time": inits,
+                "lead_time": leads,
+                "latitude": lats,
+                "longitude": lons,
+            },
+        )
+        case = cases.IndividualCase(
+            case_id_number=1,
+            title="mask-pairs",
+            start_date=pd.Timestamp("2021-06-20 12:00"),
+            end_date=pd.Timestamp("2021-06-21 00:00"),
+            location=regions.CenteredRegion(
+                latitude=45.0, longitude=-120.0, bounding_box_degrees=4.0
+            ),
+            event_type="heat_wave",
+        )
+        forecast = inputs.ZarrForecast(
+            name="test",
+            source="test.zarr",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+        result = forecast.subset_data_to_case(data, case)
+        assert "valid_time_mask" in result.coords
+        mask = result.valid_time_mask
+        assert set(mask.dims) == {"lead_time", "valid_time"}
+        assert bool(mask.any())
+        n_true = int(mask.astype(bool).sum())
+        stacked = utils.stack_valid_time_pairs(result)
+        assert stacked.sizes["sample"] == n_true
 
     def test_forecast_base_duplicate_init_times_preserves_first_occurrence(self):
         """Test that when duplicates exist, the first occurrence is preserved."""

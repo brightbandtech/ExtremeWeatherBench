@@ -1,58 +1,77 @@
 from collections.abc import Sequence
+from typing import cast
 
 import numpy as np
 import numpy.typing as npt
 import xarray as xr
+from numba import float64, guvectorize, njit
 from scipy import ndimage
 
-from extremeweatherbench import calc
+from extremeweatherbench import calc, utils
 
 
-def _label_time_linked_tyx(mask_tyx: npt.NDArray[np.bool_]) -> npt.NDArray[np.int32]:
-    """Label a (time, lat, lon) mask with 6-connectivity.
+@njit(cache=True)
+def _ufind(parent: np.ndarray, x: int) -> int:
+    """Path-compressing union-find parent lookup."""
+    while parent[x] != x:
+        parent[x] = parent[parent[x]]
+        x = parent[x]
+    return x
 
-    2D connected components plus union-find across consecutive times.
-    Matches ndimage.label with generate_binary_structure(3, 1).
-    """
-    n_t = mask_tyx.shape[0]
-    labeled = np.empty(mask_tyx.shape, dtype=np.int32)
-    n_feat = np.empty(n_t, dtype=np.int32)
-    for t in range(n_t):
-        labeled[t], n_feat[t] = ndimage.label(mask_tyx[t])
-    total = int(n_feat.sum())
-    if total == 0:
-        return labeled
 
-    glob = np.where(
-        labeled > 0, labeled + (np.cumsum(n_feat) - n_feat)[:, None, None], 0
-    ).astype(np.int32)
-    parent = np.arange(total + 1, dtype=np.int32)
-
-    def find(x: int) -> int:
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = int(parent[x])
-        return x
-
-    for t in range(n_t - 1):
-        both = (glob[t] > 0) & (glob[t + 1] > 0)
-        if not both.any():
-            continue
-        pairs = np.unique(np.stack((glob[t][both], glob[t + 1][both]), axis=1), axis=0)
-        for a, b in pairs:
-            ra, rb = find(int(a)), find(int(b))
-            if ra != rb:
-                parent[rb] = ra
-
-    remap = np.zeros(total + 1, dtype=np.int32)
-    n = 0
-    for i in range(1, total + 1):
-        root = find(i)
-        if remap[root] == 0:
-            n += 1
-            remap[root] = n
-        remap[i] = remap[root]
-    return remap[glob]
+@njit(cache=True)
+def _label_time_linked_stack(mask: np.ndarray) -> np.ndarray:
+    """6-connected labels on (time, extra, y, x); extras stay unlinked."""
+    n_t, n_extra, n_y, n_x = mask.shape
+    out = np.zeros((n_t, n_extra, n_y, n_x), dtype=np.int32)
+    n_pix = n_t * n_y * n_x
+    parent = np.empty(n_pix, dtype=np.int32)
+    remap = np.empty(n_pix, dtype=np.int32)
+    stride_t = n_y * n_x
+    next_id = 1
+    for e in range(n_extra):
+        for i in range(n_pix):
+            parent[i] = i
+            remap[i] = 0
+        # Union True pixels with west, south, and previous-time neighbors.
+        for t in range(n_t):
+            for y in range(n_y):
+                for x in range(n_x):
+                    if not mask[t, e, y, x]:
+                        continue
+                    idx = t * stride_t + y * n_x + x
+                    if x > 0 and mask[t, e, y, x - 1]:
+                        ra = _ufind(parent, idx)
+                        rb = _ufind(parent, idx - 1)
+                        if ra != rb:
+                            parent[rb] = ra
+                    if y > 0 and mask[t, e, y - 1, x]:
+                        ra = _ufind(parent, idx)
+                        rb = _ufind(parent, idx - n_x)
+                        if ra != rb:
+                            parent[rb] = ra
+                    if t > 0 and mask[t - 1, e, y, x]:
+                        ra = _ufind(parent, idx)
+                        rb = _ufind(parent, idx - stride_t)
+                        if ra != rb:
+                            parent[rb] = ra
+        # Assign dense labels; extras do not share IDs.
+        next_local = 0
+        for t in range(n_t):
+            for y in range(n_y):
+                for x in range(n_x):
+                    if not mask[t, e, y, x]:
+                        continue
+                    idx = t * stride_t + y * n_x + x
+                    root = _ufind(parent, idx)
+                    lab = remap[root]
+                    if lab == 0:
+                        next_local += 1
+                        lab = next_local
+                        remap[root] = lab
+                    out[t, e, y, x] = lab + (next_id - 1)
+        next_id += next_local
+    return out
 
 
 def _label_objects_time_linked(
@@ -71,20 +90,149 @@ def _label_objects_time_linked(
         + [i for i, name in enumerate(dims) if name not in keep]
         + [dims.index("latitude"), dims.index("longitude")]
     )
-    moved = np.transpose(mask, order)
+    moved = np.ascontiguousarray(np.transpose(mask, order))
     n_t, *extra, n_y, n_x = moved.shape
     n_extra = int(np.prod(extra, initial=1))
-    moved = moved.reshape(n_t, n_extra, n_y, n_x)
-    out = np.empty_like(moved, dtype=np.int32)
-    next_id = 1
-    for i in range(n_extra):
-        lab = _label_time_linked_tyx(moved[:, i])
-        n_lab = int(lab.max())
-        if n_lab:
-            lab = np.where(lab, lab + (next_id - 1), 0)
-            next_id += n_lab
-        out[:, i] = lab
+    stacked = moved.reshape(n_t, n_extra, n_y, n_x)
+    out = _label_time_linked_stack(stacked)
     return np.transpose(out.reshape(n_t, *extra, n_y, n_x), np.argsort(order))
+
+
+def _filter_labels_size_and_lat(
+    labeled: npt.NDArray[np.int32],
+    latitudes: npt.NDArray[np.floating],
+    lat_axis: int,
+    min_size: int,
+    min_abs_lat: float = 15.0,
+) -> npt.NDArray[np.bool_]:
+    """Keep labels with enough pixels and |mean lat| above the tropics."""
+    if labeled.size == 0:
+        return np.zeros(labeled.shape, dtype=bool)
+    n = int(labeled.max()) + 1
+    flat = labeled.ravel()
+    counts = np.bincount(flat, minlength=n)
+    lat_shape = [1] * labeled.ndim
+    lat_shape[lat_axis] = np.asarray(latitudes).size
+    weights = np.broadcast_to(
+        np.asarray(latitudes, dtype=np.float64).reshape(lat_shape),
+        labeled.shape,
+    )
+    lat_sums = np.bincount(flat, weights=weights.ravel(), minlength=n)
+    valid = np.zeros(n, dtype=np.bool_)
+    if n > 1:
+        denom = np.maximum(counts[1:], 1)
+        valid[1:] = (counts[1:] >= min_size) & (
+            np.abs(lat_sums[1:] / denom) > min_abs_lat
+        )
+    return valid[labeled]
+
+
+@guvectorize(
+    [(float64[:], float64[:], float64[:], float64[:], float64, float64[:])],
+    "(n),(n),(n),(n),()->()",
+    nopython=True,
+    target="cpu",
+)
+def _ivt_fused_kernel(u, v, q, x, g0, out):
+    """Trapezoid-integrate u*q and v*q, then hypot / g0."""
+    east = 0.0
+    north = 0.0
+    for i in range(len(u) - 1):
+        uq0 = u[i] * q[i]
+        uq1 = u[i + 1] * q[i + 1]
+        vq0 = v[i] * q[i]
+        vq1 = v[i + 1] * q[i + 1]
+        dx = x[i + 1] - x[i]
+        if not (np.isnan(uq0) or np.isnan(uq1)):
+            east += dx * (uq0 + uq1) / 2.0
+        if not (np.isnan(vq0) or np.isnan(vq1)):
+            north += dx * (vq0 + vq1) / 2.0
+    east /= g0
+    north /= g0
+    out[()] = np.hypot(east, north)
+
+
+def _dilated_high_laplacian(
+    ivt: xr.DataArray,
+    sigma: float,
+    laplacian_threshold: float,
+    dilation_radius: int,
+) -> xr.DataArray:
+    """Threshold the blurred Laplacian and dilate on the same IVT chunks."""
+
+    def _ufunc(data, sigma_, lap_thresh, radius):
+        lap = calc._compute_blurred_laplacian_ufunc(data, sigma_)
+        high = np.abs(lap) >= lap_thresh
+        return calc._binary_dilation_ufunc(high, radius)
+
+    return xr.apply_ufunc(
+        _ufunc,
+        ivt,
+        sigma,
+        laplacian_threshold,
+        dilation_radius,
+        input_core_dims=[["latitude", "longitude"], [], [], []],
+        output_core_dims=[["latitude", "longitude"]],
+        dask="parallelized",
+        keep_attrs=True,
+        output_dtypes=[np.int8],
+    )
+
+
+def _finalize_ar_mask(
+    intersection: npt.NDArray[np.bool_],
+    coords_dict: dict,
+    min_size_gridpoints: int,
+    time_dimension: str,
+) -> xr.DataArray:
+    """Label, size-filter, and drop tropical features from a bool intersection."""
+    labeled_array = _label_objects_time_linked(
+        np.asarray(intersection, dtype=bool),
+        list(coords_dict.keys()),
+        time_dimension,
+    )
+    latitudes = np.asarray(coords_dict["latitude"].values)
+    lat_axis = list(coords_dict.keys()).index("latitude")
+    feature_mask = _filter_labels_size_and_lat(
+        labeled_array, latitudes, lat_axis, min_size_gridpoints
+    )
+    ar_mask = xr.DataArray(
+        feature_mask.astype(np.int8), coords=coords_dict, dims=coords_dict.keys()
+    )
+    ar_mask.name = "atmospheric_river_mask"
+    return ar_mask
+
+
+def _finalize_ar_mask_by_lead(
+    intersection: xr.DataArray,
+    min_size_gridpoints: int,
+    time_dimension: str,
+) -> xr.DataArray:
+    """Label each lead independently so masks can stream as they compute."""
+    if "lead_time" in intersection.dims:
+        slices = [
+            intersection.isel(lead_time=i)
+            for i in range(intersection.sizes["lead_time"])
+        ]
+    else:
+        slices = [intersection]
+    parts = []
+    for sl in slices:
+        coords = {dim: sl.coords[dim] for dim in sl.dims}
+        parts.append(
+            _finalize_ar_mask(
+                utils.values_as_bool(sl),
+                coords,
+                min_size_gridpoints,
+                time_dimension,
+            )
+        )
+    if "lead_time" not in intersection.dims:
+        return parts[0]
+    out = xr.concat(parts, dim="lead_time")
+    return out.assign_coords(lead_time=intersection.lead_time).transpose(
+        *intersection.dims
+    )
 
 
 def atmospheric_river_mask(
@@ -121,22 +269,11 @@ def atmospheric_river_mask(
         The atmospheric river mask as a DataArray
     """
 
-    # Get all coordinates except level for the intersection DataArray
-    coords_dict = {dim: ivt.coords[dim] for dim in ivt.dims if dim != "level"}
-
-    # Create boolean masks for each condition
-    has_high_laplacian, has_high_ivt = (
-        np.abs(ivt_laplacian) >= laplacian_threshold,
-        ivt >= ivt_threshold,
-    )
-
-    # For the Laplacian condition, we want to check if there's a value >=
-    # laplacian_threshold within 8 gridpoints (0.25 degrees).
-    # Apply binary dilation lazily via apply_ufunc; this keeps dilation in the Dask
-    # graph after ivt/laplacian tasks
+    has_high_laplacian = np.abs(ivt_laplacian) >= laplacian_threshold
+    has_high_ivt = ivt >= ivt_threshold
     dilated_laplacian = xr.apply_ufunc(
         calc._binary_dilation_ufunc,
-        has_high_laplacian.chunk({time_dimension: 1, "latitude": -1, "longitude": -1}),
+        has_high_laplacian,
         dilation_radius,
         input_core_dims=[["latitude", "longitude"], []],
         output_core_dims=[["latitude", "longitude"]],
@@ -144,45 +281,12 @@ def atmospheric_river_mask(
         keep_attrs=True,
         output_dtypes=[np.int8],
     )
-
-    # Combine conditions without tropical restriction initially
-    initial_intersection = xr.where(dilated_laplacian & has_high_ivt, 1, 0)
-
-    # Label 2D slices and merge across consecutive valid_time only.
-    labeled_array = _label_objects_time_linked(
-        np.asarray(initial_intersection, dtype=bool),
-        list(initial_intersection.dims),
+    initial_intersection = dilated_laplacian.astype(bool) & has_high_ivt.astype(bool)
+    return _finalize_ar_mask_by_lead(
+        initial_intersection,
+        min_size_gridpoints,
         time_dimension,
     )
-    unique_labels, label_counts = np.unique(labeled_array, return_counts=True)
-
-    # Filter by size first (excluding background label 0)
-    size_valid_labels = unique_labels[
-        np.where((label_counts >= min_size_gridpoints) & (unique_labels != 0))
-    ]
-
-    # Filter out tropical ARs: the mean latitude of each labeled feature
-    # must be > 15 degrees N or S of the equator.
-    latitudes = ivt.coords["latitude"].values
-    lat_axis = list(coords_dict.keys()).index("latitude")
-    lat_shape = [1] * labeled_array.ndim
-    lat_shape[lat_axis] = len(latitudes)
-    lat_grid = np.broadcast_to(latitudes.reshape(lat_shape), labeled_array.shape)
-    if size_valid_labels.size == 0:
-        valid_labels = size_valid_labels
-    else:
-        mean_lat = ndimage.mean(lat_grid, labels=labeled_array, index=size_valid_labels)
-        valid_labels = size_valid_labels[np.abs(mean_lat) > 15]
-
-    # Create final mask using valid features
-    feature_mask = np.isin(labeled_array, valid_labels)
-
-    # Final result with size threshold applied
-    ar_mask = xr.DataArray(
-        xr.where(feature_mask, 1, 0), coords=coords_dict, dims=coords_dict.keys()
-    )
-    ar_mask.name = "atmospheric_river_mask"
-    return ar_mask
 
 
 def integrated_vapor_transport(
@@ -201,23 +305,22 @@ def integrated_vapor_transport(
         Integrated vapor transport as a DataArray
     """
 
-    # Compute IVT components using nantrapezoid_pressure_levels
-    eastward_ivt = (
-        calc.nantrapezoid_pressure_levels(
-            da=eastward_wind * specific_humidity,
-        )
-        / calc.g0
+    q = specific_humidity.chunk({"level": -1})
+    u = eastward_wind.chunk({"level": -1})
+    v = northward_wind.chunk({"level": -1})
+    levels_pa = q["level"] * 100
+    ivt_magnitude = xr.apply_ufunc(
+        _ivt_fused_kernel,
+        u,
+        v,
+        q,
+        levels_pa,
+        calc.g0,
+        input_core_dims=[["level"], ["level"], ["level"], ["level"], []],
+        output_core_dims=[[]],
+        dask="parallelized",
+        output_dtypes=[float],
     )
-
-    northward_ivt = (
-        calc.nantrapezoid_pressure_levels(
-            da=northward_wind * specific_humidity,
-        )
-        / calc.g0
-    )
-
-    # Compute IVT using components
-    ivt_magnitude = xr.ufuncs.hypot(eastward_ivt, northward_ivt)
     ivt_magnitude.name = "integrated_vapor_transport"
     return ivt_magnitude
 
@@ -248,36 +351,51 @@ def integrated_vapor_transport_laplacian(
     return laplacian
 
 
-def build_atmospheric_river_mask_and_land_intersection(data: xr.Dataset) -> xr.Dataset:
+def build_atmospheric_river_mask_and_land_intersection(
+    data: xr.Dataset,
+    output_variables: list[str] | None = None,
+) -> xr.Dataset:
     """Calculate atmospheric river mask and land intersection.
 
     Args:
         data: Dataset with atmospheric data. Must contain eastward_wind,
             northward_wind, specific_humidity, and level.
+        output_variables: If set, only these names are kept in the result.
+            IVT is still computed for the mask but dropped when omitted.
 
     Returns:
-        Dataset containing atmospheric river mask and land intersection.
+        Dataset with atmospheric_river_mask, land intersection, and IVT,
+        or only the names listed in output_variables.
     """
-    # Generate IVT
+    working = utils.stack_valid_time_pairs(data)
     ivt_data = integrated_vapor_transport(
-        specific_humidity=data["specific_humidity"],
-        eastward_wind=data["eastward_wind"],
-        northward_wind=data["northward_wind"],
+        specific_humidity=working["specific_humidity"],
+        eastward_wind=working["eastward_wind"],
+        northward_wind=working["northward_wind"],
+    )
+    dilated = _dilated_high_laplacian(
+        ivt_data, sigma=3, laplacian_threshold=2.5, dilation_radius=8
+    )
+    initial_intersection = dilated.astype(bool) & (ivt_data >= 400)
+    ivt_data = cast(xr.DataArray, utils.unstack_valid_time_pairs(ivt_data, like=data))
+    initial_intersection = cast(
+        xr.DataArray,
+        utils.unstack_valid_time_pairs(initial_intersection, like=data),
+    )
+    ar_mask_result = _finalize_ar_mask_by_lead(
+        initial_intersection,
+        min_size_gridpoints=500,
+        time_dimension="valid_time",
     )
 
-    # Compute IVT Laplacian
-    ivt_laplacian = integrated_vapor_transport_laplacian(ivt=ivt_data, sigma=3)
-
-    # Compute AR mask with default parameters
-    ar_mask_result = atmospheric_river_mask(ivt=ivt_data, ivt_laplacian=ivt_laplacian)
-
-    # Compute land intersection
     land_intersection = calc.find_land_intersection(ar_mask_result)
+    land_intersection.name = "atmospheric_river_land_intersection"
 
-    return xr.Dataset(
-        {
-            "atmospheric_river_mask": ar_mask_result,
-            "atmospheric_river_land_intersection": land_intersection,
-            "integrated_vapor_transport": ivt_data,
-        }
-    )
+    result: dict[str, xr.DataArray] = {
+        "atmospheric_river_mask": ar_mask_result,
+        "atmospheric_river_land_intersection": land_intersection,
+        "integrated_vapor_transport": ivt_data,
+    }
+    if output_variables is not None:
+        result = {k: v for k, v in result.items() if k in output_variables}
+    return xr.Dataset(result)

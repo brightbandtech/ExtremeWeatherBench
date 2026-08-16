@@ -6,9 +6,8 @@ import numpy as np
 import numpy.typing as npt
 import shapely
 import xarray as xr
-from numba import float64, guvectorize
+from numba import float64, guvectorize, njit
 from scipy import ndimage
-from skimage import filters
 
 from extremeweatherbench import utils
 from extremeweatherbench._cape import EPSILON
@@ -1332,11 +1331,73 @@ def _is_true_landfall(
         return False
 
 
-def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataArray:
-    """Apply binary dilation along the last two (lat, lon) axes.
+@njit(cache=True)
+def _dilate_rows_or(src: np.ndarray, dst: np.ndarray, radius: int) -> None:
+    """Horizontal sliding-window OR with constant-0 (clipped) borders."""
+    n_y, n_x = src.shape
+    for y in range(n_y):
+        count = 0
+        end = min(n_x, radius + 1)
+        for x in range(end):
+            count += src[y, x]
+        dst[y, 0] = 1 if count > 0 else 0
+        for x in range(1, n_x):
+            left = x - 1 - radius
+            right = x + radius
+            if left >= 0:
+                count -= src[y, left]
+            if right < n_x:
+                count += src[y, right]
+            dst[y, x] = 1 if count > 0 else 0
 
-    Uses axes=(-2, -1) so the function works correctly for any number of
-    leading broadcast dimensions (e.g. valid_time, lead_time).
+
+@njit(cache=True)
+def _dilate_cols_or(src: np.ndarray, dst: np.ndarray, radius: int) -> None:
+    """Vertical sliding-window OR with constant-0 (clipped) borders."""
+    n_y, n_x = src.shape
+    for x in range(n_x):
+        count = 0
+        end = min(n_y, radius + 1)
+        for y in range(end):
+            count += src[y, x]
+        dst[0, x] = 1 if count > 0 else 0
+        for y in range(1, n_y):
+            top = y - 1 - radius
+            bot = y + radius
+            if top >= 0:
+                count -= src[top, x]
+            if bot < n_y:
+                count += src[bot, x]
+            dst[y, x] = 1 if count > 0 else 0
+
+
+@njit(cache=True)
+def _dilate_square_2d(data: np.ndarray, radius: int, out: np.ndarray) -> None:
+    """Separable chessboard binary dilation on one 2D slice."""
+    n_y, n_x = data.shape
+    tmp = np.empty((n_y, n_x), dtype=np.int8)
+    _dilate_rows_or(data, tmp, radius)
+    _dilate_cols_or(tmp, out, radius)
+
+
+@njit(cache=True)
+def _dilate_square_last2(data: np.ndarray, radius: int) -> np.ndarray:
+    """Square dilation on the last two axes of a C-contiguous array."""
+    n_y = data.shape[-2]
+    n_x = data.shape[-1]
+    n_lead = data.size // (n_y * n_x)
+    src = data.reshape(n_lead, n_y, n_x)
+    out = np.empty((n_lead, n_y, n_x), dtype=np.int8)
+    for i in range(n_lead):
+        _dilate_square_2d(src[i], radius, out[i])
+    return out.reshape(data.shape)
+
+
+def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> np.ndarray:
+    """Square binary dilation on the last two (lat, lon) axes.
+
+    Matches ndimage.binary_dilation with a (2r+1)^2 ones structure and
+    border_value=0. Extra leading dims are dilated independently.
 
     Args:
         data: Array of shape (..., lat, lon)
@@ -1345,22 +1406,60 @@ def _binary_dilation_ufunc(data: xr.DataArray, dilation_radius: int) -> xr.DataA
     Returns:
         Dilated array of the same shape as data
     """
-    size = dilation_radius * 2 + 1
-    struct = np.ones((size, size))
-    return ndimage.binary_dilation(data, structure=struct, axes=(-2, -1)).astype(
-        np.int8
-    )
+    arr = np.ascontiguousarray(np.asarray(data) != 0, dtype=np.int8)
+    radius = int(dilation_radius)
+    if arr.ndim < 2:
+        raise ValueError("binary dilation requires at least 2 dimensions")
+    if radius <= 0:
+        return arr
+    return _dilate_square_last2(arr, radius)
 
 
-def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> xr.DataArray:
-    """Compute blurred Laplacian using scipy filters.
+@njit(cache=True)
+def _laplace_2d(data: np.ndarray, out: np.ndarray) -> None:
+    """2D Laplace with reflect borders (edge sample repeated)."""
+    n_y, n_x = data.shape
+    for i in range(n_y):
+        im = i if i == 0 else i - 1
+        ip = i if i == n_y - 1 else i + 1
+        for j in range(n_x):
+            jm = j if j == 0 else j - 1
+            jp = j if j == n_x - 1 else j + 1
+            c = data[i, j]
+            out[i, j] = 4.0 * c - data[im, j] - data[ip, j] - data[i, jm] - data[i, jp]
+
+
+def _discrete_laplace(data: np.ndarray) -> np.ndarray:
+    """2D discrete Laplace matching skimage.filters.laplace (ksize=3)."""
+    out = np.empty_like(data)
+    _laplace_2d(data, out)
+    return out
+
+
+def _compute_blurred_laplacian_ufunc(data: xr.DataArray, sigma: float) -> np.ndarray:
+    """Blurred Laplacian: discrete Laplace, then a Gaussian smooth.
+
+    Extra leading dims are filtered independently on lat/lon only.
 
     Args:
-        data: IVT data to compute the blurred Laplacian of; data must be 2D
+        data: IVT data of shape (..., lat, lon)
         sigma: the standard deviation for the Gaussian filter
 
     Returns:
         The blurred Laplacian of IVT
     """
-    laplace_data = filters.laplace(data)
-    return ndimage.gaussian_filter(laplace_data, sigma=sigma)
+    arr = np.asarray(data)
+    if arr.dtype.kind == "f":
+        arr = np.ascontiguousarray(arr)
+    else:
+        arr = np.ascontiguousarray(arr, dtype=np.float64)
+    if arr.ndim < 2:
+        raise ValueError("blurred laplacian requires at least 2 dimensions")
+    sigma_f = float(sigma)
+    n_y, n_x = arr.shape[-2], arr.shape[-1]
+    n_lead = arr.size // (n_y * n_x)
+    src = arr.reshape(n_lead, n_y, n_x)
+    out = np.empty_like(src)
+    for i in range(n_lead):
+        out[i] = ndimage.gaussian_filter(_discrete_laplace(src[i]), sigma=sigma_f)
+    return out.reshape(arr.shape)

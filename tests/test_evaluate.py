@@ -1984,6 +1984,52 @@ class TestPipelineFunctions:
             # Two targets + one forecast; the second forecast is reused.
             assert mock_run_pipeline.call_count == 3
 
+    def test_precompute_unique_targets_runs_shared_target_once(
+        self, sample_case_operator
+    ):
+        """Two forecast groups that share a target precompute it once."""
+        other_forecast = mock.Mock(spec=inputs.ForecastBase)
+        other_forecast.name = "other"
+        other_forecast.source = "other://x"
+        other_forecast.variables = sample_case_operator.forecast.variables
+        op2 = dataclasses.replace(sample_case_operator, forecast=other_forecast)
+        target_ds = xr.Dataset(
+            coords={"time": [1, 2, 3]}, attrs={"name": "shared_target"}
+        )
+        with mock.patch(
+            "extremeweatherbench.evaluate.run_pipeline", return_value=target_ds
+        ) as mock_run:
+            precomputed = evaluate._precompute_unique_targets(
+                [sample_case_operator, op2]
+            )
+        assert mock_run.call_count == 1
+        assert len(precomputed) == 1
+        only = next(iter(precomputed.values()))
+        assert only.attrs["name"] == "shared_target"
+
+    def test_build_datasets_uses_precomputed_target(self, sample_case_operator):
+        """A precomputed target must skip the target pipeline."""
+        precomputed_target = xr.Dataset(
+            coords={"time": [1, 2, 3]}, attrs={"name": "precomputed"}
+        )
+        forecast_ds = xr.Dataset(
+            coords={"valid_time": [1, 2, 3]}, attrs={"name": "forecast_source"}
+        )
+        key = evaluate._pipeline_cache_key(
+            sample_case_operator.case_metadata,
+            sample_case_operator.target,
+        )
+        with mock.patch(
+            "extremeweatherbench.evaluate.run_pipeline", return_value=forecast_ds
+        ) as mock_run:
+            forecast_out, target_out = evaluate._build_datasets(
+                sample_case_operator,
+                precomputed_targets={key: precomputed_target},
+            )
+        assert mock_run.call_count == 1
+        assert target_out.attrs["name"] == "precomputed"
+        assert forecast_out.attrs["name"] == "forecast_source"
+
     def test_build_datasets_zero_length_dimensions(self, sample_case_operator):
         """Test _build_datasets when forecast has zero-length dimensions."""
         # Set up the mock to return a dataset that will trigger the warning
