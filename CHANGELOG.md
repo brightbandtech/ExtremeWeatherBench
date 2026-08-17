@@ -17,6 +17,10 @@ commits. Prefer this changelog when writing GitHub release notes.
 - Unified evaluation progress bar in `progress.py`: one 0–100% bar with
   ETA in both serial and parallel mode, plus `--no-progress` and
   `EWB_DISABLE_PROGRESS` ([#381](https://github.com/brightbandtech/ExtremeWeatherBench/pull/381)).
+- Optional `output_format="xarray"` (a flat Dataset) and CLI writes to
+  netCDF or zarr, including `--sparse`
+  ([#399](https://github.com/brightbandtech/ExtremeWeatherBench/pull/399),
+  [#407](https://github.com/brightbandtech/ExtremeWeatherBench/pull/407)).
 - Python 3.14 support
   ([#386](https://github.com/brightbandtech/ExtremeWeatherBench/pull/386)).
 - Hypothesis property tests for forecast/target input variation
@@ -52,6 +56,30 @@ commits. Prefer this changelog when writing GitHub release notes.
 - `MaximumMeanAbsoluteError` honors the instance `reduce_spatial_dims`
   instead of hardcoding latitude/longitude
   ([#383](https://github.com/brightbandtech/ExtremeWeatherBench/pull/383)).
+- Evaluation reuses forecast and target datasets within a process,
+  groups operators that share a case and forecast, and computes aligned
+  data once so each metric does not rebuild the same dask graph
+  ([#399](https://github.com/brightbandtech/ExtremeWeatherBench/pull/399)).
+- `DurationMeanError` keeps only the case dayofyear slice of
+  climatology before stacking to valid time
+  ([#400](https://github.com/brightbandtech/ExtremeWeatherBench/pull/400)).
+- Atmospheric river objects use 2D labels plus union-find instead of a
+  4D connected-component scan, skip unused forecast
+  `(lead, valid_time)` pairs, and stream masks one lead at a time
+  ([#401](https://github.com/brightbandtech/ExtremeWeatherBench/pull/401),
+  [#408](https://github.com/brightbandtech/ExtremeWeatherBench/pull/408)).
+- Tropical cyclone spatial masks use a chunked haversine grid instead
+  of a Python loop over IBTrACS points
+  ([#402](https://github.com/brightbandtech/ExtremeWeatherBench/pull/402)).
+- LSR parquet reads filter `valid_time` to the case window, with a
+  fallback to the full file if the store rejects filters
+  ([#403](https://github.com/brightbandtech/ExtremeWeatherBench/pull/403)).
+- Unique target pipelines are computed once in the parent and reused
+  across forecast workers
+  ([#408](https://github.com/brightbandtech/ExtremeWeatherBench/pull/408)).
+- Ruff and the pre-commit hook are pinned to 0.16.2, with matching
+  lint fixes
+  ([#404](https://github.com/brightbandtech/ExtremeWeatherBench/pull/404)).
 
 ### Removed
 
@@ -87,6 +115,9 @@ commits. Prefer this changelog when writing GitHub release notes.
 - Landfall, timestep-completeness, and temporal-resolution helpers no
   longer materialize whole arrays to answer emptiness/shape questions
   ([#383](https://github.com/brightbandtech/ExtremeWeatherBench/pull/383)).
+- `outputs` is exported from the package loader, and empty-fallback
+  time dims no longer poison Dataset dtypes
+  ([#407](https://github.com/brightbandtech/ExtremeWeatherBench/pull/407)).
 
 ## [1.0.2.post1] - 2026-04-30
 
