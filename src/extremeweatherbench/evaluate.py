@@ -369,20 +369,6 @@ def _run_parallel_evaluation(
     renderer = None
     log_queue = None
     log_listener = None
-    if progress and progress_module.supports_nested_bars():
-        n_jobs = parallel_config.get("n_jobs")
-        # n_jobs may be negative (all-but-N cores) or None (backend
-        # default), so resolve it to a real, bounded slot count.
-        n_slots = joblib.effective_n_jobs(n_jobs) if n_jobs else 1
-        manager = multiprocessing.Manager()
-        event_queue = manager.Queue()
-        renderer = progress_module.WorkerSlotRenderer(n_slots=n_slots)
-        renderer.start(event_queue)
-        # A separate queue from event_queue: log records and progress
-        # events have different payloads and drain logic.
-        log_queue = manager.Queue()
-        log_listener = progress_module.LogQueueListener()
-        log_listener.start(log_queue)
 
     def _close_worker_progress() -> None:
         # Flush trailing log records before the bars they'd otherwise
@@ -408,10 +394,27 @@ def _run_parallel_evaluation(
             if isinstance(getattr(op, "target", None), inputs.InputBase)
             and not type(op.target).__module__.startswith("unittest")
         ]
+        # Precompute before Manager() so the target bar is visible
+        # during the long first open/compute, not after a silent wait.
         if real_ops:
             kwargs["precomputed_targets"] = _precompute_unique_targets(
-                real_ops, **kwargs
+                real_ops, progress=progress, **kwargs
             )
+        if progress and progress_module.supports_nested_bars():
+            n_jobs = parallel_config.get("n_jobs")
+            # n_jobs may be negative (all-but-N cores) or None (backend
+            # default), so resolve it to a real, bounded slot count.
+            n_slots = joblib.effective_n_jobs(n_jobs) if n_jobs else 1
+            logger.info("Starting parallel workers...")
+            manager = multiprocessing.Manager()
+            event_queue = manager.Queue()
+            renderer = progress_module.WorkerSlotRenderer(n_slots=n_slots)
+            renderer.start(event_queue)
+            # A separate queue from event_queue: log records and progress
+            # events have different payloads and drain logic.
+            log_queue = manager.Queue()
+            log_listener = progress_module.LogQueueListener()
+            log_listener.start(log_queue)
         parallel_tqdm_kwargs["total_tasks"] = len(groups)
         with joblib.parallel_config(**parallel_config):
             nested_results = utils.ParallelTqdm(
@@ -538,30 +541,51 @@ def _augment_operator_inputs(
 
 def _precompute_unique_targets(
     case_operators: list["cases.CaseOperator"],
+    progress: bool = True,
     **kwargs,
 ) -> dict[tuple, xr.Dataset]:
     """Run each unique target pipeline once before parallel forecast work."""
     kwargs = dict(kwargs)
     kwargs.pop("precomputed_targets", None)
-    precomputed: dict[tuple, xr.Dataset] = {}
+    jobs: list[tuple[tuple, "cases.CaseOperator", "inputs.InputBase"]] = []
+    seen: set[tuple] = set()
     for case_operator in case_operators:
         _, augmented_target = _augment_operator_inputs(case_operator)
         key = _pipeline_cache_key(case_operator.case_metadata, augmented_target)
-        if key in precomputed:
+        if key in seen:
             continue
-        logger.info(
-            "Precomputing target %s for case %s",
-            augmented_target.name,
-            case_operator.case_metadata.case_id_number,
-        )
-        progress_module.set_phase(
-            f"case {case_operator.case_metadata.case_id_number} | "
-            "shared target pipeline"
-        )
-        target_ds = run_pipeline(
-            case_operator.case_metadata, augmented_target, **kwargs
-        )
-        precomputed[key] = target_ds.compute()
+        seen.add(key)
+        jobs.append((key, case_operator, augmented_target))
+
+    precomputed: dict[tuple, xr.Dataset] = {}
+    bar = progress_module.make_precompute_bar(len(jobs), disable=not progress)
+    task_bar = progress_module.make_dask_task_bar(disable=not progress)
+    try:
+        with (
+            progress_module.registered_bar(bar, allow_phase_updates=True),
+            progress_module.DaskTaskBar(task_bar),
+        ):
+            for key, case_operator, augmented_target in jobs:
+                case_id = case_operator.case_metadata.case_id_number
+                progress_module.set_phase(
+                    f"case {case_id} | {augmented_target.name} | opening"
+                )
+                logger.debug(
+                    "Precomputing target %s for case %s",
+                    augmented_target.name,
+                    case_id,
+                )
+                target_ds = run_pipeline(
+                    case_operator.case_metadata, augmented_target, **kwargs
+                )
+                progress_module.set_phase(
+                    f"case {case_id} | {augmented_target.name} | computing"
+                )
+                precomputed[key] = target_ds.compute()
+                bar.update(1)
+    finally:
+        task_bar.close()
+        bar.close()
     return precomputed
 
 

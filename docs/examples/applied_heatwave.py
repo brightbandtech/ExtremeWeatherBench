@@ -3,7 +3,7 @@ import operator
 
 import extremeweatherbench as ewb
 
-# Set the logger level to INFO
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("extremeweatherbench")
 logger.setLevel(logging.INFO)
 

@@ -1,5 +1,8 @@
 """Tests for defaults module."""
 
+import logging
+from unittest import mock
+
 import numpy as np
 import xarray as xr
 
@@ -261,3 +264,26 @@ class TestMaybeAddSpecificHumidity:
         ds["specific_humidity"] = (["level"], np.array([0.01, 0.02]))
         result = defaults._maybe_add_specific_humidity(ds)
         np.testing.assert_array_equal(result["specific_humidity"].values, [0.01, 0.02])
+
+
+class TestGetClimatology:
+    """Tests for climatology loading progress."""
+
+    def test_get_climatology_logs_before_opening(self, caplog):
+        """Users must see why climatology loading is taking time."""
+        climatology = xr.Dataset(
+            {
+                "2m_temperature": (
+                    ("quantile", "dayofyear"),
+                    np.zeros((7, 1)),
+                )
+            },
+            coords={"quantile": [0.10, 0.15, 0.25, 0.50, 0.75, 0.85, 0.90]},
+        )
+        with (
+            mock.patch("xarray.open_zarr", return_value=climatology),
+            caplog.at_level(logging.INFO, logger="extremeweatherbench.defaults"),
+        ):
+            defaults.get_climatology(quantile=0.85)
+        assert any("climatology" in rec.message.lower() for rec in caplog.records)
+        assert any("0.85" in rec.message for rec in caplog.records)

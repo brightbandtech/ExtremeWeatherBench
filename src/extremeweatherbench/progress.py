@@ -113,6 +113,30 @@ def make_case_bar(total: int, disable: bool = False) -> tqdm:
     )
 
 
+def make_precompute_bar(total: int, disable: bool = False) -> tqdm:
+    """Build the bar tracking unique target pipelines before parallel work.
+
+    Args:
+        total: The number of unique targets the bar should track.
+        disable: If True, suppress the bar's output.
+
+    Returns:
+        A configured, not-yet-registered tqdm bar.
+    """
+    disable = disable or bool(os.environ.get("EWB_DISABLE_PROGRESS"))
+    return tqdm(
+        total=total,
+        desc="Precomputing targets",
+        unit="target",
+        bar_format=BAR_FORMAT,
+        dynamic_ncols=True,
+        mininterval=0.5,
+        leave=False,
+        smoothing=0,
+        disable=disable,
+    )
+
+
 def make_case_step_bar(
     case_id: int | str,
     total_steps: int,

@@ -55,6 +55,29 @@ def test_make_case_bar_disable_param_without_env_var(monkeypatch):
         bar.close()
 
 
+def test_make_precompute_bar_defaults():
+    """make_precompute_bar tracks unique targets with the shared format."""
+    bar = progress.make_precompute_bar(4)
+    try:
+        assert bar.total == 4
+        assert bar.desc == "Precomputing targets"
+        assert bar.unit == "target"
+        assert bar.bar_format == progress.BAR_FORMAT
+        assert bar.leave is False
+    finally:
+        bar.close()
+
+
+def test_make_precompute_bar_disable_env_var(monkeypatch):
+    """EWB_DISABLE_PROGRESS forces the precompute bar into a disabled state."""
+    monkeypatch.setenv("EWB_DISABLE_PROGRESS", "1")
+    bar = progress.make_precompute_bar(3)
+    try:
+        assert bar.disable is True
+    finally:
+        bar.close()
+
+
 def test_set_phase_is_noop_without_registered_bar():
     """set_phase must not raise when no bar has been registered."""
     progress.clear_bar()
