@@ -60,6 +60,22 @@ class CaseOperator:
     target: "inputs.TargetBase"
     forecast: "inputs.ForecastBase"
 
+def _read_incoming_yaml(input_pth: str | pathlib.Path):
+    """Read events yaml from data into a dictionary.
+
+    This function is a wrapper around yaml.safe_load that reads the yaml file directly.
+    It is useful for reading yaml files other than the EWB events.yaml file.
+
+    Args:
+        input_pth: A path to a yaml file containing the case metadata.
+
+    Returns:
+        A dictionary of case metadata.
+    """
+    input_pth = pathlib.Path(input_pth)
+    with open(input_pth, "rb") as f:
+        yaml_event_case = yaml.safe_load(f)
+    return yaml_event_case
 
 def build_case_operators(
     case_list: list[IndividualCase],
@@ -92,7 +108,7 @@ def build_case_operators(
     return case_operators
 
 
-def load_individual_cases(
+def load_individual_cases_from_dict(
     cases: list[dict[str, Any]] | list[IndividualCase],
 ) -> list[IndividualCase]:
     """Load IndividualCase metadata from a dictionary.
@@ -158,42 +174,21 @@ def load_individual_cases_from_yaml(
     Returns:
         A list of IndividualCase objects.
     """
-    yaml_event_case = read_incoming_yaml(yaml_file)
-    return load_individual_cases(yaml_event_case)
+    yaml_event_case = _read_incoming_yaml(yaml_file)
+    return load_individual_cases_from_dict(yaml_event_case)
 
 
-def load_ewb_events_yaml_into_case_list() -> list[IndividualCase]:
+def load_ewb_cases() -> list[IndividualCase]:
     """Loads the EWB events yaml file into a list of IndividualCase objects."""
-    logger.warning(
-        "load_ewb_events_yaml_into_case_list is deprecated. Use load_ewb_events_yaml_into_case_list instead."
-    )
     import extremeweatherbench.data
 
     events_yaml_file = importlib.resources.files(extremeweatherbench.data).joinpath(
         "events.yaml"
     )
     with importlib.resources.as_file(events_yaml_file) as file:
-        yaml_event_case = read_incoming_yaml(file)
+        yaml_event_case = _read_incoming_yaml(file)
 
-    return load_individual_cases(yaml_event_case)
-
-
-load_cases = load_ewb_events_yaml_into_case_list
+    return load_individual_cases_from_dict(yaml_event_case)
 
 
-def read_incoming_yaml(input_pth: str | pathlib.Path):
-    """Read events yaml from data into a dictionary.
-
-    This function is a wrapper around yaml.safe_load that reads the yaml file directly.
-    It is useful for reading yaml files other than the EWB events.yaml file.
-
-    Args:
-        input_pth: A path to a yaml file containing the case metadata.
-
-    Returns:
-        A dictionary of case metadata.
-    """
-    input_pth = pathlib.Path(input_pth)
-    with open(input_pth, "rb") as f:
-        yaml_event_case = yaml.safe_load(f)
-    return yaml_event_case
+load_cases = load_ewb_cases

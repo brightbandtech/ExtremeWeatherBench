@@ -48,7 +48,7 @@ def cases_list_of_dicts():
 
 @pytest.fixture
 def individualcase_list(cases_list_of_dicts):
-    return cases.load_individual_cases(cases_list_of_dicts)
+    return cases.load_individual_cases_from_dict(cases_list_of_dicts)
 
 
 class TestIndividualCase:
@@ -174,7 +174,7 @@ class TestLoadIndividualCases:
     def test_load_individual_cases_basic(self, cases_list_of_dicts):
         """Test loading individual cases from dictionary."""
 
-        case_list = cases.load_individual_cases(cases_list_of_dicts)
+        case_list = cases.load_individual_cases_from_dict(cases_list_of_dicts)
 
         assert all(isinstance(case, cases.IndividualCase) for case in case_list)
         assert len(case_list) == 2
@@ -392,10 +392,10 @@ class TestLoadIndividualCasesFromYaml:
 
 
 class TestLoadEventsYaml:
-    """Test the load_ewb_events_yaml_into_case_list function."""
+    """Test the load_ewb_cases function."""
 
     @mock.patch("importlib.resources")
-    def test_load_ewb_events_yaml_into_case_list_success(self, mock_resources):
+    def test_load_ewb_cases_success(self, mock_resources):
         """Test successful loading of events YAML."""
         # Mock the resource access
         mock_files = mock.Mock()
@@ -423,12 +423,12 @@ class TestLoadEventsYaml:
 
         with (
             mock.patch("importlib.resources.as_file") as mock_as_file,
-            mock.patch("extremeweatherbench.cases.read_incoming_yaml") as mock_read,
+            mock.patch("extremeweatherbench.cases._read_incoming_yaml") as mock_read,
         ):
             mock_read.return_value = mock_yaml_content
             mock_as_file.return_value.__enter__.return_value = "/mock/file"
 
-            result = cases.load_ewb_events_yaml_into_case_list()
+            result = cases.load_ewb_cases()
 
             # Should return a list of IndividualCase objects, not the raw dict
             assert isinstance(result, list)
@@ -445,7 +445,7 @@ class TestLoadEventsYaml:
 
 
 class TestReadIncomingYaml:
-    """Test the read_incoming_yaml function."""
+    """Test the _read_incoming_yaml function."""
 
     def test_read_incoming_yaml_success(self, tmp_path):
         """Test successful reading of YAML file."""
@@ -471,7 +471,7 @@ class TestReadIncomingYaml:
         with open(yaml_file, "w") as f:
             yaml.dump(test_data, f)
 
-        result = cases.read_incoming_yaml(yaml_file)
+        result = cases._read_incoming_yaml(yaml_file)
 
         assert result == test_data
         assert isinstance(result, list)
@@ -494,20 +494,20 @@ class TestReadIncomingYaml:
         with open(yaml_file, "w") as f:
             yaml.dump(test_data, f)
 
-        result = cases.read_incoming_yaml(str(yaml_file))
+        result = cases._read_incoming_yaml(str(yaml_file))
         assert result == test_data
 
     def test_read_incoming_yaml_file_not_found(self):
         """Test error handling for non-existent file."""
         with pytest.raises(FileNotFoundError):
-            cases.read_incoming_yaml("does_not_exist.yaml")
+            cases._read_incoming_yaml("does_not_exist.yaml")
 
     def test_read_incoming_yaml_empty_file(self, tmp_path):
         """Test handling of empty YAML file."""
         empty_file = tmp_path / "empty.yaml"
         empty_file.touch()
 
-        result = cases.read_incoming_yaml(empty_file)
+        result = cases._read_incoming_yaml(empty_file)
         assert result is None
 
 
@@ -611,7 +611,7 @@ class TestCasesIntegration:
         """Test the full workflow from dictionary to case operators."""
 
         # Load individual cases
-        case_list = cases.load_individual_cases(cases_list_of_dicts)
+        case_list = cases.load_individual_cases_from_dict(cases_list_of_dicts)
         assert len(case_list) == 2
 
         # Create mock evaluation objects
