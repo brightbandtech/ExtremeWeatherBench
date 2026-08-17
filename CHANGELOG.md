@@ -17,9 +17,6 @@ commits. Prefer this changelog when writing GitHub release notes.
 - Unified evaluation progress bar in `progress.py`: one 0–100% bar with
   ETA in both serial and parallel mode, plus `--no-progress` and
   `EWB_DISABLE_PROGRESS` ([#381](https://github.com/brightbandtech/ExtremeWeatherBench/pull/381)).
-- Shared-target precompute uses a tqdm bar (case/target/phase postfix
-  and nested dask tasks) instead of one INFO line per target.
-  `get_climatology` now logs before the remote zarr open.
 - Python 3.14 support
   ([#386](https://github.com/brightbandtech/ExtremeWeatherBench/pull/386)).
 - Hypothesis property tests for forecast/target input variation
