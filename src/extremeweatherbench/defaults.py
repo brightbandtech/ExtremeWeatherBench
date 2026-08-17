@@ -6,8 +6,6 @@ import xarray as xr
 
 from extremeweatherbench import calc, derived, inputs, utils
 
-logger = logging.getLogger(__name__)
-
 # Suppress noisy log messages
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
 logging.getLogger("botocore.httpchecksum").setLevel(logging.CRITICAL)
@@ -241,9 +239,6 @@ def get_climatology(quantile: float = 0.85) -> xr.DataArray:
     if quantile not in _QUANTILE_LIST:
         raise ValueError(f"Quantile must be one of {_QUANTILE_LIST}")
     idx = _QUANTILE_LIST.index(quantile)
-    logger.info(
-        "Loading surface temperature climatology (quantile=%s)...", quantile
-    )
     return xr.open_zarr(
         "gs://extremeweatherbench/datasets/surface_air_temperature_1990_2019_climatology.zarr",
         storage_options={"anon": True},
