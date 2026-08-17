@@ -75,7 +75,7 @@ def test_read_event_yaml(tmp_path):
     with open(yaml_file, "w") as f:
         yaml.dump(yaml_content, f)
 
-    result = utils.read_event_yaml(yaml_file)
+    result = utils._read_incoming_yaml(yaml_file)
 
     assert isinstance(result, dict)
     assert "cases" in result

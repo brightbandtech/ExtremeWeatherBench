@@ -1411,7 +1411,7 @@ def load_case(case_id_number: int) -> cases.IndividualCase:
     Raises:
         ValueError: If no case with the given ID exists.
     """
-    all_cases = cases.load_ewb_events_yaml_into_case_list()
+    all_cases = cases.load_ewb_cases()
     for c in all_cases:
         if c.case_id_number == case_id_number:
             return c
@@ -1619,8 +1619,8 @@ def _load_base_temp_events() -> list[cases.IndividualCase]:
         extremeweatherbench.data,
     ).joinpath("base_temp_events.yaml")
     with importlib.resources.as_file(old_yaml) as f:
-        raw = cases.read_incoming_yaml(f)
-    return cases.load_individual_cases(raw)
+        raw = cases._read_incoming_yaml(f)
+    return cases.load_individual_cases_from_dict(raw)
 
 
 def _add_map_features(ax) -> None:

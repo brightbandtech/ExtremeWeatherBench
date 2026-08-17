@@ -191,18 +191,6 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     return dataset.where(land_mask)
 
 
-def read_event_yaml(input_pth: str | pathlib.Path) -> dict:
-    """Read events yaml from data."""
-    logger.warning(
-        "This function is deprecated and will be removed in a future release. "
-        "Please use cases.read_incoming_yaml instead."
-    )
-    input_pth = pathlib.Path(input_pth)
-    with open(input_pth, "rb") as f:
-        yaml_event_case = yaml.safe_load(f)
-    return yaml_event_case
-
-
 def derive_indices_from_init_time_and_lead_time(
     dataset: xr.Dataset,
     start_date: datetime.datetime,

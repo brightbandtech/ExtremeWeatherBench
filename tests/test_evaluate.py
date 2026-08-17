@@ -305,7 +305,7 @@ class TestExtremeWeatherBench:
         )
 
         self.assert_cases_equal(
-            ewb.case_metadata, cases.load_individual_cases(sample_cases_list)
+            ewb.case_metadata, cases.load_individual_cases_from_dict(sample_cases_list)
         )
         assert ewb.evaluation_objects == [sample_evaluation_object]
         assert ewb.cache_dir is None
@@ -362,7 +362,7 @@ class TestExtremeWeatherBench:
         # Check that the first argument (case list) has the right structure
         passed_case_list = call_args[0]
         self.assert_cases_equal(
-            passed_case_list, cases.load_individual_cases(sample_cases_list)
+            passed_case_list, cases.load_individual_cases_from_dict(sample_cases_list)
         )
 
         # Check that the second argument (evaluation objects) is correct

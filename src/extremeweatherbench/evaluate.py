@@ -79,7 +79,7 @@ class ExtremeWeatherBench:
                 spatial region.
         """
         # Load the case metadata from the input
-        self.case_metadata = cases.load_individual_cases(case_metadata)
+        self.case_metadata = cases.load_individual_cases_from_dict(case_metadata)
         self.evaluation_objects = evaluation_objects
         self.cache_dir = pathlib.Path(cache_dir) if cache_dir else None
 

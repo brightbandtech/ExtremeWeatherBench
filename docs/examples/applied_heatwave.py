@@ -10,7 +10,7 @@ logger.setLevel(logging.INFO)
 # Load case data from the default events.yaml
 # Users can also define their own cases_dict structure
 case_yaml = ewb.cases.load_cases()
-
+case_yaml = case_yaml[0:4]
 # Define targets
 # ERA5 target
 era5_heatwave_target = ewb.inputs.ERA5(
