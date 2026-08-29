@@ -26,13 +26,13 @@ from __future__ import annotations
 import numpy as np
 import xarray as xr
 
-from extremeweatherbench._cape import EPSILON
 from extremeweatherbench._cape import (
     _compute_batch_parallel as compute_ml_cape_cin_parallel,
 )
 from extremeweatherbench._cape import (
     _compute_batch_serial as compute_ml_cape_cin_serial,
 )
+from extremeweatherbench.constants import EPSILON
 
 # Atmospheric Physics Constants
 # All constants follow standard atmospheric physics values from CODATA and WMO

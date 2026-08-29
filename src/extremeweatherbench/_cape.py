@@ -19,58 +19,32 @@ import numpy as np
 import numpy.typing as npt
 from numba import njit, prange
 
-# ============================================================================
-# Physical Constants
-# ============================================================================
-
-# Thermodynamic constants
-KAPPA = 2.0 / 7.0  # Poisson constant R/Cp for dry air (dimensionless)
-GRAVITY = 9.80665  # Gravitational acceleration (m/s^2)
-Rd = 287.058  # Gas constant for dry air (J/kg/K)
-Cp = 1005.7  # Specific heat at constant pressure for dry air (J/kg/K)
-
-# Water vapor constants.
-# EPSILON is the single definition of this ratio for the whole package. It
-# lives here because this module imports nothing else from the package, so
-# any module can take it without risking an import cycle, and because numba
-# freezes it into the jitted kernels below as a plain module global.
-EPSILON = 0.6219569100577033  # Ratio of molecular weights (H2O/dry air)
-VIRTUAL_TEMP_COEFF = (
-    0.61  # Coefficient for virtual temperature calculation (dimensionless)
+from extremeweatherbench.constants import (
+    A_BOLTON,
+    B_BOLTON,
+    E0_BOLTON,
+    EPSILON,
+    GRAVITY,
+    KAPPA,
+    KELVIN_TO_CELSIUS,
+    LCL_DENOM,
+    LCL_OFFSET,
+    L_V_0,
+    L_V_TEMP_COEFF,
+    MAX_VAPOR_PRESSURE_FRACTION,
+    MIN_TV,
+    MOIST_ASCENT_STEPS,
+    MOIST_ASCENT_SUBSTEPS,
+    P_REF,
+    VIRTUAL_TEMP_COEFF,
+    Cp,
+    Rd,
 )
 
-# Latent heat constants
-L_V_0 = 2.501e6  # Latent heat of vaporization at 0°C (J/kg)
-L_V_TEMP_COEFF = 2370.0  # Temperature dependence of latent heat (J/kg/K)
-
-# Reference values
-P_REF = 1000.0  # Reference pressure for potential temperature (hPa)
-KELVIN_TO_CELSIUS = 273.15  # Conversion factor from Kelvin to Celsius (K)
-
-# Bolton (1980) formula constants for saturation vapor pressure
-# e_s = E0 * exp(A * T_c / (T_c + B))
-# where T_c is temperature in Celsius
-E0_BOLTON = 6.112  # Reference vapor pressure (hPa)
-A_BOLTON = 17.67  # Empirical constant (dimensionless)
-B_BOLTON = 243.5  # Empirical constant (°C)
-
-# Bolton (1980) LCL formula constants
-LCL_OFFSET = 56.0  # Empirical constant for LCL calculation (K)
-LCL_DENOM = 800.0  # Empirical constant for LCL calculation (K)
-
-# Numerical integration parameters
-MOIST_ASCENT_STEPS = 50  # Number of steps for moist adiabat integration
-# Steps used per level gap when marching the adiabat up a profile. Marching
-# never re-integrates the part of the column it has already covered, so fewer
-# steps per gap reach a smaller truncation error than restarting from the LCL
-# with MOIST_ASCENT_STEPS does. Measured against a converged integration of
-# the same ODE over 100 ERA5 profiles, 16 substeps lands at 31 J/kg mean
-# absolute error where the restarting scheme sits at 53 J/kg; 8 substeps was
-# worse than restarting, so this is the floor rather than a tuning knob.
-MOIST_ASCENT_SUBSTEPS = 16
-
-# Data processing parameters
-RADIUS_DEG = 2.0  # Default radius for sample data extraction (degrees)
+# Re-export package constants as this module's globals. Numba nopython
+# kernels bind those names at compile time; they cannot follow
+# ``constants.EPSILON`` attribute lookups. constants.py is a leaf so
+# this import cannot cycle.
 
 
 # ============================================================================
@@ -109,9 +83,8 @@ def mixing_ratio_inline(pressure: float, vapor_pressure: float) -> float:
     Returns:
         The mixing ratio in kg/kg.
     """
-    # Prevent supersaturation: cap vapor pressure at 0.9999 * pressure
-    # This handles both real supersaturation in data and numerical precision issues
-    max_vapor_pressure = 0.9999 * pressure
+    # Cap vapor pressure so the mixing-ratio denominator stays positive.
+    max_vapor_pressure = MAX_VAPOR_PRESSURE_FRACTION * pressure
     vapor_pressure = min(vapor_pressure, max_vapor_pressure)
     return EPSILON * vapor_pressure / (pressure - vapor_pressure)
 
@@ -175,10 +148,6 @@ def compute_buoyancy_energy_inline(
     Returns:
         The buoyancy energy in J/kg.
     """
-    # Minimum reasonable virtual temperature (in K) to avoid division issues
-    # ~100 K is well below any realistic atmospheric temperature
-    MIN_TV = 100.0
-
     if env_tv_avg < MIN_TV or not np.isfinite(env_tv_avg):
         return 0.0
 
@@ -204,7 +173,9 @@ def lcl(pressure: float, temperature: float, dewpoint: float) -> tuple[float, fl
     """
     # LCL temperature (Bolton 1980, eq. 15)
     t_lcl = (
-        1.0 / (1.0 / (dewpoint - 56.0) + np.log(temperature / dewpoint) / 800.0) + 56.0
+        1.0
+        / (1.0 / (dewpoint - LCL_OFFSET) + np.log(temperature / dewpoint) / LCL_DENOM)
+        + LCL_OFFSET
     )
 
     # LCL pressure (Bolton 1980, eq. 22)
