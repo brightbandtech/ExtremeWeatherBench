@@ -842,6 +842,221 @@ def convert_day_yearofday_to_time(
     )
 
 
+_TIME_DIM_NAMES = frozenset({"time", "valid_time", "lead_time", "init_time"})
+_LAT_NAMES = ("latitude", "lat")
+_LON_NAMES = ("longitude", "lon")
+_POINT_DIM_NAMES = ("location", "station", "sample", "stacked")
+
+
+def _lat_lon_names(
+    obj: xr.Dataset | xr.DataArray,
+) -> tuple[str | None, str | None]:
+    """Return latitude and longitude coordinate names if present."""
+    names = list(obj.dims) + list(obj.coords)
+    lat = next((n for n in _LAT_NAMES if n in names), None)
+    lon = next((n for n in _LON_NAMES if n in names), None)
+    return lat, lon
+
+
+def infer_spatial_layout(
+    obj: xr.Dataset | xr.DataArray,
+) -> Literal["grid", "points"]:
+    """Classify a Dataset or DataArray as a spatial grid or point samples.
+
+    Points are paired (lat, lon) samples: a shared non-time dimension, or a
+    sparse lat x lon cube of occupied stations. Independent lat and lon
+    dimensions with dense data are a grid.
+    """
+    lat_name, lon_name = _lat_lon_names(obj)
+    if lat_name is None or lon_name is None:
+        return "grid"
+
+    arrays: list[xr.DataArray]
+    if isinstance(obj, xr.DataArray):
+        arrays = [obj]
+    else:
+        arrays = [obj[v] for v in obj.data_vars]
+
+    for da in arrays:
+        if (
+            isinstance(da.data, sparse.COO)
+            and lat_name in da.dims
+            and lon_name in da.dims
+        ):
+            return "points"
+
+    for dim in _POINT_DIM_NAMES:
+        if dim not in obj.dims:
+            continue
+        if dim in obj[lat_name].dims and dim in obj[lon_name].dims:
+            return "points"
+
+    lat_dims = set(obj[lat_name].dims) - _TIME_DIM_NAMES
+    lon_dims = set(obj[lon_name].dims) - _TIME_DIM_NAMES
+    if lat_dims and lat_dims == lon_dims and lat_name not in obj.dims:
+        return "points"
+
+    return "grid"
+
+
+def _point_dim_name(obj: xr.Dataset | xr.DataArray) -> str | None:
+    """Name of the sample dimension for point-like data, if any."""
+    for dim in _POINT_DIM_NAMES:
+        if dim in obj.dims:
+            return dim
+    lat_name, lon_name = _lat_lon_names(obj)
+    if lat_name is None:
+        return None
+    skip = _TIME_DIM_NAMES | {lat_name, lon_name}
+    spatial = set(obj[lat_name].dims) - skip
+    if len(spatial) == 1:
+        return str(next(iter(spatial)))
+    return None
+
+
+def point_frame_to_dataset(
+    df: pd.DataFrame,
+    *,
+    time_col: str = "valid_time",
+    lat_col: str = "latitude",
+    lon_col: str = "longitude",
+    location_dim: str = "location",
+) -> xr.Dataset:
+    """Convert point rows to (time, location) with lat/lon as coords.
+
+    Does not build a unique-lat x unique-lon Cartesian product.
+    """
+    frame = df.copy()
+    key_cols = [time_col, lat_col, lon_col]
+    frame = frame.drop_duplicates(subset=key_cols, keep="first")
+    stations = frame[[lat_col, lon_col]].drop_duplicates().reset_index(drop=True)
+    stations[location_dim] = np.arange(len(stations))
+    frame = frame.merge(stations, on=[lat_col, lon_col], how="left")
+    skip = {time_col, lat_col, lon_col, location_dim}
+    value_cols = [c for c in frame.columns if c not in skip]
+    indexed = frame.set_index([time_col, location_dim])[value_cols]
+    ds = xr.Dataset.from_dataframe(indexed)
+    stations = stations.set_index(location_dim)
+    return ds.assign_coords(
+        latitude=(location_dim, stations[lat_col].to_numpy()),
+        longitude=(location_dim, stations[lon_col].to_numpy()),
+    )
+
+
+def sparse_cube_to_location(
+    ds: xr.Dataset, location_dim: str = "location"
+) -> xr.Dataset:
+    """Collapse a sparse lat x lon cube onto occupied station pairs."""
+    lat_name, lon_name = _lat_lon_names(ds)
+    if lat_name is None or lon_name is None:
+        return ds
+    da = next(iter(ds.data_vars.values()))
+    pairs: np.ndarray | None = None
+    if isinstance(da.data, sparse.COO):
+        dims = list(da.dims)
+        lat_i = da.data.coords[dims.index(lat_name)]
+        lon_i = da.data.coords[dims.index(lon_name)]
+        pairs = np.unique(np.column_stack([lat_i, lon_i]), axis=0)
+        ds = ds.map(
+            lambda v: (
+                v.copy(data=v.data.todense()) if isinstance(v.data, sparse.COO) else v
+            )
+        )
+    if pairs is None:
+        stacked = ds.stack({location_dim: (lat_name, lon_name)})
+        keep = (
+            stacked[da.name]
+            .notnull()
+            .any(dim=[d for d in stacked[da.name].dims if d != location_dim])
+        )
+        return stacked.isel({location_dim: keep})
+
+    loc = xr.DataArray(np.arange(len(pairs)), dims=location_dim)
+    out = ds.isel(
+        {
+            lat_name: xr.DataArray(pairs[:, 0], dims=location_dim),
+            lon_name: xr.DataArray(pairs[:, 1], dims=location_dim),
+        }
+    )
+    return out.assign_coords({location_dim: loc})
+
+
+def as_point_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """Return point data with a location dim and lat/lon coords."""
+    if _point_dim_name(ds) is not None and infer_spatial_layout(ds) == "points":
+        lat_name, lon_name = _lat_lon_names(ds)
+        point_dim = _point_dim_name(ds)
+        if point_dim != "location" and point_dim is not None:
+            ds = ds.rename({point_dim: "location"})
+        if lat_name and lat_name != "latitude":
+            ds = ds.rename({lat_name: "latitude"})
+        if lon_name and lon_name != "longitude":
+            ds = ds.rename({lon_name: "longitude"})
+        return ds
+    if infer_spatial_layout(ds) == "points":
+        return sparse_cube_to_location(ds)
+    return ds
+
+
+def sample_field_at_points(
+    field: xr.Dataset,
+    latitude: xr.DataArray,
+    longitude: xr.DataArray,
+    method: str = "nearest",
+) -> xr.Dataset:
+    """Sample a gridded field at paired latitude/longitude coordinates."""
+    lat_name, lon_name = _lat_lon_names(field)
+    if lat_name is None or lon_name is None:
+        return field
+    interp_method: Literal["nearest", "linear"] = (
+        "nearest" if method == "nearest" else "linear"
+    )
+    lat_da = latitude
+    lon_da = longitude
+    if "location" not in lat_da.dims:
+        loc = np.arange(lat_da.size)
+        lat_da = xr.DataArray(
+            np.asarray(lat_da),
+            dims="location",
+            coords={"location": loc},
+        )
+        lon_da = xr.DataArray(
+            np.asarray(lon_da),
+            dims="location",
+            coords={"location": loc},
+        )
+    return field.interp(
+        {lat_name: lat_da, lon_name: lon_da},
+        method=interp_method,
+        kwargs={"fill_value": None},
+    )
+
+
+def _colocate_points(forecast_pts: xr.Dataset, target_pts: xr.Dataset) -> xr.Dataset:
+    """Map forecast stations onto target stations by nearest lat/lon."""
+    fc_dim = _point_dim_name(forecast_pts) or "location"
+    tg_dim = _point_dim_name(target_pts) or "location"
+    fc_lat = np.asarray(forecast_pts["latitude"])
+    fc_lon = np.asarray(forecast_pts["longitude"])
+    tg_lat = np.asarray(target_pts["latitude"])
+    tg_lon = np.asarray(target_pts["longitude"])
+    dist = (fc_lat[:, None] - tg_lat[None, :]) ** 2 + (
+        fc_lon[:, None] - tg_lon[None, :]
+    ) ** 2
+    idx = dist.argmin(axis=0)
+    mapped = forecast_pts.isel({fc_dim: idx})
+    mapped = mapped.assign_coords(
+        {
+            tg_dim: target_pts[tg_dim].values,
+            "latitude": target_pts["latitude"],
+            "longitude": target_pts["longitude"],
+        }
+    )
+    if fc_dim != tg_dim:
+        mapped = mapped.rename({fc_dim: tg_dim})
+    return mapped
+
+
 def interp_climatology_to_target(
     target: xr.DataArray, climatology: xr.DataArray
 ) -> xr.DataArray:
@@ -856,6 +1071,14 @@ def interp_climatology_to_target(
         climatology is interpolated to the target coordinates. If the target is not
         sparse, the climatology is interpolated to the target coordinates.
     """
+    point_dim = _point_dim_name(target)
+    if point_dim is not None and "latitude" in target.coords:
+        return climatology.interp(
+            latitude=target["latitude"],
+            longitude=target["longitude"],
+            method="nearest",
+            kwargs={"fill_value": None},
+        )
     # If the target is sparse or has less than 3 dimensions, interpolate the
     # climatology using stacked dim
     if isinstance(target.data, sparse.COO) or target.ndim < 3:
@@ -917,7 +1140,23 @@ def reduce_dataarray(
     Returns:
         The reduced xarray dataarray.
     """
-    if isinstance(da.data, sparse.COO):
+    reduce_dims = list(reduce_dims)
+    present = [d for d in reduce_dims if d in da.dims]
+    if not present:
+        alt = _point_dim_name(da)
+        if alt is not None:
+            reduce_dims = [alt]
+        elif isinstance(da.data, sparse.COO):
+            da = stack_dataarray_from_dims(da, reduce_dims)
+            reduce_dims = ["stacked"]
+    else:
+        reduce_dims = present
+
+    if (
+        isinstance(da.data, sparse.COO)
+        and reduce_dims != ["stacked"]
+        and all(d in da.dims for d in reduce_dims)
+    ):
         da = stack_dataarray_from_dims(da, reduce_dims)
         reduce_dims = ["stacked"]
 

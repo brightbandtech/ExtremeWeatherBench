@@ -1253,6 +1253,218 @@ class TestERA5:
         assert len(aligned_forecast.valid_time) > 0
 
 
+def _gridded_forecast(times, lats, lons, *, leads=None, value=1.0) -> xr.Dataset:
+    """Build a dense gridded forecast on (valid_time, lat, lon)."""
+    if leads is None:
+        data = np.full((len(times), len(lats), len(lons)), value)
+        dims = ["valid_time", "latitude", "longitude"]
+        coords = {"valid_time": times, "latitude": lats, "longitude": lons}
+    else:
+        data = np.full((len(leads), len(times), len(lats), len(lons)), value)
+        dims = ["lead_time", "valid_time", "latitude", "longitude"]
+        coords = {
+            "lead_time": leads,
+            "valid_time": times,
+            "latitude": lats,
+            "longitude": lons,
+        }
+    return xr.Dataset(
+        {"surface_air_temperature": (dims, data)},
+        coords=coords,
+    )
+
+
+def _point_dataset_location_dim(times, lats, lons, values) -> xr.Dataset:
+    """Point obs as (valid_time, location) with lat/lon coords."""
+    n_loc = len(lats)
+    data = np.broadcast_to(np.asarray(values), (len(times), n_loc)).copy()
+    return xr.Dataset(
+        {
+            "surface_air_temperature": (
+                ["valid_time", "location"],
+                data,
+            )
+        },
+        coords={
+            "valid_time": times,
+            "location": np.arange(n_loc),
+            "latitude": ("location", np.asarray(lats)),
+            "longitude": ("location", np.asarray(lons)),
+        },
+    )
+
+
+def _sparse_station_cube(times, lats, lons, values) -> xr.Dataset:
+    """GHCN-style sparse cube: unique lat x lon, one station per pair."""
+    n_t, n_s = len(times), len(lats)
+    coords = np.array(
+        [
+            np.repeat(np.arange(n_t), n_s),
+            np.tile(np.arange(n_s), n_t),
+            np.tile(np.arange(n_s), n_t),
+        ]
+    )
+    data = np.broadcast_to(np.asarray(values), (n_t * n_s,)).copy()
+    sparse_arr = sparse.COO(coords, data, shape=(n_t, n_s, n_s))
+    return xr.Dataset(
+        {
+            "surface_air_temperature": (
+                ["valid_time", "latitude", "longitude"],
+                sparse_arr,
+            )
+        },
+        coords={
+            "valid_time": times,
+            "latitude": np.asarray(lats),
+            "longitude": np.asarray(lons),
+        },
+    )
+
+
+class TestAgnosticSpatialAlign:
+    """Grid/point alignment must sample pairs, not a lat x lon mesh."""
+
+    def test_infer_grid_layout(self):
+        times = pd.date_range("2021-01-01", periods=3, freq="6h")
+        ds = _gridded_forecast(times, [10.0, 20.0], [100.0, 110.0])
+        assert utils.infer_spatial_layout(ds) == "grid"
+
+    def test_infer_location_dim_as_points(self):
+        times = pd.date_range("2021-01-01", periods=3, freq="6h")
+        ds = _point_dataset_location_dim(
+            times, [10.0, 11.0, 12.0], [100.0, 101.0, 102.0], 273.0
+        )
+        assert utils.infer_spatial_layout(ds) == "points"
+
+    def test_infer_sparse_cube_as_points(self):
+        times = pd.date_range("2021-01-01", periods=2, freq="6h")
+        ds = _sparse_station_cube(
+            times, [10.0, 20.0, 30.0], [100.0, 110.0, 120.0], 273.0
+        )
+        assert utils.infer_spatial_layout(ds) == "points"
+
+    def test_grid_to_location_points_is_o_stations_not_mesh(self):
+        """Sampling a field at stations must not allocate n_lat * n_lon."""
+        times = pd.date_range("2021-01-01", periods=4, freq="6h")
+        leads = pd.to_timedelta([0, 6, 12, 18, 24], unit="h")
+        grid_lat = np.linspace(10, 20, 8)
+        grid_lon = np.linspace(100, 110, 8)
+        forecast = _gridded_forecast(
+            times, grid_lat, grid_lon, leads=leads, value=280.0
+        )
+        n_stations = 40
+        st_lats = np.linspace(10.5, 19.5, n_stations)
+        st_lons = np.linspace(100.5, 109.5, n_stations)
+        target = _point_dataset_location_dim(times, st_lats, st_lons, 273.0)
+        aligned_fc, aligned_tg = inputs.align_forecast_to_target(forecast, target)
+        assert "location" in aligned_fc.dims
+        assert aligned_fc.sizes["location"] == n_stations
+        fc_spatial = aligned_fc.surface_air_temperature.isel(lead_time=0, valid_time=0)
+        assert fc_spatial.size == n_stations
+        assert "latitude" not in aligned_fc.dims
+        assert "longitude" not in aligned_fc.dims
+        np.testing.assert_allclose(
+            aligned_fc.latitude.values, aligned_tg.latitude.values
+        )
+        np.testing.assert_allclose(
+            aligned_fc.longitude.values, aligned_tg.longitude.values
+        )
+
+    def test_grid_to_sparse_cube_does_not_fill_lat_lon_product(self):
+        """A sparse station cube must align at occupied pairs only."""
+        times = pd.date_range("2021-01-01", periods=3, freq="6h")
+        n_stations = 25
+        st_lats = np.linspace(10.0, 20.0, n_stations)
+        st_lons = np.linspace(100.0, 110.0, n_stations)
+        forecast = _gridded_forecast(
+            times,
+            np.linspace(9.0, 21.0, 10),
+            np.linspace(99.0, 111.0, 10),
+            value=280.0,
+        )
+        target = _sparse_station_cube(times, st_lats, st_lons, 273.0)
+        aligned_fc, aligned_tg = inputs.align_forecast_to_target(forecast, target)
+        fc_slice = aligned_fc.surface_air_temperature.isel(valid_time=0)
+        # Occupied stations, not the n_stations x n_stations mesh.
+        assert fc_slice.size == n_stations
+        assert aligned_tg.surface_air_temperature.isel(valid_time=0).size == n_stations
+
+    def test_point_forecast_samples_gridded_target(self):
+        """Point forecasts sample the target field at forecast stations."""
+        times = pd.date_range("2021-01-01", periods=3, freq="6h")
+        st_lats = np.array([10.0, 15.0, 20.0])
+        st_lons = np.array([100.0, 105.0, 110.0])
+        forecast = _point_dataset_location_dim(times, st_lats, st_lons, 280.0)
+        target = _gridded_forecast(
+            times,
+            np.linspace(10.0, 20.0, 5),
+            np.linspace(100.0, 110.0, 5),
+            value=270.0,
+        )
+        aligned_fc, aligned_tg = inputs.align_forecast_to_target(forecast, target)
+        assert "location" in aligned_tg.dims
+        assert aligned_tg.sizes["location"] == 3
+        assert "latitude" not in aligned_tg.dims
+        np.testing.assert_allclose(
+            aligned_fc.latitude.values, aligned_tg.latitude.values
+        )
+
+    def test_grid_to_grid_still_remaps_forecast_to_target(self):
+        times = pd.date_range("2021-01-01", periods=3, freq="6h")
+        target = _gridded_forecast(
+            times, np.linspace(10, 20, 5), np.linspace(100, 110, 6)
+        )
+        forecast = _gridded_forecast(
+            times, np.linspace(10, 20, 4), np.linspace(100, 110, 5)
+        )
+        aligned_fc, aligned_tg = inputs.align_forecast_to_target(forecast, target)
+        np.testing.assert_array_equal(
+            aligned_fc.latitude.values, aligned_tg.latitude.values
+        )
+        np.testing.assert_array_equal(
+            aligned_fc.longitude.values, aligned_tg.longitude.values
+        )
+        assert "latitude" in aligned_fc.dims
+        assert "longitude" in aligned_fc.dims
+
+    def test_grid_align_keeps_size_one_lead_time(self):
+        """A single lead must stay a dimension so metrics can preserve it."""
+        times = pd.date_range("2021-01-01", periods=3, freq="6h")
+        leads = pd.to_timedelta([6], unit="h")
+        forecast = _gridded_forecast(
+            times,
+            np.linspace(10, 20, 4),
+            np.linspace(100, 110, 5),
+            leads=leads,
+        )
+        target = _gridded_forecast(
+            times, np.linspace(10, 20, 5), np.linspace(100, 110, 6)
+        )
+        aligned_fc, _aligned_tg = inputs.align_forecast_to_target(forecast, target)
+        assert "lead_time" in aligned_fc.dims
+        assert aligned_fc.sizes["lead_time"] == 1
+
+    def test_point_frame_to_dataset_is_not_a_lat_lon_product(self):
+        times = pd.date_range("2021-01-01", periods=2, freq="6h")
+        rows = []
+        for t in times:
+            for lat, lon in [(10.0, 100.0), (11.0, 101.0), (12.0, 102.0)]:
+                rows.append(
+                    {
+                        "valid_time": t,
+                        "latitude": lat,
+                        "longitude": lon,
+                        "surface_air_temperature": 273.0,
+                    }
+                )
+        df = pd.DataFrame(rows)
+        ds = utils.point_frame_to_dataset(df)
+        assert "location" in ds.dims
+        assert "latitude" not in ds.dims
+        assert ds.sizes["location"] == 3
+        assert ds.surface_air_temperature.size == 2 * 3
+
+
 class TestGHCN:
     """Test the GHCN target class."""
 
@@ -1361,8 +1573,9 @@ class TestGHCN:
 
         assert isinstance(result, xr.Dataset)
         assert "valid_time" in result.dims
-        assert "latitude" in result.dims
-        assert "longitude" in result.dims
+        assert "location" in result.dims
+        assert "latitude" in result.coords
+        assert "longitude" in result.coords
 
     def test_ghcn_custom_convert_to_dataset_invalid_input(self):
         """Test GHCN custom conversion with invalid input."""
@@ -1394,8 +1607,9 @@ class TestGHCN:
 
         assert isinstance(result, xr.Dataset)
         assert "valid_time" in result.dims
-        assert "latitude" in result.dims
-        assert "longitude" in result.dims
+        assert "location" in result.dims
+        assert "latitude" in result.coords
+        assert "longitude" in result.coords
         assert "surface_air_temperature" in result.data_vars
 
         # Should have no NaN values if no duplicates were dropped
