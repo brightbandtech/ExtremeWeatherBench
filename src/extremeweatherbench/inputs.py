@@ -1206,9 +1206,51 @@ def align_forecast_to_target(
 ) -> tuple[xr.Dataset, xr.Dataset]:
     """Put forecast and target on a shared sample geometry.
 
-    Two grids: remap forecast onto the target grid. If either side is
-    points, sample the field at those (lat, lon) pairs instead of
-    expanding onto a unique-lat x unique-lon mesh.
+    Two grids: remap the forecast onto the target grid. If either side
+    is points (station samples or a sparse lat × lon cube), sample the
+    field at those (lat, lon) pairs instead of expanding onto a
+    unique-lat × unique-lon mesh.
+
+    Args:
+        forecast_data: Forecast Dataset, gridded or point samples.
+        target_data: Target Dataset, gridded or point samples.
+        method: Spatial interpolation method. ``"nearest"`` or
+            ``"linear"``. Defaults to ``"nearest"``.
+
+    Returns:
+        Tuple of ``(aligned_forecast, aligned_target)`` with a shared
+        time range. Point alignments use a ``location`` dimension;
+        grid alignments keep latitude and longitude dims from the
+        target.
+
+    Examples:
+        >>> import pandas as pd
+        >>> import xarray as xr
+        >>> from extremeweatherbench import utils
+        >>> from extremeweatherbench.inputs import align_forecast_to_target
+        >>> times = pd.date_range("2021-01-01", periods=1, freq="6h")
+        >>> t2m = [[[0.0, 1.0]]]
+        >>> forecast = xr.Dataset(
+        ...     {"t2m": (("valid_time", "latitude", "longitude"), t2m)},
+        ...     coords={
+        ...         "valid_time": times,
+        ...         "latitude": [10.0],
+        ...         "longitude": [20.0, 30.0],
+        ...     },
+        ... )
+        >>> stations = utils.point_frame_to_dataset(
+        ...     pd.DataFrame(
+        ...         {
+        ...             "valid_time": [times[0]],
+        ...             "latitude": [10.0],
+        ...             "longitude": [20.0],
+        ...             "t2m": [0.0],
+        ...         }
+        ...     )
+        ... )
+        >>> fc, tg = align_forecast_to_target(forecast, stations)
+        >>> fc.sizes["location"] == tg.sizes["location"]
+        True
     """
     fc_layout = utils.infer_spatial_layout(forecast_data)
     tg_layout = utils.infer_spatial_layout(target_data)

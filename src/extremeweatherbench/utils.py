@@ -863,9 +863,46 @@ def infer_spatial_layout(
 ) -> Literal["grid", "points"]:
     """Classify a Dataset or DataArray as a spatial grid or point samples.
 
-    Points are paired (lat, lon) samples: a shared non-time dimension, or a
-    sparse lat x lon cube of occupied stations. Independent lat and lon
-    dimensions with dense data are a grid.
+    Points are paired (lat, lon) samples: a shared non-time dimension such
+    as ``location``, or a sparse lat × lon cube of occupied stations.
+    Independent latitude and longitude dimensions with dense data are a
+    grid.
+
+    Args:
+        obj: Dataset or DataArray to classify.
+
+    Returns:
+        ``"points"`` if lat/lon are paired samples, otherwise ``"grid"``.
+        Objects with no lat/lon coordinates are treated as ``"grid"``.
+
+    Examples:
+        >>> import numpy as np
+        >>> import pandas as pd
+        >>> import xarray as xr
+        >>> from extremeweatherbench import utils
+        >>> times = pd.date_range("2021-01-01", periods=2, freq="6h")
+        >>> grid = xr.Dataset(
+        ...     {"t": (["valid_time", "latitude", "longitude"], np.zeros((2, 3, 4)))},
+        ...     coords={
+        ...         "valid_time": times,
+        ...         "latitude": [10.0, 11.0, 12.0],
+        ...         "longitude": [100.0, 101.0, 102.0, 103.0],
+        ...     },
+        ... )
+        >>> utils.infer_spatial_layout(grid)
+        'grid'
+        >>> pts = utils.point_frame_to_dataset(
+        ...     pd.DataFrame(
+        ...         {
+        ...             "valid_time": [times[0], times[0]],
+        ...             "latitude": [10.0, 12.0],
+        ...             "longitude": [100.0, 103.0],
+        ...             "t": [273.0, 275.0],
+        ...         }
+        ...     )
+        ... )
+        >>> utils.infer_spatial_layout(pts)
+        'points'
     """
     lat_name, lon_name = _lat_lon_names(obj)
     if lat_name is None or lon_name is None:
@@ -922,9 +959,41 @@ def point_frame_to_dataset(
     lon_col: str = "longitude",
     location_dim: str = "location",
 ) -> xr.Dataset:
-    """Convert point rows to (time, location) with lat/lon as coords.
+    """Convert station rows to (time, location) with lat/lon as coords.
 
-    Does not build a unique-lat x unique-lon Cartesian product.
+    Each unique (latitude, longitude) pair becomes one location. This does
+    not build a unique-lat × unique-lon Cartesian product, which would
+    fill empty grid crossings and can exhaust memory.
+
+    Args:
+        df: Point observations with time, latitude, longitude, and value
+            columns.
+        time_col: Name of the valid-time column.
+        lat_col: Name of the latitude column.
+        lon_col: Name of the longitude column.
+        location_dim: Name of the sample dimension to create.
+
+    Returns:
+        Dataset with dimensions ``(time_col, location_dim)``. Latitude
+        and longitude are non-dimension coordinates on ``location_dim``.
+        Duplicate (time, lat, lon) rows keep the first value.
+
+    Examples:
+        >>> import pandas as pd
+        >>> from extremeweatherbench import utils
+        >>> df = pd.DataFrame(
+        ...     {
+        ...         "valid_time": ["2021-02-01", "2021-02-01"],
+        ...         "latitude": [10.0, 30.0],
+        ...         "longitude": [20.0, 40.0],
+        ...         "surface_air_temperature": [273.1, 268.4],
+        ...     }
+        ... )
+        >>> ds = utils.point_frame_to_dataset(df)
+        >>> list(ds.dims)
+        ['valid_time', 'location']
+        >>> ds.sizes["location"]
+        2
     """
     frame = df.copy()
     key_cols = [time_col, lat_col, lon_col]
@@ -946,7 +1015,23 @@ def point_frame_to_dataset(
 def sparse_cube_to_location(
     ds: xr.Dataset, location_dim: str = "location"
 ) -> xr.Dataset:
-    """Collapse a sparse lat x lon cube onto occupied station pairs."""
+    """Collapse a sparse lat × lon cube onto occupied station pairs.
+
+    Use this when point data was stored as a unique-lat × unique-lon
+    product with values only at real stations. The result has a sample
+    dimension instead of separate latitude and longitude dimensions.
+
+    Args:
+        ds: Dataset with latitude and longitude dimensions. Sparse COO
+            variables are densified after occupied pairs are collected.
+        location_dim: Name of the sample dimension to create. Defaults
+            to ``"location"``.
+
+    Returns:
+        Dataset indexed by occupied (lat, lon) pairs along
+        ``location_dim``, with latitude and longitude as coordinates.
+        If lat/lon names are missing, ``ds`` is returned unchanged.
+    """
     lat_name, lon_name = _lat_lon_names(ds)
     if lat_name is None or lon_name is None:
         return ds
@@ -982,7 +1067,19 @@ def sparse_cube_to_location(
 
 
 def as_point_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """Return point data with a location dim and lat/lon coords."""
+    """Return point data with a ``location`` dim and lat/lon coords.
+
+    Accepts already-point Datasets (``location``, ``station``,
+    ``sample``, or ``stacked``) or a sparse lat × lon cube of occupied
+    stations. Grid Datasets are returned unchanged.
+
+    Args:
+        ds: Point or gridded Dataset.
+
+    Returns:
+        Point Dataset with a ``location`` dimension and ``latitude`` /
+        ``longitude`` coordinates, or ``ds`` if it is a spatial grid.
+    """
     if _point_dim_name(ds) is not None and infer_spatial_layout(ds) == "points":
         lat_name, lon_name = _lat_lon_names(ds)
         point_dim = _point_dim_name(ds)
@@ -1004,7 +1101,43 @@ def sample_field_at_points(
     longitude: xr.DataArray,
     method: str = "nearest",
 ) -> xr.Dataset:
-    """Sample a gridded field at paired latitude/longitude coordinates."""
+    """Sample a gridded field at paired latitude/longitude coordinates.
+
+    Interpolating onto 1D lat and lon *dimension* coords builds a full
+    lat × lon mesh. This instead evaluates the field at each (lat, lon)
+    pair, so the output has a ``location`` dimension.
+
+    Args:
+        field: Gridded Dataset with latitude and longitude dimensions.
+        latitude: Sample latitudes. Should share a ``location`` dim with
+            ``longitude`` when already a DataArray.
+        longitude: Sample longitudes paired with ``latitude``.
+        method: Interpolation method passed to ``Dataset.interp``.
+            ``"nearest"`` or ``"linear"``. Defaults to ``"nearest"``.
+
+    Returns:
+        ``field`` interpolated at the given pairs, with a ``location``
+        dimension. If ``field`` has no lat/lon coordinates, it is
+        returned unchanged.
+
+    Examples:
+        >>> import numpy as np
+        >>> import xarray as xr
+        >>> from extremeweatherbench import utils
+        >>> t2m = np.arange(6.0).reshape(2, 3)
+        >>> forecast = xr.Dataset(
+        ...     {"t2m": (("latitude", "longitude"), t2m)},
+        ...     coords={
+        ...         "latitude": [10.0, 20.0],
+        ...         "longitude": [1.0, 2.0, 3.0],
+        ...     },
+        ... )
+        >>> lat = xr.DataArray([10.0, 20.0], dims="location")
+        >>> lon = xr.DataArray([1.0, 3.0], dims="location")
+        >>> sampled = utils.sample_field_at_points(forecast, lat, lon)
+        >>> list(sampled.dims)
+        ['location']
+    """
     lat_name, lon_name = _lat_lon_names(field)
     if lat_name is None or lon_name is None:
         return field
