@@ -18,6 +18,7 @@ import xarray as xr
 
 from extremeweatherbench import (
     cases,
+    defaults,
     derived,
     evaluate,
     inputs,
@@ -2148,6 +2149,64 @@ class TestPipelineFunctions:
 
                 # Should call run_pipeline twice (for both forecast and target)
                 assert mock_run_pipeline.call_count == 2
+
+    def test_run_pipeline_tc_preprocess_after_cira_mapping(
+        self, sample_individual_case
+    ):
+        """Map CIRA z to geopotential before TC thickness preprocess.
+
+        Gridded pipelines rename variables before preprocess. A lookup of
+        ``z`` after mapping raises KeyError on the mapped dataset.
+        """
+        init_time = pd.date_range("2021-06-20", periods=3)
+        lead_time = np.array([0, 6], dtype="timedelta64[h]").astype("timedelta64[ns]")
+        lat = np.array([43.0, 45.0, 47.0])
+        lon = np.array([238.0, 240.0, 242.0])
+        level = np.array([300.0, 500.0])
+        rng = np.random.RandomState(0)
+        z_shape = (
+            len(init_time),
+            len(lat),
+            len(lon),
+            len(lead_time),
+            len(level),
+        )
+        ds = xr.Dataset(
+            {
+                "z": (
+                    [
+                        "init_time",
+                        "latitude",
+                        "longitude",
+                        "lead_time",
+                        "level",
+                    ],
+                    rng.random(z_shape) * 1e4 + 5e4,
+                ),
+                "msl": (
+                    ["init_time", "latitude", "longitude", "lead_time"],
+                    rng.random(z_shape[:4]) * 100 + 1e5,
+                ),
+            },
+            coords={
+                "init_time": init_time,
+                "latitude": lat,
+                "longitude": lon,
+                "lead_time": lead_time,
+                "level": level,
+            },
+        )
+        forecast = inputs.XarrayForecast(
+            ds=ds,
+            variables=[],
+            variable_mapping=inputs.CIRA_metadata_variable_mapping,
+            preprocess=defaults.preprocess_cira_icechunk_tc_forecast_dataset,
+            name="cira-tc",
+        )
+        result = evaluate.run_pipeline(sample_individual_case, forecast)
+        assert "geopotential_thickness" in result.data_vars
+        assert "z" not in result.data_vars
+        assert "geopotential" in result.data_vars
 
     @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
     @mock.patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")

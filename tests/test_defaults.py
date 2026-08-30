@@ -234,6 +234,35 @@ class TestCiraFcnv2PreprocessFunctions:
         assert heatwave_preprocess == freeze_preprocess
 
 
+class TestTcGeopotentialThicknessPreprocess:
+    """TC thickness preprocess after CIRA names are mapped.
+
+    Gridded pipelines map ``z`` to ``geopotential`` before preprocess
+    runs. Looking up ``z`` then raises KeyError on the mapped dataset.
+    """
+
+    def _height_ds(self, name):
+        return xr.Dataset(
+            {name: (["level"], np.array([90000.0, 50000.0]))},
+            coords={"level": [300.0, 500.0]},
+        )
+
+    def test_icechunk_mapped_geopotential(self):
+        ds = self._height_ds("geopotential")
+        result = defaults.preprocess_cira_icechunk_tc_forecast_dataset(ds)
+        assert "geopotential_thickness" in result.data_vars
+
+    def test_icechunk_original_cira_z(self):
+        ds = self._height_ds("z")
+        result = defaults.preprocess_cira_icechunk_tc_forecast_dataset(ds)
+        assert "geopotential_thickness" in result.data_vars
+
+    def test_hres_mapped_geopotential(self):
+        ds = self._height_ds("geopotential")
+        result = defaults.preprocess_hres_tc_forecast_dataset(ds)
+        assert "geopotential_thickness" in result.data_vars
+
+
 class TestMaybeAddSpecificHumidity:
     """Tests for humidity preprocess after variable mapping."""
 
