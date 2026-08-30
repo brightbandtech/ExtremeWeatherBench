@@ -71,6 +71,16 @@ def preprocess_heatwave_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
+def _geopotential_for_thickness(ds: xr.Dataset) -> xr.DataArray:
+    """Return geopotential using mapped or original CIRA names.
+
+    Gridded pipelines map ``z`` to ``geopotential`` before preprocess.
+    """
+    if "geopotential" in ds.variables:
+        return ds["geopotential"]
+    return ds["z"]
+
+
 def preprocess_cira_icechunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """A preprocess function for CIRA icechunk data that includes geopotential thickness
     calculation required for tropical cyclone tracks.
@@ -82,7 +92,9 @@ def preprocess_cira_icechunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
         The forecast dataset with geopotential thickness.
     """
     ds["geopotential_thickness"] = (
-        calc.geopotential_thickness(ds["geopotential"], top_level=300, bottom_level=500)
+        calc.geopotential_thickness(
+            _geopotential_for_thickness(ds), top_level=300, bottom_level=500
+        )
         / 9.81
     )
     return ds
@@ -170,7 +182,9 @@ def preprocess_cira_kerchunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """
     ds = _set_cira_kerchunk_lead_time(ds)
     ds["geopotential_thickness"] = (
-        calc.geopotential_thickness(ds["geopotential"], top_level=300, bottom_level=500)
+        calc.geopotential_thickness(
+            _geopotential_for_thickness(ds), top_level=300, bottom_level=500
+        )
         / 9.81
     )
     return ds
@@ -212,9 +226,10 @@ def preprocess_hres_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
         The forecast dataset with geopotential thickness.
     """
 
-    # Calculate the geopotential thickness required for tropical cyclone tracks
     ds["geopotential_thickness"] = (
-        calc.geopotential_thickness(ds["geopotential"], top_level=300, bottom_level=500)
+        calc.geopotential_thickness(
+            _geopotential_for_thickness(ds), top_level=300, bottom_level=500
+        )
         / 9.81
     )
     return ds
