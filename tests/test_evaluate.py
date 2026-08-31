@@ -11,6 +11,7 @@ import warnings
 from typing import ClassVar
 from unittest import mock
 
+import joblib
 import numpy as np
 import pandas as pd
 import pytest
@@ -1202,7 +1203,7 @@ class TestRunParallel:
         mock_manager.assert_called_once()
         _, renderer_kwargs = mock_renderer_class.call_args
         n_slots = renderer_kwargs["n_slots"]
-        assert 0 < n_slots <= 64
+        assert n_slots == joblib.effective_n_jobs(-1)
 
     @mock.patch("extremeweatherbench.evaluate.multiprocessing.Manager")
     @mock.patch("extremeweatherbench.evaluate.progress_module.LogQueueListener")

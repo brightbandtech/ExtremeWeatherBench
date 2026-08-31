@@ -100,7 +100,6 @@ dataset stored in parquet format:
 import dataclasses
 import pandas as pd
 import polars as pl
-import xarray as xr
 import extremeweatherbench as ewb
 from extremeweatherbench import inputs, cases, utils
 
@@ -136,10 +135,7 @@ class MyStationObs(inputs.TargetBase):
         # EWB calls this when it needs an xr.Dataset from the LazyFrame
         df = data.collect(engine="streaming").to_pandas()
         df["longitude"] = utils.convert_longitude_to_360(df["longitude"])
-        df = df.set_index(["valid_time", "latitude", "longitude"])
-        return xr.Dataset.from_dataframe(
-            df[~df.index.duplicated(keep="first")], sparse=True
-        )
+        return utils.point_frame_to_dataset(df)
 
     def maybe_align_forecast_to_target(self, forecast_data, target_data):
         return inputs.align_forecast_to_target(forecast_data, target_data)
@@ -150,10 +146,12 @@ class MyStationObs(inputs.TargetBase):
 > The base `TargetBase` implementation handles `xr.Dataset` and
 > `xr.DataArray` natively; for any other type (polars `LazyFrame`,
 > pandas `DataFrame`) you must override `_custom_convert_to_dataset` to
-> produce an `xr.Dataset` with `valid_time`, `latitude`, and `longitude`
-> as index dimensions. `align_forecast_to_target` then interpolates the
-> forecast to the target's spatial coordinates using nearest-neighbour
-> interpolation.
+> produce an `xr.Dataset`. For station data, use
+> `utils.point_frame_to_dataset`: that keeps one row per station as a
+> `location` dimension, with `latitude` and `longitude` as coordinates.
+> Do not index by unique latitude and longitude — that builds a full
+> lat × lon mesh and can run out of memory. `align_forecast_to_target`
+> then samples a gridded forecast at those station pairs.
 
 ## Tips
 
@@ -178,7 +176,6 @@ import datetime
 import dataclasses
 import pandas as pd
 import polars as pl
-import xarray as xr
 import extremeweatherbench as ewb
 from extremeweatherbench import inputs, utils
 from extremeweatherbench.cases import IndividualCase
@@ -230,10 +227,7 @@ class CustomGHCN(inputs.TargetBase):
         df = data.collect().to_pandas()
         df["surface_air_temperature"] += 273.15
         df["longitude"] = utils.convert_longitude_to_360(df["longitude"])
-        df = df.set_index(["valid_time", "latitude", "longitude"])
-        return xr.Dataset.from_dataframe(
-            df[~df.index.duplicated(keep="first")], sparse=True
-        )
+        return utils.point_frame_to_dataset(df)
 
     def maybe_align_forecast_to_target(self, forecast_data, target_data):
         return inputs.align_forecast_to_target(forecast_data, target_data)

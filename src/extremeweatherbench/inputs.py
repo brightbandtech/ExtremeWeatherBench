@@ -674,14 +674,9 @@ class GHCN(TargetBase):
                 data = data.with_columns(pl.col("surface_air_temperature").add(273.15))
             data = data.collect(engine="streaming").to_pandas()
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
-
-            data = data.set_index(["valid_time", "latitude", "longitude"])
-            # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
-                data = xr.Dataset.from_dataframe(
-                    data[~data.index.duplicated(keep="first")], sparse=True
-                )
-            except (ValueError, TypeError, KeyError) as e:
+                data = utils.point_frame_to_dataset(data)
+            except (ValueError, TypeError, KeyError, IndexError) as e:
                 logger.warning(
                     "Error converting GHCN data to xarray: %s, returning empty Dataset",
                     e,
@@ -797,13 +792,14 @@ class LSR(TargetBase):
 
         # Convert longitude back to 0 - 360
         data.loc[:, "longitude"] = utils.convert_longitude_to_360(data["longitude"])
-        data = data.set_index(["valid_time", "latitude", "longitude"])
-
-        data = xr.Dataset.from_dataframe(
-            data[~data.index.duplicated(keep="first")], sparse=True
-        )
-        data.attrs["report_type_mapping"] = report_type_mapping
-        return data
+        data = data[
+            ~data.duplicated(
+                subset=["valid_time", "latitude", "longitude"], keep="first"
+            )
+        ]
+        converted = utils.point_frame_to_dataset(data)
+        converted.attrs["report_type_mapping"] = report_type_mapping
+        return converted
 
     def maybe_align_forecast_to_target(
         self,
@@ -1208,51 +1204,149 @@ def align_forecast_to_target(
     # TODO: provide passthrough for other methods
     method: str = "nearest",
 ) -> tuple[xr.Dataset, xr.Dataset]:
-    # Find spatial dimensions that exist in both datasets
+    """Put forecast and target on a shared sample geometry.
+
+    Two grids: remap the forecast onto the target grid. If either side
+    is points (station samples or a sparse lat × lon cube), sample the
+    field at those (lat, lon) pairs instead of expanding onto a
+    unique-lat × unique-lon mesh.
+
+    Args:
+        forecast_data: Forecast Dataset, gridded or point samples.
+        target_data: Target Dataset, gridded or point samples.
+        method: Spatial interpolation method. ``"nearest"`` or
+            ``"linear"``. Defaults to ``"nearest"``.
+
+    Returns:
+        Tuple of ``(aligned_forecast, aligned_target)`` with a shared
+        time range. Point alignments use a ``location`` dimension;
+        grid alignments keep latitude and longitude dims from the
+        target.
+
+    Examples:
+        >>> import pandas as pd
+        >>> import xarray as xr
+        >>> from extremeweatherbench import utils
+        >>> from extremeweatherbench.inputs import align_forecast_to_target
+        >>> times = pd.date_range("2021-01-01", periods=1, freq="6h")
+        >>> t2m = [[[0.0, 1.0]]]
+        >>> forecast = xr.Dataset(
+        ...     {"t2m": (("valid_time", "latitude", "longitude"), t2m)},
+        ...     coords={
+        ...         "valid_time": times,
+        ...         "latitude": [10.0],
+        ...         "longitude": [20.0, 30.0],
+        ...     },
+        ... )
+        >>> stations = utils.point_frame_to_dataset(
+        ...     pd.DataFrame(
+        ...         {
+        ...             "valid_time": [times[0]],
+        ...             "latitude": [10.0],
+        ...             "longitude": [20.0],
+        ...             "t2m": [0.0],
+        ...         }
+        ...     )
+        ... )
+        >>> fc, tg = align_forecast_to_target(forecast, stations)
+        >>> fc.sizes["location"] == tg.sizes["location"]
+        True
+    """
+    fc_layout = utils.infer_spatial_layout(forecast_data)
+    tg_layout = utils.infer_spatial_layout(target_data)
+
+    if fc_layout == "grid" and tg_layout == "grid":
+        return _align_grid_to_grid(forecast_data, target_data, method)
+
+    if tg_layout == "points":
+        target_pts = utils.as_point_dataset(target_data)
+        if fc_layout == "grid":
+            forecast_pts = utils.sample_field_at_points(
+                forecast_data,
+                target_pts["latitude"],
+                target_pts["longitude"],
+                method=method,
+            )
+        else:
+            forecast_pts = utils._colocate_points(
+                utils.as_point_dataset(forecast_data), target_pts
+            )
+        return _align_time_inner(forecast_pts, target_pts)
+
+    forecast_pts = utils.as_point_dataset(forecast_data)
+    target_pts = utils.sample_field_at_points(
+        target_data,
+        forecast_pts["latitude"],
+        forecast_pts["longitude"],
+        method=method,
+    )
+    return _align_time_inner(forecast_pts, target_pts)
+
+
+def _align_grid_to_grid(
+    forecast_data: xr.Dataset,
+    target_data: xr.Dataset,
+    method: str,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """Remap a gridded forecast onto a gridded target."""
     intersection_dims = [
         dim
         for dim in forecast_data.dims
         if dim in target_data.dims
         and dim not in ["time", "valid_time", "lead_time", "init_time"]
     ]
-
     spatial_dims = {str(dim): target_data[dim] for dim in intersection_dims}
-
-    # Align time dimensions if they exist in both datasets
     time_aligned_target, time_aligned_forecast = xr.align(
         target_data,
         forecast_data,
         join="inner",
         exclude=spatial_dims.keys(),
     )
-    # Squeeze the data to remove any single-value dimensions
-    target_data = target_data.squeeze()
-    forecast_data = forecast_data.squeeze()
-    # Regrid forecast to target grid using nearest neighbor interpolation
-    # extrapolate in the case of targets slightly outside the forecast domain
     if spatial_dims:
         same_grid = all(
             time_aligned_forecast[dim].equals(time_aligned_target[dim])
             for dim in spatial_dims
         )
         if same_grid:
-            time_space_aligned_forecast = time_aligned_forecast
-        else:
-            interp_method: Literal["nearest", "linear"] = (
-                "nearest" if method == "nearest" else "linear"
-            )
+            return time_aligned_forecast, time_aligned_target
+        interp_method: Literal["nearest", "linear"] = (
+            "nearest" if method == "nearest" else "linear"
+        )
+        interp_kwargs = cast(
+            dict[str, Any],
+            {"method": interp_method, "kwargs": {"fill_value": "extrapolate"}},
+        )
+        interp_kwargs.update(spatial_dims)
+        return time_aligned_forecast.interp(**interp_kwargs), time_aligned_target
+    return time_aligned_forecast, time_aligned_target
 
-            interp_kwargs = cast(
-                dict[str, Any],
-                {"method": interp_method, "kwargs": {"fill_value": "extrapolate"}},
-            )
-            interp_kwargs.update(spatial_dims)
 
-            time_space_aligned_forecast = time_aligned_forecast.interp(**interp_kwargs)
-    else:
-        time_space_aligned_forecast = time_aligned_forecast
-
-    return time_space_aligned_forecast, time_aligned_target
+def _align_time_inner(
+    forecast_data: xr.Dataset,
+    target_data: xr.Dataset,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """Inner-join time dims, leaving location/lat/lon unaligned."""
+    exclude = {
+        name
+        for name in (
+            "latitude",
+            "longitude",
+            "lat",
+            "lon",
+            "location",
+            "station",
+            "sample",
+            "stacked",
+        )
+        if name in forecast_data.dims or name in target_data.dims
+    }
+    time_aligned_target, time_aligned_forecast = xr.align(
+        target_data,
+        forecast_data,
+        join="inner",
+        exclude=exclude,
+    )
+    return time_aligned_forecast, time_aligned_target
 
 
 def maybe_subset_variables(

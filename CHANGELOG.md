@@ -118,6 +118,10 @@ commits. Prefer this changelog when writing GitHub release notes.
 - `outputs` is exported from the package loader, and empty-fallback
   time dims no longer poison Dataset dtypes
   ([#407](https://github.com/brightbandtech/ExtremeWeatherBench/pull/407)).
+- Point observations (GHCN, LSR) use a `location` dimension instead of
+  a unique-lat × unique-lon mesh. Alignment samples the forecast at
+  those stations, which avoids out-of-memory on large freeze cases and
+  makes spatial-mean metrics average stations only.
 
 ## [1.0.2.post1] - 2026-04-30
 
