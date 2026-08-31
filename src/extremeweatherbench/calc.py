@@ -10,12 +10,21 @@ from numba import float64, guvectorize, njit
 from scipy import ndimage
 
 from extremeweatherbench import utils
-from extremeweatherbench._cape import EPSILON
+from extremeweatherbench.constants import (
+    A_BOLTON,
+    B_BOLTON,
+    E0_BOLTON,
+    EARTH_RADIUS_KM,
+    EPSILON,
+    GRAVITY,
+    KELVIN_TO_CELSIUS,
+    NS_PER_HOUR,
+)
 
 epsilon: float = EPSILON  # Ratio of molecular weights (H2O/dry air)
-sat_press_0c: float = 6.112  # Saturation vapor pressure at 0°C (hPa)
-g0: float = 9.80665  # Standard gravity (m/s^2)
-_ns_per_hour = 3_600_000_000_000
+sat_press_0c: float = E0_BOLTON  # Saturation vapor pressure at 0°C (hPa)
+g0: float = GRAVITY  # Standard gravity (m/s^2)
+_ns_per_hour = NS_PER_HOUR
 logger = logging.getLogger("extremeweatherbench.calc")
 logger.setLevel(logging.INFO)
 
@@ -49,7 +58,7 @@ def mixing_ratio(
     r"""Calculate the mixing ratio of water vapor in air.
 
     Uses the formula: $w = (\epsilon * e) / (p - e)$ where $\epsilon \approx
-    0.622$; the code uses the unrounded ratio in `_cape.EPSILON`.
+    0.622$; the code uses the unrounded ratio in ``constants.EPSILON``.
 
     Args:
         partial_pressure: Water vapor partial pressure in hPa.
@@ -92,7 +101,7 @@ def saturation_vapor_pressure(
     """
     # Suppress overflow warnings for this calculation
     with np.errstate(over="ignore", invalid="ignore"):
-        return sat_press_0c * np.exp(17.67 * temperature / (temperature + 243.5))
+        return sat_press_0c * np.exp(A_BOLTON * temperature / (temperature + B_BOLTON))
 
 
 def saturation_mixing_ratio(
@@ -139,7 +148,7 @@ def haversine_distance(
     a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
     c = 2 * np.arcsin(np.sqrt(a))
     if units == "km" or units == "kilometers":
-        return 6371 * c
+        return EARTH_RADIUS_KM * c
     elif units == "deg" or units == "degrees":
         return np.degrees(c)  # Convert back to degrees
     else:
@@ -355,7 +364,9 @@ def specific_humidity_from_relative_humidity(
         A DataArray of specific humidity in kg/kg.
     """
     # Compute saturation mixing ratio; air temperature must be in Kelvin
-    sat_mixing_ratio = saturation_mixing_ratio(levels, air_temperature - 273.15)
+    sat_mixing_ratio = saturation_mixing_ratio(
+        levels, air_temperature - KELVIN_TO_CELSIUS
+    )
 
     # Calculate specific humidity using saturation mixing ratio, epsilon,
     # and relative humidity
@@ -416,8 +427,8 @@ def dewpoint_from_specific_humidity(pressure: float, specific_humidity: float) -
     # remaining physical constraints.
     w = specific_humidity / (1.0 - specific_humidity)
     e = pressure * w / (w + epsilon)
-    T_d = 243.5 * np.log(e / sat_press_0c) / (17.67 - np.log(e / sat_press_0c))
-    return T_d + 273.15
+    T_d = B_BOLTON * np.log(e / sat_press_0c) / (A_BOLTON - np.log(e / sat_press_0c))
+    return T_d + KELVIN_TO_CELSIUS
 
 
 def find_landfalls(
@@ -982,7 +993,7 @@ def _deduplicate_landfalls(
         dlat = lat2 - lat1
         dlon = lon2 - lon1
         a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
-        dist_km = 2 * 6371.0 * np.arcsin(np.sqrt(a))
+        dist_km = 2 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(a))
         if dist_km < min_distance_km:
             keep[i] = False
         else:

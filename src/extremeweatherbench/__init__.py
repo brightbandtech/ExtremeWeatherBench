@@ -20,6 +20,7 @@ __getattr__, __dir__, __all__ = lazy.attach(
     submodules=[
         "calc",
         "cases",
+        "constants",
         "defaults",
         "derived",
         "evaluate",
