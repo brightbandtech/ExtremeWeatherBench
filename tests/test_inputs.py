@@ -1,6 +1,7 @@
 """Tests for inputs module."""
 
 import copy
+import logging
 from unittest import mock
 
 import numpy as np
@@ -9,6 +10,8 @@ import polars as pl
 import pytest
 import sparse
 import xarray as xr
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from extremeweatherbench import cases, inputs, regions, utils
 
@@ -1463,6 +1466,110 @@ class TestAgnosticSpatialAlign:
         assert "latitude" not in ds.dims
         assert ds.sizes["location"] == 3
         assert ds.surface_air_temperature.size == 2 * 3
+
+    def test_sample_field_mixed_longitude_convention(self):
+        """359° must sample the cell at -1°, not 1°, on a -180/180 grid."""
+        grid = xr.Dataset(
+            {"t2m": (("latitude", "longitude"), np.array([[10.0, 20.0, 30.0]]))},
+            coords={"latitude": [0.0], "longitude": [-1.0, 0.0, 1.0]},
+        )
+        lat = xr.DataArray([0.0], dims="location")
+        lon = xr.DataArray([359.0], dims="location")
+        sampled = utils.sample_field_at_points(grid, lat, lon)
+        np.testing.assert_allclose(sampled.t2m.values, [10.0])
+
+    def test_colocate_points_uses_cyclic_longitude(self):
+        """A station at 0.05° is closer to 359.9° than to 1.0°."""
+        times = pd.date_range("2021-01-01", periods=1, freq="6h")
+        forecast = _point_dataset_location_dim(
+            times, [0.0, 0.0], [359.9, 1.0], [2.0, 1.0]
+        )
+        target = _point_dataset_location_dim(times, [0.0], [0.05], [0.0])
+        mapped = utils._colocate_points(forecast, target)
+        np.testing.assert_allclose(mapped.surface_air_temperature.values, [[2.0]])
+
+    def test_sparse_cube_to_location_does_not_call_todense(self, monkeypatch):
+        """Occupied pairs must be gathered without materializing the cube."""
+        times = pd.date_range("2021-01-01", periods=2, freq="6h")
+        ds = _sparse_station_cube(
+            times, [10.0, 20.0, 30.0], [100.0, 110.0, 120.0], 273.0
+        )
+
+        def _boom(*_args, **_kwargs):
+            raise AssertionError("todense should not be called")
+
+        monkeypatch.setattr(sparse.COO, "todense", _boom)
+        out = utils.sparse_cube_to_location(ds)
+        assert out.sizes["location"] == 3
+        assert "latitude" not in out.dims
+        np.testing.assert_allclose(out.latitude.values, [10.0, 20.0, 30.0])
+
+    def test_sparse_occupancy_is_union_across_variables(self):
+        """Each variable's stored cells count as occupied locations."""
+        times = pd.date_range("2021-01-01", periods=1, freq="6h")
+        shape = (1, 2, 2)
+        a = sparse.COO(
+            np.array([[0], [0], [0]]),
+            np.array([1.0]),
+            shape=shape,
+            fill_value=np.nan,
+        )
+        b = sparse.COO(
+            np.array([[0], [1], [1]]),
+            np.array([2.0]),
+            shape=shape,
+            fill_value=np.nan,
+        )
+        ds = xr.Dataset(
+            {
+                "a": (("valid_time", "latitude", "longitude"), a),
+                "b": (("valid_time", "latitude", "longitude"), b),
+            },
+            coords={
+                "valid_time": times,
+                "latitude": [0.0, 1.0],
+                "longitude": [10.0, 20.0],
+            },
+        )
+        out = utils.sparse_cube_to_location(ds)
+        assert out.sizes["location"] == 2
+        pairs = set(zip(out.latitude.values.tolist(), out.longitude.values.tolist()))
+        assert pairs == {(0.0, 10.0), (1.0, 20.0)}
+
+    def test_point_frame_duplicate_rows_log_a_warning(self, caplog):
+        df = pd.DataFrame(
+            {
+                "valid_time": ["2021-01-01", "2021-01-01"],
+                "latitude": [10.0, 10.0],
+                "longitude": [20.0, 20.0],
+                "station_id": ["A", "B"],
+                "t": [1.0, 2.0],
+            }
+        )
+        with caplog.at_level(logging.WARNING, logger="extremeweatherbench.utils"):
+            ds = utils.point_frame_to_dataset(df)
+        assert ds.sizes["location"] == 1
+        assert "duplicate" in caplog.text.lower()
+
+
+@given(
+    lon=st.floats(min_value=0.0, max_value=359.0, allow_nan=False, allow_infinity=False)
+)
+@settings(max_examples=40, deadline=None)
+def test_sample_field_longitude_shift_by_360_is_invariant(lon):
+    """Nearest sample must not change if longitude is shifted by 360°."""
+    grid_lon = np.arange(0.0, 360.0, 1.0)
+    values = grid_lon[np.newaxis, :]
+    grid = xr.Dataset(
+        {"t2m": (("latitude", "longitude"), values)},
+        coords={"latitude": [0.0], "longitude": grid_lon},
+    )
+    lat = xr.DataArray([0.0], dims="location")
+    base = utils.sample_field_at_points(grid, lat, xr.DataArray([lon], dims="location"))
+    shifted = utils.sample_field_at_points(
+        grid, lat, xr.DataArray([lon - 360.0], dims="location")
+    )
+    np.testing.assert_allclose(base.t2m.values, shifted.t2m.values)
 
 
 class TestGHCN:

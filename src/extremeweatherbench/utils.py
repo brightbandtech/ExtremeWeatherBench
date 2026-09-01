@@ -139,6 +139,19 @@ def convert_longitude_to_360(longitude: float) -> float:
     return np.mod(longitude, 360)
 
 
+def _wrap_longitude_to_grid(sample_lon: np.ndarray, grid_lon: np.ndarray) -> np.ndarray:
+    """Shift sample longitudes by ±360° into the grid's numeric range.
+
+    Maps each sample into ``[mid - 180, mid + 180)`` where ``mid`` is the
+    midpoint of the grid longitudes. That puts 359° next to -1° on a
+    ``[-180, 180)`` axis and -1° next to 359° on a ``[0, 360)`` axis.
+    """
+    grid = np.asarray(grid_lon, dtype=float)
+    sample = np.asarray(sample_lon, dtype=float)
+    mid = 0.5 * (np.nanmin(grid) + np.nanmax(grid))
+    return np.mod(sample - mid + 180.0, 360.0) - 180.0 + mid
+
+
 def convert_longitude_to_180(
     longitude: float | xr.Dataset | xr.DataArray,
     longitude_name: str = "longitude",
@@ -997,7 +1010,15 @@ def point_frame_to_dataset(
     """
     frame = df.copy()
     key_cols = [time_col, lat_col, lon_col]
+    n_before = len(frame)
     frame = frame.drop_duplicates(subset=key_cols, keep="first")
+    n_dropped = n_before - len(frame)
+    if n_dropped:
+        logger.warning(
+            "Dropped %s duplicate (time, lat, lon) point rows; "
+            "colocated stations collapse to one location.",
+            n_dropped,
+        )
     stations = frame[[lat_col, lon_col]].drop_duplicates().reset_index(drop=True)
     stations[location_dim] = np.arange(len(stations))
     frame = frame.merge(stations, on=[lat_col, lon_col], how="left")
@@ -1021,9 +1042,13 @@ def sparse_cube_to_location(
     product with values only at real stations. The result has a sample
     dimension instead of separate latitude and longitude dimensions.
 
+    Occupied locations are the union of stored (lat, lon) index pairs
+    across every data variable. A station present only in a later
+    variable is kept. Sparse COO arrays are indexed in place; the
+    full Cartesian cube is not densified.
+
     Args:
-        ds: Dataset with latitude and longitude dimensions. Sparse COO
-            variables are densified after occupied pairs are collected.
+        ds: Dataset with latitude and longitude dimensions.
         location_dim: Name of the sample dimension to create. Defaults
             to ``"location"``.
 
@@ -1035,19 +1060,9 @@ def sparse_cube_to_location(
     lat_name, lon_name = _lat_lon_names(ds)
     if lat_name is None or lon_name is None:
         return ds
-    da = next(iter(ds.data_vars.values()))
-    pairs: np.ndarray | None = None
-    if isinstance(da.data, sparse.COO):
-        dims = list(da.dims)
-        lat_i = da.data.coords[dims.index(lat_name)]
-        lon_i = da.data.coords[dims.index(lon_name)]
-        pairs = np.unique(np.column_stack([lat_i, lon_i]), axis=0)
-        ds = ds.map(
-            lambda v: (
-                v.copy(data=v.data.todense()) if isinstance(v.data, sparse.COO) else v
-            )
-        )
+    pairs = _occupied_lat_lon_index_pairs(ds, lat_name, lon_name)
     if pairs is None:
+        da = next(iter(ds.data_vars.values()))
         stacked = ds.stack({location_dim: (lat_name, lon_name)})
         keep = (
             stacked[da.name]
@@ -1056,14 +1071,84 @@ def sparse_cube_to_location(
         )
         return stacked.isel({location_dim: keep})
 
-    loc = xr.DataArray(np.arange(len(pairs)), dims=location_dim)
-    out = ds.isel(
+    data_vars = {}
+    for name, da in ds.data_vars.items():
+        if isinstance(da.data, sparse.COO):
+            data_vars[name] = _coo_at_lat_lon_pairs(
+                da, lat_name, lon_name, pairs, location_dim
+            )
+        else:
+            data_vars[name] = da.isel(
+                {
+                    lat_name: xr.DataArray(pairs[:, 0], dims=location_dim),
+                    lon_name: xr.DataArray(pairs[:, 1], dims=location_dim),
+                }
+            )
+    other_coords = {
+        name: coord
+        for name, coord in ds.coords.items()
+        if name not in (lat_name, lon_name)
+        and set(coord.dims).isdisjoint({lat_name, lon_name})
+    }
+    out = xr.Dataset(data_vars, coords=other_coords)
+    return out.assign_coords(
         {
-            lat_name: xr.DataArray(pairs[:, 0], dims=location_dim),
-            lon_name: xr.DataArray(pairs[:, 1], dims=location_dim),
+            location_dim: np.arange(len(pairs)),
+            lat_name: (location_dim, np.asarray(ds[lat_name])[pairs[:, 0]]),
+            lon_name: (location_dim, np.asarray(ds[lon_name])[pairs[:, 1]]),
         }
     )
-    return out.assign_coords({location_dim: loc})
+
+
+def _occupied_lat_lon_index_pairs(
+    ds: xr.Dataset, lat_name: str, lon_name: str
+) -> np.ndarray | None:
+    """Unique stored (lat, lon) index pairs, or None if nothing is sparse."""
+    chunks: list[np.ndarray] = []
+    saw_sparse = False
+    for da in ds.data_vars.values():
+        if lat_name not in da.dims or lon_name not in da.dims:
+            continue
+        if not isinstance(da.data, sparse.COO):
+            continue
+        saw_sparse = True
+        dims = list(da.dims)
+        lat_i = da.data.coords[dims.index(lat_name)]
+        lon_i = da.data.coords[dims.index(lon_name)]
+        chunks.append(np.column_stack([lat_i, lon_i]))
+    if not saw_sparse:
+        return None
+    if not chunks:
+        return np.zeros((0, 2), dtype=int)
+    return np.unique(np.vstack(chunks), axis=0)
+
+
+def _coo_at_lat_lon_pairs(
+    da: xr.DataArray,
+    lat_name: str,
+    lon_name: str,
+    pairs: np.ndarray,
+    location_dim: str,
+) -> xr.DataArray:
+    """Pull COO values at (lat, lon) index pairs without densifying."""
+    coo = da.data
+    dims = list(da.dims)
+    lat_ax = dims.index(lat_name)
+    lon_ax = dims.index(lon_name)
+    other_dims = [dim for dim in dims if dim not in (lat_name, lon_name)]
+    other_axes = [dims.index(dim) for dim in other_dims]
+    other_shape = tuple(da.sizes[dim] for dim in other_dims)
+    out = np.full(other_shape + (len(pairs),), np.nan, dtype=np.float64)
+    loc_of = {(int(row[0]), int(row[1])): i for i, row in enumerate(pairs)}
+    coords = coo.coords
+    values = coo.data
+    for k in range(values.shape[0]):
+        loc = loc_of.get((int(coords[lat_ax, k]), int(coords[lon_ax, k])))
+        if loc is None:
+            continue
+        idx = tuple(int(coords[ax, k]) for ax in other_axes) + (loc,)
+        out[idx] = values[k]
+    return xr.DataArray(out, dims=other_dims + [location_dim])
 
 
 def as_point_dataset(ds: xr.Dataset) -> xr.Dataset:
@@ -1158,6 +1243,8 @@ def sample_field_at_points(
             dims="location",
             coords={"location": loc},
         )
+    wrapped = _wrap_longitude_to_grid(np.asarray(lon_da), np.asarray(field[lon_name]))
+    lon_da = xr.DataArray(wrapped, dims=lon_da.dims, coords=lon_da.coords)
     return field.interp(
         {lat_name: lat_da, lon_name: lon_da},
         method=interp_method,
@@ -1173,9 +1260,9 @@ def _colocate_points(forecast_pts: xr.Dataset, target_pts: xr.Dataset) -> xr.Dat
     fc_lon = np.asarray(forecast_pts["longitude"])
     tg_lat = np.asarray(target_pts["latitude"])
     tg_lon = np.asarray(target_pts["longitude"])
-    dist = (fc_lat[:, None] - tg_lat[None, :]) ** 2 + (
-        fc_lon[:, None] - tg_lon[None, :]
-    ) ** 2
+    dlat = fc_lat[:, None] - tg_lat[None, :]
+    dlon = np.mod(fc_lon[:, None] - tg_lon[None, :] + 180.0, 360.0) - 180.0
+    dist = dlat**2 + dlon**2
     idx = dist.argmin(axis=0)
     mapped = forecast_pts.isel({fc_dim: idx})
     mapped = mapped.assign_coords(
