@@ -1253,8 +1253,7 @@ def run_pipeline(
         data = input_data._open_data_from_source()
     is_gridded = isinstance(data, (xr.Dataset, xr.DataArray))
     preprocess_before_map = (
-        not is_gridded
-        and input_data.preprocess_before_variable_mapping is True
+        not is_gridded and input_data.preprocess_before_variable_mapping is True
     )
     if preprocess_before_map:
         data = input_data.preprocess(data)

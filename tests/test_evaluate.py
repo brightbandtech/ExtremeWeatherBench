@@ -2295,9 +2295,7 @@ class TestPipelineFunctions:
         assert "t2" not in seen_columns[0]
         assert "surface_air_temperature" in seen_columns[0]
 
-    def test_run_pipeline_tabular_source_names_keyerror(
-        self, sample_individual_case
-    ):
+    def test_run_pipeline_tabular_source_names_keyerror(self, sample_individual_case):
         """Source-name lookup in a tabular preprocess must KeyError."""
         raw = pd.DataFrame(
             {
