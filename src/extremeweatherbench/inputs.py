@@ -191,6 +191,9 @@ class InputBase(abc.ABC):
         variable_mapping: A dictionary of variable names to map to the data.
         storage_options: Storage/access options for the data.
         preprocess: A function to preprocess the data.
+        preprocess_before_variable_mapping: If True, run preprocess on the
+            source variable names before mapping to EWB names. Reserved for
+            inputs such as IBTrACS that must merge and coerce source columns.
 
     Public methods:
         open_and_maybe_preprocess_data_from_source: Open and preprocess data
@@ -211,6 +214,7 @@ class InputBase(abc.ABC):
     variable_mapping: dict = dataclasses.field(default_factory=dict)
     storage_options: dict | None = None
     preprocess: Callable = _default_preprocess
+    preprocess_before_variable_mapping: bool = False
 
     def open_and_maybe_preprocess_data_from_source(
         self,
@@ -859,8 +863,9 @@ class PPH(TargetBase):
 def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
     """Preprocess IBTrACS data.
 
-    Preprocessing is done before any variable mapping is applied, thus using the
-    original variable names is required."""
+    IBTrACS sets preprocess_before_variable_mapping so this runs on source
+    column names (USA_WIND, WMO_PRES, and similar) before EWB mapping.
+    """
 
     schema = data.collect_schema()
     # Convert pressure and surface wind columns to float, replacing " " with null
@@ -955,6 +960,7 @@ class IBTrACS(TargetBase):
 
     name: str = "IBTrACS"
     preprocess: Callable = _ibtracs_preprocess
+    preprocess_before_variable_mapping: bool = True
     variable_mapping: dict = dataclasses.field(
         default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
     )

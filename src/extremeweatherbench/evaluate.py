@@ -1243,17 +1243,23 @@ def run_pipeline(
     Returns:
         The processed input data as an xarray dataset.
     """
-    # Gridded: map names, subset case, preprocess, then subset variables so
-    # preprocess can add fields such as geopotential thickness. Tabular
-    # sources such as IBTrACS need original column names inside preprocess.
+    # Map to EWB names before preprocess. IBTrACS (and similar) set
+    # preprocess_before_variable_mapping to merge/coerce source columns first.
+    # Gridded preprocess still runs after case subset so it can add fields
+    # such as geopotential thickness before variable subset.
     if isinstance(input_data, inputs.LSR):
         data = input_data._open_data_from_source(case_metadata=case_metadata)
     else:
         data = input_data._open_data_from_source()
     is_gridded = isinstance(data, (xr.Dataset, xr.DataArray))
-    if not is_gridded:
+    preprocess_before_map = (
+        not is_gridded and input_data.preprocess_before_variable_mapping is True
+    )
+    if preprocess_before_map:
         data = input_data.preprocess(data)
     data = input_data.maybe_map_variable_names(data)
+    if not is_gridded and not preprocess_before_map:
+        data = input_data.preprocess(data)
 
     # Get the appropriate source module for the data type
     source_module = sources.get_backend_module(type(data))

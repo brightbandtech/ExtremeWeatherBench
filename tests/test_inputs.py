@@ -2338,6 +2338,15 @@ class TestConstants:
         assert mapping["LAT"] == "latitude"
         assert mapping["LON"] == "longitude"
 
+    def test_ibtracs_preprocess_before_variable_mapping(self):
+        """IBTrACS is the exception that preprocesses source columns."""
+        ibtracs = inputs.IBTrACS(source="test.csv")
+        ghcn = inputs.GHCN(source="test.parquet")
+        lsr = inputs.LSR(source="test.parquet")
+        assert ibtracs.preprocess_before_variable_mapping is True
+        assert ghcn.preprocess_before_variable_mapping is False
+        assert lsr.preprocess_before_variable_mapping is False
+
 
 @pytest.mark.integration
 class TestInputsIntegration:

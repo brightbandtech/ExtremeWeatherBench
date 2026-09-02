@@ -2242,6 +2242,138 @@ class TestPipelineFunctions:
             "preprocess"
         )
 
+    def test_run_pipeline_tabular_preprocess_after_mapping(
+        self, sample_individual_case
+    ):
+        """Tabular preprocess sees EWB names, not source names."""
+        raw = pd.DataFrame(
+            {
+                "t2": [280.0],
+                "valid_time": [pd.Timestamp("2021-06-20")],
+                "latitude": [45.0],
+                "longitude": [-120.0],
+            }
+        )
+        mapped = raw.rename(columns={"t2": "surface_air_temperature"})
+        seen_columns = []
+
+        def preprocess(data):
+            seen_columns.append(list(data.columns))
+            return data
+
+        target = mock.Mock(spec=inputs.TargetBase)
+        target.name = "GHCN"
+        target.variables = ["surface_air_temperature"]
+        target.preprocess_before_variable_mapping = False
+        target._open_data_from_source.return_value = raw
+        target.maybe_map_variable_names.return_value = mapped
+        target.preprocess.side_effect = preprocess
+        target.subset_data_to_case.return_value = mapped
+        target.maybe_convert_to_dataset.return_value = xr.Dataset()
+        target.add_source_to_dataset_attrs.return_value = xr.Dataset()
+
+        with (
+            mock.patch(
+                "extremeweatherbench.evaluate.inputs.check_for_missing_data",
+                return_value=True,
+            ),
+            mock.patch(
+                "extremeweatherbench.evaluate.inputs.maybe_subset_variables",
+                side_effect=lambda data, **kwargs: data,
+            ),
+            mock.patch(
+                "extremeweatherbench.derived.maybe_derive_variables",
+                return_value=xr.Dataset(),
+            ),
+        ):
+            evaluate.run_pipeline(sample_individual_case, target)
+
+        method_names = [name for name, *_ in target.method_calls]
+        assert method_names.index("maybe_map_variable_names") < method_names.index(
+            "preprocess"
+        )
+        assert "t2" not in seen_columns[0]
+        assert "surface_air_temperature" in seen_columns[0]
+
+    def test_run_pipeline_tabular_source_names_keyerror(self, sample_individual_case):
+        """Source-name lookup in a tabular preprocess must KeyError."""
+        raw = pd.DataFrame(
+            {
+                "t2": [280.0],
+                "valid_time": [pd.Timestamp("2021-06-20")],
+                "latitude": [45.0],
+                "longitude": [-120.0],
+            }
+        )
+
+        def preprocess(data):
+            _ = data["t2"]
+            return data
+
+        target = mock.Mock(spec=inputs.TargetBase)
+        target.name = "GHCN"
+        target.variables = ["surface_air_temperature"]
+        target.preprocess_before_variable_mapping = False
+        target._open_data_from_source.return_value = raw
+        target.maybe_map_variable_names.return_value = raw.rename(
+            columns={"t2": "surface_air_temperature"}
+        )
+        target.preprocess.side_effect = preprocess
+
+        with pytest.raises(KeyError, match="t2"):
+            evaluate.run_pipeline(sample_individual_case, target)
+
+    def test_run_pipeline_ibtracs_preprocess_before_mapping(
+        self, sample_individual_case
+    ):
+        """IBTrACS preprocess still runs on source column names."""
+        raw = pd.DataFrame(
+            {
+                "USA_WIND": [50.0],
+                "valid_time": [pd.Timestamp("2021-06-20")],
+            }
+        )
+        seen_columns = []
+
+        def preprocess(data):
+            seen_columns.append(list(data.columns))
+            return data
+
+        target = mock.Mock(spec=inputs.IBTrACS)
+        target.name = "IBTrACS"
+        target.variables = ["surface_wind_speed"]
+        target.preprocess_before_variable_mapping = True
+        target._open_data_from_source.return_value = raw
+        target.maybe_map_variable_names.return_value = raw.rename(
+            columns={"USA_WIND": "usa_surface_wind_speed"}
+        )
+        target.preprocess.side_effect = preprocess
+        target.subset_data_to_case.return_value = raw
+        target.maybe_convert_to_dataset.return_value = xr.Dataset()
+        target.add_source_to_dataset_attrs.return_value = xr.Dataset()
+
+        with (
+            mock.patch(
+                "extremeweatherbench.evaluate.inputs.check_for_missing_data",
+                return_value=True,
+            ),
+            mock.patch(
+                "extremeweatherbench.evaluate.inputs.maybe_subset_variables",
+                side_effect=lambda data, **kwargs: data,
+            ),
+            mock.patch(
+                "extremeweatherbench.derived.maybe_derive_variables",
+                return_value=xr.Dataset(),
+            ),
+        ):
+            evaluate.run_pipeline(sample_individual_case, target)
+
+        method_names = [name for name, *_ in target.method_calls]
+        assert method_names.index("preprocess") < method_names.index(
+            "maybe_map_variable_names"
+        )
+        assert "USA_WIND" in seen_columns[0]
+
     def test_run_pipeline_invalid_source(self, sample_case_operator):
         """Test run_pipeline function with invalid input source."""
         with pytest.raises(AttributeError, match="'str' object has no attribute"):
