@@ -22,6 +22,7 @@ nav:
   - Cookbook:
       - CIRA Forecast: recipes/cira_forecast.md
       - BYOF (Bring Your Own Forecast): recipes/your_own_forecast.md
+      - t0-beta: recipes/t0_beta.md
       - BYOT (Bring Your Own Target): recipes/your_own_target.md
       - BYOM (Bring Your Own Metrics): recipes/your_own_metrics.md
       - BYOV (Bring Your Own Variable): recipes/your_own_variable.md
