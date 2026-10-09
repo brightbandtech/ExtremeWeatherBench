@@ -161,6 +161,9 @@ commits. Prefer this changelog when writing GitHub release notes.
   forecasts were silently skipped and, for example, `applied_freeze.py`
   produced zero rows
   ([#391](https://github.com/brightbandtech/ExtremeWeatherBench/issues/391)).
+  The data check now uses each forecast's `init_time` + `lead_time`, so
+  forecasts initialized before a case whose lead times reach into it are
+  also kept.
 - `CravenBrooksSignificantSevere` output carries its own attributes
   instead of CAPE's
   ([#363](https://github.com/brightbandtech/ExtremeWeatherBench/issues/363)).
