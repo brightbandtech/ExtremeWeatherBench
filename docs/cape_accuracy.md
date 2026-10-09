@@ -22,15 +22,16 @@ the lifting condensation level for every pressure level in the profile, which
 made the cost quadratic in the number of levels and left a comparatively coarse
 effective step size at the top of the sounding. The integration now *marches*
 level by level, carrying the parcel temperature forward from the level below and
-taking a fixed 16 substeps across each gap (`_cape.MOIST_ASCENT_SUBSTEPS`).
+taking a fixed 16 substeps across each gap (`constants.MOIST_ASCENT_SUBSTEPS`).
 
 **2. The molecular-weight ratio $\epsilon$.** The package previously carried two
 values of the ratio of the molecular weights of water vapor and dry air: the
 rounded `0.622` inside `_cape.py`, and the unrounded `0.6219569100577033` in
-These are now a single constant, `constants.EPSILON`, set to the
-unrounded value and imported everywhere else. `_cape.py` re-exports it so Numba
-kernels can bind the module global without an import cycle; it is defined in the
-leaf `constants.py` module.
+`calc.py` and the severe-convection module. These are now a single constant,
+`constants.EPSILON`, set to the unrounded value and imported everywhere else.
+It is defined in `constants.py`, a leaf module that imports nothing else from
+the package, so any module can take it without an import cycle. `_cape.py`
+imports it as a module global so its Numba kernels can bind it at compile time.
 
 ## Size of the shift
 
@@ -80,7 +81,7 @@ not close it.
 
 `data_prep/generate_cape_reference_data.py` derived dewpoint from specific
 humidity with its own hardcoded `0.622`, so it now uses the shared
-`_cape.EPSILON` as well. Because dewpoint is an *input* to the stored profiles,
+`constants.EPSILON` as well. Because dewpoint is an *input* to the stored profiles,
 `tests/data/era5_reference.npz` was regenerated to match. The reference CAPE and
 CIN values in that file still come from `metpy.calc.mixed_layer_cape_cin`, so it
 remains an independent oracle and the reference tests are not circular.

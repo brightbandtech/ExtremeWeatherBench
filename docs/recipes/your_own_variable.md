@@ -82,16 +82,18 @@ my_metric = ewb.metrics.MeanAbsoluteError(
 )
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[my_metric],
-        target=ewb.ERA5(),
+        target=ewb.inputs.ERA5(),
         forecast=my_forecast,
     ),
 ]
 
-cases = ewb.load_cases()
-runner = ewb.evaluation(case_metadata=cases, evaluation_objects=eval_objects)
+cases = ewb.cases.load_cases()
+runner = ewb.evaluate.ExtremeWeatherBench(
+    case_metadata=cases, evaluation_objects=eval_objects
+)
 outputs = runner.run_evaluation()
 ```
 
@@ -241,14 +243,14 @@ class DewpointDepression(DerivedVariable):
 
 dd = DewpointDepression()
 
-forecast = ewb.ZarrForecast(
+forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
-target = ewb.ERA5(
+target = ewb.inputs.ERA5(
     variables=[
         "surface_air_temperature",
         "surface_dewpoint_temperature",
@@ -256,7 +258,7 @@ target = ewb.ERA5(
 )
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MeanAbsoluteError(
@@ -269,7 +271,7 @@ eval_objects = [
     ),
 ]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=cases,
     evaluation_objects=eval_objects,
 )

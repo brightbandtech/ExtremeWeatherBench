@@ -67,7 +67,7 @@ metrics_list = [
     metrics.MaximumMeanAbsoluteError(
         forecast_variable='surface_air_temperature', 
         target_variable='surface_air_temperature'
-        )
+        ),
     
     # Arbitrary thresholds to check CSI on the temperature; how did the models do
     # spatially for the upper echelons of heat?
@@ -105,7 +105,7 @@ evaluation_object = [
     ),
 ]
 
-ewb = evaluate.ExtremeWeatherBench(
+runner = evaluate.ExtremeWeatherBench(
     case_metadata=case_vals, evaluation_objects=evaluation_object
 )
 
@@ -115,7 +115,7 @@ parallel_config = {
     "n_jobs": 4,
 }
 
-output = ewb.run_evaluation(parallel_config=parallel_config)
+output = runner.run_evaluation(parallel_config=parallel_config)
 ```
 
 ## Complete Example

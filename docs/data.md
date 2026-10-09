@@ -62,12 +62,12 @@ object storage or a local path.
 ```python
 import extremeweatherbench as ewb
 
-hres_forecast = ewb.forecasts.ZarrForecast(
+hres_forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
     variables=["surface_air_temperature"],
     # built-in mapping for ECMWF HRES from WeatherBench2
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 ```
@@ -84,11 +84,11 @@ AWS Open Data.
 ```python
 import extremeweatherbench as ewb
 
-cira_kerchunk_forecast = ewb.forecasts.KerchunkForecast(
+cira_kerchunk_forecast = ewb.inputs.KerchunkForecast(
     source="s3://noaa-oar-mlwp-data/FourCastNetv2/kerchunk.parq",
     name="FourCastNetv2",
     variables=["surface_air_temperature"],
-    variable_mapping=ewb.CIRA_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.CIRA_metadata_variable_mapping,
     storage_options={
         "remote_protocol": "s3",
         "remote_options": {"anon": True},
@@ -111,7 +111,7 @@ import extremeweatherbench as ewb
 
 ds = xr.open_mfdataset("my_forecast_*.nc", combine="by_coords")
 
-my_forecast = ewb.forecasts.XarrayForecast(
+my_forecast = ewb.inputs.XarrayForecast(
     ds=ds,
     name="MyModel",
     variables=["surface_air_temperature"],
@@ -148,7 +148,7 @@ zarr hosted by Google and requires no credentials:
 ```python
 import extremeweatherbench as ewb
 
-era5_target = ewb.targets.ERA5(
+era5_target = ewb.inputs.ERA5(
     variables=["surface_air_temperature"],
     storage_options={"remote_options": {"anon": True}},
 )
@@ -173,7 +173,7 @@ Network. Data is loaded lazily as a Polars `LazyFrame` and filtered to the case
 bounding box at evaluation time.
 
 ```python
-ghcn_target = ewb.targets.GHCN(variables=["surface_air_temperature"])
+ghcn_target = ewb.inputs.GHCN(variables=["surface_air_temperature"])
 ```
 
 Default URI:
@@ -189,7 +189,7 @@ automatically before computing metrics.
 `LSR` provides local storm reports from the SPC's report database (US) as well as compiled reports from Canada and Australia. Report types are encoded numerically at metric computation time: wind = 1, hail = 2, tornado = 3. Case date ranges should span 12 UTC to 12 UTC the following day to match the SPC reporting window.
 
 ```python
-lsr_target = ewb.targets.LSR(
+lsr_target = ewb.inputs.LSR(
     storage_options={"remote_options": {"anon": True}},
 )
 ```
@@ -206,7 +206,7 @@ gs://extremeweatherbench/datasets/
 proxy used as a skill baseline for severe convection forecasts which uses the LSR data for hail and tornadoes. Unlike `LSR`, it is stored as a zarr on GCS.
 
 ```python
-pph_target = ewb.targets.PPH(
+pph_target = ewb.inputs.PPH(
     storage_options={"remote_options": {"anon": True}},
 )
 ```
@@ -225,7 +225,7 @@ order (USA → WMO → regional agencies) and converts units from knots to m/s a
 hPa to Pa.
 
 ```python
-ibtracs_target = ewb.targets.IBTrACS()
+ibtracs_target = ewb.inputs.IBTrACS()
 ```
 
 No `storage_options` are required because the data is fetched over HTTPS directly

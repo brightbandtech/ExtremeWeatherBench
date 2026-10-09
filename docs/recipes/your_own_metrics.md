@@ -42,7 +42,7 @@ import xarray as xr
 import extremeweatherbench as ewb
 
 
-class MeanAbsolutePercentageError(ewb.BaseMetric):
+class MeanAbsolutePercentageError(ewb.metrics.BaseMetric):
     """Mean Absolute Percentage Error between forecast and target."""
 
     def __init__(self, name: str = "MAPE", **kwargs):
@@ -69,10 +69,10 @@ mape = MeanAbsolutePercentageError(
 )
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[mape],
-        target=ewb.ERA5(variables=["surface_air_temperature"]),
+        target=ewb.inputs.ERA5(variables=["surface_air_temperature"]),
         forecast=my_forecast,
     ),
 ]
@@ -93,7 +93,7 @@ import xarray as xr
 import extremeweatherbench as ewb
 
 
-class ProbabilityOfDetection(ewb.ThresholdMetric):
+class ProbabilityOfDetection(ewb.metrics.ThresholdMetric):
     """Probability of Detection (Hit Rate) from binary classifications."""
 
     def __init__(self, name: str = "ProbabilityOfDetection", **kwargs):
@@ -144,16 +144,16 @@ If you want to compute several threshold metrics in a single pass
 (reusing the contingency table), pass them as a list to `ThresholdMetric`:
 
 ```python
-composite = ewb.ThresholdMetric(
+composite = ewb.metrics.ThresholdMetric(
     name="severe_wx_contingency",
     forecast_variable="craven_brooks_significant_severe",
     target_variable="craven_brooks_significant_severe",
     forecast_threshold=20_000,
     target_threshold=20_000,
     metrics=[
-        ewb.CriticalSuccessIndex,
-        ewb.FalseAlarmRatio,
-        ewb.Accuracy,
+        ewb.metrics.CriticalSuccessIndex,
+        ewb.metrics.FalseAlarmRatio,
+        ewb.metrics.Accuracy,
     ],
 )
 ```
@@ -203,7 +203,7 @@ demo_case = IndividualCase(
 cases = [demo_case]
 
 
-class MeanAbsolutePercentageError(ewb.BaseMetric):
+class MeanAbsolutePercentageError(ewb.metrics.BaseMetric):
     """Mean Absolute Percentage Error."""
 
     def __init__(self, name: str = "MAPE", **kwargs):
@@ -221,7 +221,7 @@ class MeanAbsolutePercentageError(ewb.BaseMetric):
         )
 
 
-class ProbabilityOfDetection(ewb.ThresholdMetric):
+class ProbabilityOfDetection(ewb.metrics.ThresholdMetric):
     """Probability of Detection (Hit Rate)."""
 
     def __init__(self, name: str = "ProbabilityOfDetection", **kwargs):
@@ -260,17 +260,17 @@ pod = ProbabilityOfDetection(
     target_threshold=308.15,
 )
 
-forecast = ewb.ZarrForecast(
+forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
-target = ewb.ERA5(variables=["surface_air_temperature"])
+target = ewb.inputs.ERA5(variables=["surface_air_temperature"])
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[mape, pod],
         target=target,
@@ -278,7 +278,7 @@ eval_objects = [
     ),
 ]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=cases,
     evaluation_objects=eval_objects,
 )
