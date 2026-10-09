@@ -75,16 +75,28 @@ def preprocess_heatwave_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
 def _add_tc_geopotential_thickness(ds: xr.Dataset) -> xr.Dataset:
     """Add the 300-500 hPa geopotential thickness (m) used for TC tracking.
 
-    Geopotential (m^2/s^2) is read as ``geopotential`` (the EWB name, after
-    variable mapping) or ``z`` (the raw CIRA/ERA5 name), so the preprocess
-    functions work whether or not the dataset has been mapped yet.
+    Reads the EWB variable ``geopotential`` (m^2/s^2) or ``geopotential_height``
+    (m); their units are fixed, so no scale factor is guessed. Map a source
+    field (e.g. CIRA's ``z``) to one of them with the input's
+    ``variable_mapping``, which the pipeline applies before preprocess.
+
+    Raises:
+        KeyError: If neither variable is present.
     """
-    geopotential = ds["geopotential"] if "geopotential" in ds else ds["z"]
-    ds["geopotential_thickness"] = (
-        calc.geopotential_thickness(geopotential, top_level=300, bottom_level=500)
-        / GRAVITY_ROUNDED
+    for name, units_per_meter in (
+        ("geopotential", GRAVITY_ROUNDED),
+        ("geopotential_height", 1.0),
+    ):
+        if name in ds:
+            thickness = calc.geopotential_thickness(
+                ds[name], top_level=300, bottom_level=500
+            )
+            ds["geopotential_thickness"] = thickness / units_per_meter
+            return ds
+    raise KeyError(
+        "TC preprocess needs 'geopotential' (m^2/s^2) or 'geopotential_height' "
+        "(m). Map your source variable to one of them with variable_mapping."
     )
-    return ds
 
 
 def preprocess_cira_icechunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:

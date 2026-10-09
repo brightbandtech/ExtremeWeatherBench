@@ -235,22 +235,35 @@ class TestCiraFcnv2PreprocessFunctions:
         assert heatwave_preprocess == freeze_preprocess
 
 
-@pytest.mark.parametrize("name", ["geopotential", "z"])
+TC_PREPROCESS_FUNCTIONS = [
+    defaults.preprocess_cira_icechunk_tc_forecast_dataset,
+    defaults.preprocess_hres_tc_forecast_dataset,
+]
+
+
 @pytest.mark.parametrize(
-    "preprocess",
+    "name, values, expected",
     [
-        defaults.preprocess_cira_icechunk_tc_forecast_dataset,
-        defaults.preprocess_hres_tc_forecast_dataset,
+        ("geopotential", [90000.0, 50000.0], 40000.0 / 9.81),
+        ("geopotential_height", [9000.0, 5000.0], 4000.0),
     ],
 )
-def test_tc_preprocess_geopotential_thickness(preprocess, name):
-    """TC preprocess reads geopotential by its mapped or raw CIRA name."""
-    ds = xr.Dataset(
-        {name: (["level"], np.array([90000.0, 50000.0]))},
-        coords={"level": [300.0, 500.0]},
-    )
+@pytest.mark.parametrize("preprocess", TC_PREPROCESS_FUNCTIONS)
+def test_tc_preprocess_geopotential_thickness(preprocess, name, values, expected):
+    """Thickness is in meters whether the input is geopotential or height."""
+    ds = xr.Dataset({name: (["level"], values)}, coords={"level": [300.0, 500.0]})
     result = preprocess(ds)
-    np.testing.assert_allclose(result["geopotential_thickness"], 40000.0 / 9.81)
+    np.testing.assert_allclose(result["geopotential_thickness"], expected)
+
+
+@pytest.mark.parametrize("preprocess", TC_PREPROCESS_FUNCTIONS)
+def test_tc_preprocess_unmapped_geopotential_raises(preprocess):
+    """Unmapped source names such as CIRA's ``z`` raise a pointer to the mapping."""
+    ds = xr.Dataset(
+        {"z": (["level"], [90000.0, 50000.0])}, coords={"level": [300.0, 500.0]}
+    )
+    with pytest.raises(KeyError, match="variable_mapping"):
+        preprocess(ds)
 
 
 class TestMaybeAddSpecificHumidity:
