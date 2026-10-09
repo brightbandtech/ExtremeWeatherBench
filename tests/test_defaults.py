@@ -1,6 +1,7 @@
 """Tests for defaults module."""
 
 import numpy as np
+import pytest
 import xarray as xr
 
 from extremeweatherbench import defaults, inputs, metrics
@@ -234,33 +235,22 @@ class TestCiraFcnv2PreprocessFunctions:
         assert heatwave_preprocess == freeze_preprocess
 
 
-class TestTcGeopotentialThicknessPreprocess:
-    """TC thickness preprocess after CIRA names are mapped.
-
-    Gridded pipelines map ``z`` to ``geopotential`` before preprocess
-    runs. Looking up ``z`` then raises KeyError on the mapped dataset.
-    """
-
-    def _height_ds(self, name):
-        return xr.Dataset(
-            {name: (["level"], np.array([90000.0, 50000.0]))},
-            coords={"level": [300.0, 500.0]},
-        )
-
-    def test_icechunk_mapped_geopotential(self):
-        ds = self._height_ds("geopotential")
-        result = defaults.preprocess_cira_icechunk_tc_forecast_dataset(ds)
-        assert "geopotential_thickness" in result.data_vars
-
-    def test_icechunk_original_cira_z(self):
-        ds = self._height_ds("z")
-        result = defaults.preprocess_cira_icechunk_tc_forecast_dataset(ds)
-        assert "geopotential_thickness" in result.data_vars
-
-    def test_hres_mapped_geopotential(self):
-        ds = self._height_ds("geopotential")
-        result = defaults.preprocess_hres_tc_forecast_dataset(ds)
-        assert "geopotential_thickness" in result.data_vars
+@pytest.mark.parametrize("name", ["geopotential", "z"])
+@pytest.mark.parametrize(
+    "preprocess",
+    [
+        defaults.preprocess_cira_icechunk_tc_forecast_dataset,
+        defaults.preprocess_hres_tc_forecast_dataset,
+    ],
+)
+def test_tc_preprocess_geopotential_thickness(preprocess, name):
+    """TC preprocess reads geopotential by its mapped or raw CIRA name."""
+    ds = xr.Dataset(
+        {name: (["level"], np.array([90000.0, 50000.0]))},
+        coords={"level": [300.0, 500.0]},
+    )
+    result = preprocess(ds)
+    np.testing.assert_allclose(result["geopotential_thickness"], 40000.0 / 9.81)
 
 
 class TestMaybeAddSpecificHumidity:
