@@ -88,7 +88,7 @@ ghcn_target = inputs.GHCN()
 
 ```python
 # Use EWB's cases and subset to the first two heat waves
-case_vals = cases.load_ewb_events_yaml_into_case_list()
+case_vals = cases.load_ewb_cases()
 case_vals = [case for case in case_vals if case.case_id_number in [1, 2]]
 ```
 
