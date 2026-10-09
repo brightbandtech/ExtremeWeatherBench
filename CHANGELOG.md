@@ -10,7 +10,7 @@ GitHub's auto-generated release notes can list PRs that were already
 squash-merged into `main`, because `develop` still contains those original
 commits. Prefer this changelog when writing GitHub release notes.
 
-## [1.1.0] - 2026-08-13
+## [1.1.0] - 2026-10-09
 
 ### Added
 
@@ -27,6 +27,10 @@ commits. Prefer this changelog when writing GitHub release notes.
   ([#388](https://github.com/brightbandtech/ExtremeWeatherBench/pull/388)).
 - CAPE accuracy note in the docs
   ([#384](https://github.com/brightbandtech/ExtremeWeatherBench/pull/384)).
+- A docs check in the test suite: every `ewb.*` reference in `README.md`
+  and `docs/` must exist, Python snippets must parse, their
+  `extremeweatherbench` imports must resolve, and calls must use real
+  keyword arguments.
 
 ### Changed
 
@@ -80,6 +84,17 @@ commits. Prefer this changelog when writing GitHub release notes.
 - Ruff and the pre-commit hook are pinned to 0.16.2, with matching
   lint fixes
   ([#404](https://github.com/brightbandtech/ExtremeWeatherBench/pull/404)).
+- Physical constants live in a single `constants.py` module; `calc` and
+  `_cape` import them from there instead of keeping their own copies
+  ([#411](https://github.com/brightbandtech/ExtremeWeatherBench/pull/411)).
+- Tabular targets (GHCN, LSR, ...) run `preprocess` after variable
+  mapping, so preprocess functions see EWB variable names. IBTrACS still
+  preprocesses on its raw source columns. A preprocess function that
+  reads source column names now raises `KeyError`
+  ([#413](https://github.com/brightbandtech/ExtremeWeatherBench/pull/413)).
+- Docs and README examples use the namespaced API (`ewb.inputs.*`,
+  `ewb.evaluate.ExtremeWeatherBench`, `ewb.cases.load_cases`, ...)
+  instead of removed top-level names.
 
 ### Removed
 
@@ -88,6 +103,12 @@ commits. Prefer this changelog when writing GitHub release notes.
 - Unused core pins (`eccodes`, `frozenlist`, `pyogrio`) and `cartopy`
   from the default install
   ([#386](https://github.com/brightbandtech/ExtremeWeatherBench/pull/386)).
+- `cases.load_individual_cases` (use
+  `cases.load_individual_cases_from_dict`),
+  `cases.load_ewb_events_yaml_into_case_list` (use `cases.load_cases` or
+  `cases.load_ewb_cases`), `cases.read_incoming_yaml`, and
+  `utils.read_event_yaml` (use `cases.load_individual_cases_from_yaml`
+  to load cases from your own YAML file).
 
 ### Fixed
 
@@ -121,7 +142,29 @@ commits. Prefer this changelog when writing GitHub release notes.
 - Point observations (GHCN, LSR) use a `location` dimension instead of
   a unique-lat × unique-lon mesh. Alignment samples the forecast at
   those stations, which avoids out-of-memory on large freeze cases and
-  makes spatial-mean metrics average stations only.
+  makes spatial-mean metrics average stations only
+  ([#410](https://github.com/brightbandtech/ExtremeWeatherBench/pull/410)).
+- `Region.mask` keeps only the longitudes inside antimeridian- and
+  prime-meridian-crossing regions instead of the full longitude axis
+  ([#416](https://github.com/brightbandtech/ExtremeWeatherBench/pull/416)).
+- `Region.mask` returns an empty subset instead of raising `ValueError`
+  when a wrapping region has no longitudes in the dataset.
+- Forecasts whose `valid_time` is a non-indexed coordinate (all CIRA
+  icechunk models: FourCastNetv2, GraphCast, Pangu, ...) are no longer
+  rejected as having no data for the case. With xarray 2026.7, slicing a
+  non-indexed coordinate returns nothing instead of raising, so these
+  forecasts were silently skipped and, for example, `applied_freeze.py`
+  produced zero rows
+  ([#391](https://github.com/brightbandtech/ExtremeWeatherBench/issues/391)).
+- The tropical cyclone thickness preprocess functions accept geopotential
+  as either `geopotential` or the raw CIRA/ERA5 `z`, so they also work on
+  datasets that have not been through variable mapping.
+- `CravenBrooksSignificantSevere` output carries its own attributes
+  instead of CAPE's
+  ([#363](https://github.com/brightbandtech/ExtremeWeatherBench/issues/363)).
+- `cases.load_cases()` no longer logs a bogus deprecation warning.
+- The CAPE accuracy note points at `constants.py` for `EPSILON` and
+  `MOIST_ASCENT_SUBSTEPS`.
 
 ## [1.0.2.post1] - 2026-04-30
 
