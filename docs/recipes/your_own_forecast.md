@@ -36,11 +36,11 @@ remote cloud stores (GCS, S3, Azure) or local paths.
 ```python
 import extremeweatherbench as ewb
 
-hres_forecast = ewb.ZarrForecast(
+hres_forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
     variables=["surface_air_temperature"],
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 ```
@@ -58,13 +58,13 @@ Key arguments:
 - `chunks` — dask chunking strategy, defaults to `"auto"`
 
 > **Detailed Explanation**: EWB ships several built-in variable mappings
-> for common datasets: `ewb.HRES_metadata_variable_mapping`,
-> `ewb.ERA5_metadata_variable_mapping`, and
-> `ewb.CIRA_metadata_variable_mapping`. For any other model you need to
+> for common datasets: `ewb.inputs.HRES_metadata_variable_mapping`,
+> `ewb.inputs.ERA5_metadata_variable_mapping`, and
+> `ewb.inputs.CIRA_metadata_variable_mapping`. For any other model you need to
 > supply a dictionary that at minimum maps the model's time coordinate
 > names to `"init_time"` and `"lead_time"`, and each variable name to
 > its EWB CF-convention equivalent. A full list of expected variable
-> names lives in `ewb.DEFAULT_VARIABLE_NAMES`.
+> names lives in `ewb.defaults.DEFAULT_VARIABLE_NAMES`.
 
 ### Building a custom variable mapping
 
@@ -78,7 +78,7 @@ my_mapping = {
     "msl": "air_pressure_at_mean_sea_level",
 }
 
-my_zarr_forecast = ewb.ZarrForecast(
+my_zarr_forecast = ewb.inputs.ZarrForecast(
     source="gs://my-bucket/my-model.zarr",
     name="MyModel",
     variables=["surface_air_temperature"],
@@ -104,7 +104,7 @@ ds = xr.open_mfdataset(
     concat_dim="init_time",
 )
 
-my_forecast = ewb.XarrayForecast(
+my_forecast = ewb.inputs.XarrayForecast(
     ds=ds,
     name="MyNcModel",
     variables=["surface_air_temperature"],
@@ -132,7 +132,7 @@ def celsius_to_kelvin(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-preprocessed_forecast = ewb.XarrayForecast(
+preprocessed_forecast = ewb.inputs.XarrayForecast(
     ds=ds,
     name="MyModel_K",
     variable_mapping=my_mapping,
@@ -148,10 +148,10 @@ JSON files. This is the access pattern used for CIRA MLWP data.
 ```python
 import extremeweatherbench as ewb
 
-cira_kerchunk = ewb.KerchunkForecast(
+cira_kerchunk = ewb.inputs.KerchunkForecast(
     source="s3://noaa-oar-mlwp-data/references/FOUR_v200_IFS.parq",
     name="FCNv2_IFS",
-    variable_mapping=ewb.CIRA_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.CIRA_metadata_variable_mapping,
     storage_options={
         "remote_protocol": "s3",
         "remote_options": {"anon": True},
@@ -174,10 +174,10 @@ list inside an `EvaluationObject`:
 ```python
 import extremeweatherbench as ewb
 
-target = ewb.ERA5(variables=["surface_air_temperature"])
+target = ewb.inputs.ERA5(variables=["surface_air_temperature"])
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MeanAbsoluteError(
@@ -194,8 +194,8 @@ eval_objects = [
     ),
 ]
 
-cases = ewb.load_cases()
-runner = ewb.evaluation(case_metadata=cases, evaluation_objects=eval_objects)
+cases = ewb.cases.load_cases()
+runner = ewb.evaluate.ExtremeWeatherBench(case_metadata=cases, evaluation_objects=eval_objects)
 outputs = runner.run_evaluation()
 outputs.to_csv("results.csv")
 ```
@@ -228,18 +228,18 @@ demo_case = IndividualCase(
 )
 cases = [demo_case]
 
-forecast = ewb.ZarrForecast(
+forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
     variables=["surface_air_temperature"],
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
-target = ewb.ERA5(variables=["surface_air_temperature"])
+target = ewb.inputs.ERA5(variables=["surface_air_temperature"])
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MeanAbsoluteError(
@@ -256,7 +256,7 @@ eval_objects = [
     ),
 ]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=cases,
     evaluation_objects=eval_objects,
 )

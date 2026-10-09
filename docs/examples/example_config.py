@@ -40,18 +40,18 @@ evaluation_objects = [
 # Users can also define their own cases_dict structure
 case_list = ewb.cases.load_cases()
 
-# Alternatively, users could define custom cases like this:
+# Alternatively, users could define custom cases like this (needs `import datetime`):
 # case_list = [
 #         {
 #             "case_id_number": 1,
 #             "title": "Custom Heat Wave Case",
-#             "start_date": "2021-06-01T00:00:00",
-#             "end_date": "2021-06-15T00:00:00",
+#             "start_date": datetime.datetime(2021, 6, 1),
+#             "end_date": datetime.datetime(2021, 6, 15),
 #             "location": {
 #                 "type": "centered_region",
 #                 "parameters": {
 #                     "latitude": 40.0,
-#                     "longitude": -100.0,
+#                     "longitude": 260.0,
 #                     "bounding_box_degrees": 5.0,
 #                 },
 #             },
