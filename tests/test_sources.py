@@ -1058,32 +1058,27 @@ def _forecast_with_unindexed_valid_time(init_start: str) -> xr.Dataset:
     ids=["dataset", "dataarray"],
 )
 class TestCheckForValidTimesUnindexedCoords:
-    """Regression tests for #391: non-indexed time coords must not decide."""
+    """Regression tests for #391: valid times decide, indexed or not."""
 
-    def test_unindexed_valid_time_falls_through_to_init_time(
-        self, module, as_dataarray
-    ):
-        """An indexed init_time inside the case range is found."""
+    start, end = datetime.datetime(2021, 2, 10), datetime.datetime(2021, 2, 22)
+
+    def _check(self, module, as_dataarray, data):
+        if as_dataarray:
+            data = data["t2"]
+        return module.check_for_valid_times(data, self.start, self.end)
+
+    def test_unindexed_valid_time_in_range(self, module, as_dataarray):
+        """A non-indexed valid_time inside the case range is found."""
         data = _forecast_with_unindexed_valid_time("2021-02-10T12")
-        if as_dataarray:
-            data = data["t2"]
-        assert module.check_for_valid_times(
-            data, datetime.datetime(2021, 2, 10), datetime.datetime(2021, 2, 22)
-        )
+        assert self._check(module, as_dataarray, data)
 
-    def test_no_indexed_time_in_range_is_false(self, module, as_dataarray):
-        """Nothing in range on any indexed time coordinate returns False."""
+    def test_unindexed_valid_time_out_of_range(self, module, as_dataarray):
+        """A non-indexed valid_time outside the case range is False."""
         data = _forecast_with_unindexed_valid_time("2020-09-30T12")
-        if as_dataarray:
-            data = data["t2"]
-        assert not module.check_for_valid_times(
-            data, datetime.datetime(2021, 2, 10), datetime.datetime(2021, 2, 22)
-        )
+        assert not self._check(module, as_dataarray, data)
 
-    def test_empty_indexed_valid_time_does_not_short_circuit(
-        self, module, as_dataarray
-    ):
-        """An indexed valid_time outside the range does not hide init_time."""
+    def test_valid_time_decides_over_init_time(self, module, as_dataarray):
+        """valid_time out of range is False even if init_time is in range."""
         data = xr.Dataset(
             {"t2": (["valid_time", "init_time"], np.zeros((2, 2)))},
             coords={
@@ -1091,8 +1086,30 @@ class TestCheckForValidTimesUnindexedCoords:
                 "init_time": pd.date_range("2021-02-12", periods=2, freq="D"),
             },
         )
-        if as_dataarray:
-            data = data["t2"]
-        assert module.check_for_valid_times(
-            data, datetime.datetime(2021, 2, 10), datetime.datetime(2021, 2, 22)
+        assert not self._check(module, as_dataarray, data)
+
+    @pytest.mark.parametrize(
+        "first_init, expected", [("2021-02-01", True), ("2021-01-01", False)]
+    )
+    def test_init_and_lead_time_without_valid_time(
+        self, module, as_dataarray, first_init, expected
+    ):
+        """Inits before the case still count when their leads reach into it."""
+        lead = pd.to_timedelta(np.arange(0, 241, 6), unit="h")
+        data = xr.Dataset(
+            {"t2": (["init_time", "lead_time"], np.zeros((5, lead.size)))},
+            coords={
+                "init_time": pd.date_range(first_init, periods=5, freq="D"),
+                "lead_time": lead,
+            },
         )
+        assert self._check(module, as_dataarray, data) is expected
+
+    def test_time_fallback_and_no_time_coordinate(self, module, as_dataarray):
+        """A plain time coordinate is used last; no time coordinate is False."""
+        data = xr.Dataset(
+            {"t2": ("time", np.zeros(2))},
+            coords={"time": pd.date_range("2021-02-15", periods=2, freq="D")},
+        )
+        assert self._check(module, as_dataarray, data)
+        assert not self._check(module, as_dataarray, data.drop_vars("time"))

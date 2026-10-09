@@ -56,12 +56,13 @@ def check_for_valid_times(
     start_date: datetime.datetime,
     end_date: datetime.datetime,
 ) -> bool:
-    """Check if the data has any times in the given date range.
+    """Check if any of the data's valid times fall in [start_date, end_date].
 
-    Checks the indexed ``valid_time``, ``time``, and ``init_time`` coordinates
-    and returns True if any of them has a value in [start_date, end_date].
-    Non-indexed coordinates (e.g. a ``valid_time`` that varies along
-    ``lead_time``) are skipped, so a forecast is judged by its ``init_time``.
+    The valid times come from the first of these that exists; it alone decides:
+
+    1. a ``valid_time`` coordinate, indexed or not (e.g. 2D over init/lead time);
+    2. ``init_time`` + ``lead_time``, as in ``subset_data_to_case`` for forecasts;
+    3. a ``time`` coordinate (e.g. a custom input with no variable mapping).
 
     Args:
         data: The xarray Dataset or DataArray to check for valid times.
@@ -69,16 +70,22 @@ def check_for_valid_times(
         end_date: The end date of the time range to check.
 
     Returns:
-        True if any indexed time coordinate has values within the range,
-        False otherwise.
+        True if any valid time is within the range, False otherwise (including
+        when the data has none of the coordinates above).
     """
+    if "valid_time" in data.coords:
+        times = data["valid_time"].values
+    elif "init_time" in data.coords and "lead_time" in data.coords:
+        indices = utils.derive_indices_from_init_time_and_lead_time(
+            data, start_date, end_date
+        )
+        return indices[0].size > 0
+    elif "time" in data.coords:
+        times = data["time"].values
+    else:
+        return False
     start_ts, end_ts = pd.Timestamp(start_date), pd.Timestamp(end_date)
-    for time_dim in ("valid_time", "time", "init_time"):
-        if time_dim in data.indexes:
-            times = data.indexes[time_dim]
-            if ((times >= start_ts) & (times <= end_ts)).any():
-                return True
-    return False
+    return bool(((times >= start_ts) & (times <= end_ts)).any())
 
 
 def check_for_spatial_data(data: xr.Dataset, location: "regions.Region") -> bool:
