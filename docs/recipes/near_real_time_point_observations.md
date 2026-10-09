@@ -35,18 +35,18 @@ at individual stations are operationally important.
 ```python
 import extremeweatherbench as ewb
 
-forecast = ewb.ZarrForecast(
+forecast = ewb.inputs.ZarrForecast(
     source=("gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr"),
     name="HRES",
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
 # GHCN defaults: reads from the EWB GCS bucket, no credentials needed
-ghcn_target = ewb.GHCN()
+ghcn_target = ewb.inputs.GHCN()
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MeanAbsoluteError(
@@ -63,10 +63,10 @@ eval_objects = [
     ),
 ]
 
-cases = ewb.load_cases()
+cases = ewb.cases.load_cases()
 heatwave_cases = [c for c in cases if c.event_type == "heat_wave"]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=heatwave_cases,
     evaluation_objects=eval_objects,
 )
@@ -83,10 +83,10 @@ DataFrame:
 ```python
 import extremeweatherbench as ewb
 
-forecast = ewb.ZarrForecast(
+forecast = ewb.inputs.ZarrForecast(
     source=("gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr"),
     name="HRES",
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
@@ -98,22 +98,22 @@ shared_metrics = [
 ]
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=shared_metrics,
-        target=ewb.ERA5(variables=["surface_air_temperature"]),
+        target=ewb.inputs.ERA5(variables=["surface_air_temperature"]),
         forecast=forecast,
     ),
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=shared_metrics,
-        target=ewb.GHCN(),
+        target=ewb.inputs.GHCN(),
         forecast=forecast,
     ),
 ]
 
-runner = ewb.evaluation(
-    case_metadata=ewb.load_cases(),
+runner = ewb.evaluate.ExtremeWeatherBench(
+    case_metadata=ewb.cases.load_cases(),
     evaluation_objects=eval_objects,
 )
 outputs = runner.run_evaluation()
@@ -132,7 +132,7 @@ point the `source` argument at it:
 ```python
 import extremeweatherbench as ewb
 
-recent_ghcn = ewb.GHCN(
+recent_ghcn = ewb.inputs.GHCN(
     source="gs://my-bucket/ghcnh_2025.parq",
     storage_options={"anon": False},
 )
@@ -166,7 +166,7 @@ query the parquet file:
 import polars as pl
 
 ghcn = pl.scan_parquet(
-    ewb.DEFAULT_GHCN_URI,
+    ewb.inputs.DEFAULT_GHCN_URI,
     storage_options={"anon": True},
 )
 
@@ -211,17 +211,17 @@ demo_case = IndividualCase(
 )
 cases = [demo_case]
 
-forecast = ewb.ZarrForecast(
+forecast = ewb.inputs.ZarrForecast(
     source=("gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr"),
     name="HRES",
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
-ghcn_target = ewb.GHCN()
+ghcn_target = ewb.inputs.GHCN()
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MeanAbsoluteError(
@@ -238,7 +238,7 @@ eval_objects = [
     ),
 ]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=cases,
     evaluation_objects=eval_objects,
 )

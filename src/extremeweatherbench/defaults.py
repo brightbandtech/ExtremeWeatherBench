@@ -5,6 +5,7 @@ import numpy as np
 import xarray as xr
 
 from extremeweatherbench import calc, derived, inputs, utils
+from extremeweatherbench.constants import GRAVITY_ROUNDED
 
 # Suppress noisy log messages
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
@@ -71,6 +72,33 @@ def preprocess_heatwave_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
+def _add_tc_geopotential_thickness(ds: xr.Dataset) -> xr.Dataset:
+    """Add the 300-500 hPa geopotential thickness (m) used for TC tracking.
+
+    Reads the EWB variable ``geopotential`` (m^2/s^2) or ``geopotential_height``
+    (m); their units are fixed, so no scale factor is guessed. Map a source
+    field (e.g. CIRA's ``z``) to one of them with the input's
+    ``variable_mapping``, which the pipeline applies before preprocess.
+
+    Raises:
+        KeyError: If neither variable is present.
+    """
+    for name, units_per_meter in (
+        ("geopotential", GRAVITY_ROUNDED),
+        ("geopotential_height", 1.0),
+    ):
+        if name in ds:
+            thickness = calc.geopotential_thickness(
+                ds[name], top_level=300, bottom_level=500
+            )
+            ds["geopotential_thickness"] = thickness / units_per_meter
+            return ds
+    raise KeyError(
+        "TC preprocess needs 'geopotential' (m^2/s^2) or 'geopotential_height' "
+        "(m). Map your source variable to one of them with variable_mapping."
+    )
+
+
 def preprocess_cira_icechunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     """A preprocess function for CIRA icechunk data that includes geopotential thickness
     calculation required for tropical cyclone tracks.
@@ -81,11 +109,7 @@ def preprocess_cira_icechunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     Returns:
         The forecast dataset with geopotential thickness.
     """
-    ds["geopotential_thickness"] = (
-        calc.geopotential_thickness(ds["geopotential"], top_level=300, bottom_level=500)
-        / 9.81
-    )
-    return ds
+    return _add_tc_geopotential_thickness(ds)
 
 
 def _maybe_add_specific_humidity(ds: xr.Dataset) -> xr.Dataset:
@@ -168,12 +192,7 @@ def preprocess_cira_kerchunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     Returns:
         The renamed forecast dataset.
     """
-    ds = _set_cira_kerchunk_lead_time(ds)
-    ds["geopotential_thickness"] = (
-        calc.geopotential_thickness(ds["geopotential"], top_level=300, bottom_level=500)
-        / 9.81
-    )
-    return ds
+    return _add_tc_geopotential_thickness(_set_cira_kerchunk_lead_time(ds))
 
 
 def preprocess_cira_kerchunk_ar_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
@@ -211,13 +230,7 @@ def preprocess_hres_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     Returns:
         The forecast dataset with geopotential thickness.
     """
-
-    # Calculate the geopotential thickness required for tropical cyclone tracks
-    ds["geopotential_thickness"] = (
-        calc.geopotential_thickness(ds["geopotential"], top_level=300, bottom_level=500)
-        / 9.81
-    )
-    return ds
+    return _add_tc_geopotential_thickness(ds)
 
 
 def get_climatology(quantile: float = 0.85) -> xr.DataArray:
