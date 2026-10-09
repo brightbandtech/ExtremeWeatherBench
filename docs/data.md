@@ -242,7 +242,9 @@ that source alone decides:
 1. `init_time` and `lead_time` (forecasts): the valid times are
    `init_time + lead_time`, so a forecast initialized before a case still
    counts if its lead times reach into it. A `valid_time` coordinate on a
-   forecast is ignored here.
+   forecast is ignored here; if it spans both `init_time` and `lead_time`
+   and differs from their sum, EWB warns, since that usually means
+   `lead_time` is in the wrong units (integers are read as hours).
 2. `valid_time` (targets), indexed or not.
 3. `time`, for data with neither of the above.
 

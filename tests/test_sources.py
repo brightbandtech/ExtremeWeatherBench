@@ -1,6 +1,7 @@
 """Tests for extremeweatherbench.sources modules."""
 
 import datetime
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -1110,6 +1111,35 @@ class TestCheckForValidTimesUnindexedCoords:
             },
         )
         assert self._check(module, as_dataarray, data) is expected
+
+    @pytest.mark.parametrize("lead_days", [False, True])
+    def test_warns_when_2d_valid_time_disagrees(self, module, as_dataarray, lead_days):
+        """Integer lead_time in days (read as hours) mismatches valid_time."""
+        init = pd.date_range("2021-02-10", periods=2, freq="D")
+        lead = np.arange(3)
+        valid = init.values[:, None] + pd.to_timedelta(lead, unit="D").values
+        data = xr.Dataset(
+            {"t2": (["init_time", "lead_time"], np.zeros((2, 3)))},
+            coords={
+                "init_time": init,
+                "lead_time": lead if lead_days else lead * 24,
+                "valid_time": (["init_time", "lead_time"], valid),
+            },
+        )
+        if lead_days:
+            with pytest.warns(UserWarning, match="init_time \\+ lead_time"):
+                self._check(module, as_dataarray, data)
+        else:
+            with warnings.catch_warnings():
+                warnings.simplefilter("error")
+                self._check(module, as_dataarray, data)
+
+    def test_no_warning_for_lead_only_valid_time(self, module, as_dataarray):
+        """CIRA-like valid_time along lead_time only is not compared."""
+        data = _forecast_with_unindexed_valid_time("2021-02-10T12")
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            self._check(module, as_dataarray, data)
 
     def test_time_fallback_and_no_time_coordinate(self, module, as_dataarray):
         """A plain time coordinate is used last; no time coordinate is False."""

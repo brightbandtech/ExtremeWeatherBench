@@ -1,6 +1,7 @@
 """Handle variable extraction for xarray Datasets."""
 
 import datetime
+import warnings
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -62,7 +63,10 @@ def check_for_valid_times(
 
     1. ``init_time`` + ``lead_time`` (forecasts), as in ``subset_data_to_case``.
        Any ``valid_time`` on a forecast is ignored: some sources (e.g. CIRA
-       icechunk) carry one along ``lead_time`` only, which is not every init's;
+       icechunk) carry one along ``lead_time`` only, which is not every init's.
+       A ``valid_time`` over both ``init_time`` and ``lead_time`` that differs
+       from their sum raises a warning, since it usually means ``lead_time``
+       is in the wrong units;
     2. a ``valid_time`` coordinate (targets);
     3. a ``time`` coordinate (e.g. a custom input with no variable mapping).
 
@@ -76,6 +80,7 @@ def check_for_valid_times(
         when the data has none of the coordinates above).
     """
     if "init_time" in data.coords and "lead_time" in data.coords:
+        _warn_if_valid_time_disagrees(data)
         indices = utils.derive_indices_from_init_time_and_lead_time(
             data, start_date, end_date
         )
@@ -88,6 +93,25 @@ def check_for_valid_times(
         return False
     start_ts, end_ts = pd.Timestamp(start_date), pd.Timestamp(end_date)
     return bool(((times >= start_ts) & (times <= end_ts)).any())
+
+
+def _warn_if_valid_time_disagrees(data: xr.Dataset | xr.DataArray) -> None:
+    """Warn if a forecast's 2D valid_time differs from init_time + lead_time."""
+    if "valid_time" not in data.coords:
+        return
+    valid_time = data["valid_time"]
+    # A valid_time along lead_time only (e.g. CIRA icechunk) is not comparable
+    if not {"init_time", "lead_time"} <= set(valid_time.dims):
+        return
+    expected = data["init_time"] + utils._lead_time_as_timedelta(data["lead_time"])
+    matches = (valid_time == expected) | (valid_time.isnull() & expected.isnull())
+    if not bool(matches.all()):
+        warnings.warn(
+            "The forecast's valid_time differs from init_time + lead_time; EWB "
+            "uses init_time + lead_time. Integer lead_time values are read as "
+            "hours, so check its units or store it as timedelta64.",
+            stacklevel=3,
+        )
 
 
 def check_for_spatial_data(data: xr.Dataset, location: "regions.Region") -> bool:
