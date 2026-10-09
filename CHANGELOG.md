@@ -81,6 +81,11 @@ commits. Prefer this changelog when writing GitHub release notes.
 - Unique target pipelines are computed once in the parent and reused
   across forecast workers
   ([#408](https://github.com/brightbandtech/ExtremeWeatherBench/pull/408)).
+- The tropical cyclone geopotential-thickness preprocess functions share
+  one implementation and read only EWB variable names: `geopotential`
+  (m²/s², divided by g) or, newly, `geopotential_height` (m). Anything
+  else raises a `KeyError` pointing at `variable_mapping`
+  ([#420](https://github.com/brightbandtech/ExtremeWeatherBench/pull/420)).
 - Ruff and the pre-commit hook are pinned to 0.16.2, with matching
   lint fixes
   ([#404](https://github.com/brightbandtech/ExtremeWeatherBench/pull/404)).
@@ -156,9 +161,6 @@ commits. Prefer this changelog when writing GitHub release notes.
   forecasts were silently skipped and, for example, `applied_freeze.py`
   produced zero rows
   ([#391](https://github.com/brightbandtech/ExtremeWeatherBench/issues/391)).
-- The tropical cyclone thickness preprocess functions accept geopotential
-  as either `geopotential` or the raw CIRA/ERA5 `z`, so they also work on
-  datasets that have not been through variable mapping.
 - `CravenBrooksSignificantSevere` output carries its own attributes
   instead of CAPE's
   ([#363](https://github.com/brightbandtech/ExtremeWeatherBench/issues/363)).
