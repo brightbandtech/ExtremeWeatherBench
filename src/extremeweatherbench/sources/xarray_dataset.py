@@ -60,8 +60,10 @@ def check_for_valid_times(
 
     The valid times come from the first of these that exists; it alone decides:
 
-    1. a ``valid_time`` coordinate, indexed or not (e.g. 2D over init/lead time);
-    2. ``init_time`` + ``lead_time``, as in ``subset_data_to_case`` for forecasts;
+    1. ``init_time`` + ``lead_time`` (forecasts), as in ``subset_data_to_case``.
+       Any ``valid_time`` on a forecast is ignored: some sources (e.g. CIRA
+       icechunk) carry one along ``lead_time`` only, which is not every init's;
+    2. a ``valid_time`` coordinate (targets);
     3. a ``time`` coordinate (e.g. a custom input with no variable mapping).
 
     Args:
@@ -73,13 +75,13 @@ def check_for_valid_times(
         True if any valid time is within the range, False otherwise (including
         when the data has none of the coordinates above).
     """
-    if "valid_time" in data.coords:
-        times = data["valid_time"].values
-    elif "init_time" in data.coords and "lead_time" in data.coords:
+    if "init_time" in data.coords and "lead_time" in data.coords:
         indices = utils.derive_indices_from_init_time_and_lead_time(
             data, start_date, end_date
         )
         return indices[0].size > 0
+    elif "valid_time" in data.coords:
+        times = data["valid_time"].values
     elif "time" in data.coords:
         times = data["time"].values
     else:

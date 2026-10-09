@@ -1067,18 +1067,24 @@ class TestCheckForValidTimesUnindexedCoords:
             data = data["t2"]
         return module.check_for_valid_times(data, self.start, self.end)
 
-    def test_unindexed_valid_time_in_range(self, module, as_dataarray):
-        """A non-indexed valid_time inside the case range is found."""
+    def test_forecast_in_range(self, module, as_dataarray):
+        """A forecast (CIRA-like valid_time along lead_time) in range is found."""
         data = _forecast_with_unindexed_valid_time("2021-02-10T12")
         assert self._check(module, as_dataarray, data)
 
-    def test_unindexed_valid_time_out_of_range(self, module, as_dataarray):
-        """A non-indexed valid_time outside the case range is False."""
+    def test_forecast_out_of_range(self, module, as_dataarray):
+        """A forecast whose init + lead times miss the case range is False."""
         data = _forecast_with_unindexed_valid_time("2020-09-30T12")
         assert not self._check(module, as_dataarray, data)
 
+    def test_forecast_ignores_lead_only_valid_time(self, module, as_dataarray):
+        """A valid_time along lead_time only (first init's) does not decide."""
+        data = _forecast_with_unindexed_valid_time("2021-02-10T12")
+        data = data.assign_coords(valid_time=data.valid_time - pd.Timedelta("365D"))
+        assert self._check(module, as_dataarray, data)
+
     def test_valid_time_decides_over_init_time(self, module, as_dataarray):
-        """valid_time out of range is False even if init_time is in range."""
+        """Without lead_time, valid_time decides even if init_time is in range."""
         data = xr.Dataset(
             {"t2": (["valid_time", "init_time"], np.zeros((2, 2)))},
             coords={
