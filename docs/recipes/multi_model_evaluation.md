@@ -54,7 +54,9 @@ eval_objects = [
 ]
 
 cases = ewb.cases.load_cases()
-runner = ewb.evaluate.ExtremeWeatherBench(case_metadata=cases, evaluation_objects=eval_objects)
+runner = ewb.evaluate.ExtremeWeatherBench(
+    case_metadata=cases, evaluation_objects=eval_objects
+)
 outputs = runner.run_evaluation()
 outputs.to_csv("multi_model_heatwave.csv", index=False)
 ```
@@ -98,7 +100,9 @@ eval_objects = [
 ]
 
 cases = ewb.cases.load_cases()
-runner = ewb.evaluate.ExtremeWeatherBench(case_metadata=cases, evaluation_objects=eval_objects)
+runner = ewb.evaluate.ExtremeWeatherBench(
+    case_metadata=cases, evaluation_objects=eval_objects
+)
 outputs = runner.run_evaluation()
 ```
 
