@@ -24,7 +24,11 @@ that maps the original names to EWB's conventions.
 
 > **Detailed Explanation**: EWB derives `valid_time` internally as
 > `init_time + lead_time`. You do not need a `valid_time` dimension in
-> the raw data; EWB creates it during subsetting. Additional dimensions
+> the raw data; EWB creates it during subsetting, and ignores any
+> `valid_time` already on a forecast when deciding which cases it covers.
+> If `init_time` or `lead_time` is missing after `variable_mapping`, every
+> case is skipped as having no data (see
+> [Time coordinates](../data.md#time-coordinates)). Additional dimensions
 > such as `level` (pressure level) are carried through automatically and
 > are useful for 3-D variables like temperature and wind.
 

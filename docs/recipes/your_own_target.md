@@ -61,10 +61,11 @@ class MERRA2(inputs.TargetBase):
 > **Detailed Explanation**: `zarr_target_subsetter` handles the two
 > steps that every gridded target needs: subsetting time with `.sel`
 > along `valid_time` (or `time`) and masking the dataset to the case's
-> `location` region. If your time coordinate has a different name, pass
-> `time_variable="my_time"` as a keyword argument. For targets that do
-> not use `valid_time` as their time dimension name, the helper
-> automatically checks for `"time"` as a fallback.
+> `location` region. Name your time coordinate `valid_time` (or `time`),
+> renaming it with `variable_mapping` if needed: EWB checks those names
+> for case coverage before calling `subset_data_to_case`, so a target
+> with any other time name is skipped as having no data (see
+> [Time coordinates](../data.md#time-coordinates)).
 
 ### Using the custom target
 
