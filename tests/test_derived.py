@@ -1030,3 +1030,25 @@ class TestOutputVariables:
         expected_mag = np.sqrt(u**2 + v**2)
 
         xr.testing.assert_allclose(result["magnitude"], expected_mag)
+
+
+def test_cbss_attrs_not_copied_from_cape(sample_dataset, monkeypatch):
+    """CBSS output carries its own attrs, not those of the CAPE or shear inputs."""
+    from unittest.mock import Mock
+
+    data = sample_dataset.assign(air_temperature=sample_dataset["geopotential"] * 0)
+    template = data["air_pressure_at_mean_sea_level"]
+    cape = xr.full_like(template, 1000.0).assign_attrs(long_name="CAPE", units="J/kg")
+    shear = xr.full_like(template, 20.0).assign_attrs(long_name="Shear", units="m/s")
+    monkeypatch.setattr(derived.sc, "compute_mixed_layer_cape", lambda **_: cape)
+    monkeypatch.setattr(derived.sc, "low_level_shear", lambda **_: shear)
+
+    result = derived.CravenBrooksSignificantSevere().derive_variable(
+        data, Mock(start_date=pd.Timestamp("2021-06-20"))
+    )
+
+    assert result.attrs == {
+        "long_name": "Craven-Brooks significant severe parameter",
+        "units": "m^3/s^3",
+    }
+    np.testing.assert_allclose(result.values, 20000.0)
