@@ -1034,3 +1034,65 @@ class TestXarrayDatasetModule:
 
         result = xarray_dataset.check_for_spatial_data(ds, region)
         assert result is True
+
+
+def _forecast_with_unindexed_valid_time(init_start: str) -> xr.Dataset:
+    """Forecast-shaped Dataset whose valid_time is a non-indexed coordinate."""
+    lead = pd.to_timedelta(np.arange(0, 4) * 6, unit="h")
+    init = pd.date_range(init_start, periods=3, freq="12h")
+    ds = xr.Dataset(
+        {"t2": (["init_time", "lead_time"], np.zeros((3, 4)))},
+        coords={
+            "init_time": init,
+            "lead_time": lead,
+            "valid_time": ("lead_time", init[0] + lead),
+        },
+    )
+    assert "valid_time" not in ds.xindexes
+    return ds
+
+
+@pytest.mark.parametrize(
+    "module, as_dataarray",
+    [(xarray_dataset, False), (xarray_dataarray, True)],
+    ids=["dataset", "dataarray"],
+)
+class TestCheckForValidTimesUnindexedCoords:
+    """Regression tests for #391: non-indexed time coords must not decide."""
+
+    def test_unindexed_valid_time_falls_through_to_init_time(
+        self, module, as_dataarray
+    ):
+        """An indexed init_time inside the case range is found."""
+        data = _forecast_with_unindexed_valid_time("2021-02-10T12")
+        if as_dataarray:
+            data = data["t2"]
+        assert module.check_for_valid_times(
+            data, datetime.datetime(2021, 2, 10), datetime.datetime(2021, 2, 22)
+        )
+
+    def test_no_indexed_time_in_range_is_false(self, module, as_dataarray):
+        """Nothing in range on any indexed time coordinate returns False."""
+        data = _forecast_with_unindexed_valid_time("2020-09-30T12")
+        if as_dataarray:
+            data = data["t2"]
+        assert not module.check_for_valid_times(
+            data, datetime.datetime(2021, 2, 10), datetime.datetime(2021, 2, 22)
+        )
+
+    def test_empty_indexed_valid_time_does_not_short_circuit(
+        self, module, as_dataarray
+    ):
+        """An indexed valid_time outside the range does not hide init_time."""
+        data = xr.Dataset(
+            {"t2": (["valid_time", "init_time"], np.zeros((2, 2)))},
+            coords={
+                "valid_time": pd.date_range("2020-01-01", periods=2, freq="D"),
+                "init_time": pd.date_range("2021-02-12", periods=2, freq="D"),
+            },
+        )
+        if as_dataarray:
+            data = data["t2"]
+        assert module.check_for_valid_times(
+            data, datetime.datetime(2021, 2, 10), datetime.datetime(2021, 2, 22)
+        )

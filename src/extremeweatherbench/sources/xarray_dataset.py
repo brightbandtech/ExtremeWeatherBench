@@ -52,40 +52,32 @@ def safely_pull_variables(
 
 
 def check_for_valid_times(
-    data: xr.Dataset,
+    data: xr.Dataset | xr.DataArray,
     start_date: datetime.datetime,
     end_date: datetime.datetime,
 ) -> bool:
-    """Check if the dataset has valid times in the given date range.
+    """Check if the data has any times in the given date range.
+
+    Checks the indexed ``valid_time``, ``time``, and ``init_time`` coordinates
+    and returns True if any of them has a value in [start_date, end_date].
+    Non-indexed coordinates (e.g. a ``valid_time`` that varies along
+    ``lead_time``) are skipped, so a forecast is judged by its ``init_time``.
 
     Args:
-        data: The xarray Dataset to check for valid times.
+        data: The xarray Dataset or DataArray to check for valid times.
         start_date: The start date of the time range to check.
         end_date: The end date of the time range to check.
 
     Returns:
-        True if the dataset has any times within the specified range,
+        True if any indexed time coordinate has values within the range,
         False otherwise.
     """
-
-    # Convert the start and end dates to pandas Timestamp objects for xarray's
-    # loc indexing
-    start_ts = pd.Timestamp(start_date)
-    end_ts = pd.Timestamp(end_date)
-
-    # Try different time dimension names
-    time_dims = ["valid_time", "time", "init_time"]
-    for time_dim in time_dims:
-        if time_dim in data.coords:
-            try:
-                time_slice = data[time_dim].sel({time_dim: slice(start_ts, end_ts)})
-                return len(time_slice) > 0
-
-            # If time dim is not found, check rest of time dims just in case
-            except (KeyError, ValueError):
-                continue
-
-    # If no time dimension found, return False
+    start_ts, end_ts = pd.Timestamp(start_date), pd.Timestamp(end_date)
+    for time_dim in ("valid_time", "time", "init_time"):
+        if time_dim in data.indexes:
+            times = data.indexes[time_dim]
+            if ((times >= start_ts) & (times <= end_ts)).any():
+                return True
     return False
 
 
