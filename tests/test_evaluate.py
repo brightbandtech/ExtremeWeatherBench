@@ -19,6 +19,7 @@ import xarray as xr
 
 from extremeweatherbench import (
     cases,
+    defaults,
     derived,
     evaluate,
     inputs,
@@ -2149,6 +2150,37 @@ class TestPipelineFunctions:
 
                 # Should call run_pipeline twice (for both forecast and target)
                 assert mock_run_pipeline.call_count == 2
+
+    def test_run_pipeline_tc_preprocess_after_cira_mapping(
+        self, sample_individual_case
+    ):
+        """CIRA ``z`` is mapped to ``geopotential`` before TC preprocess runs."""
+        dims = ["init_time", "latitude", "longitude", "lead_time"]
+        coords = {
+            "init_time": pd.date_range("2021-06-20", periods=3),
+            "latitude": [43.0, 45.0, 47.0],
+            "longitude": [238.0, 240.0, 242.0],
+            "lead_time": pd.to_timedelta([0, 6], unit="h"),
+            "level": [300.0, 500.0],
+        }
+        ds = xr.Dataset(
+            {
+                "z": (dims + ["level"], np.full((3, 3, 3, 2, 2), 5e4)),
+                "msl": (dims, np.full((3, 3, 3, 2), 1e5)),
+            },
+            coords=coords,
+        )
+        forecast = inputs.XarrayForecast(
+            ds=ds,
+            variables=[],
+            variable_mapping=inputs.CIRA_metadata_variable_mapping,
+            preprocess=defaults.preprocess_cira_icechunk_tc_forecast_dataset,
+            name="cira-tc",
+        )
+        result = evaluate.run_pipeline(sample_individual_case, forecast)
+        assert "geopotential_thickness" in result.data_vars
+        assert "z" not in result.data_vars
+        assert "geopotential" in result.data_vars
 
     @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
     @mock.patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
