@@ -1619,8 +1619,7 @@ def _load_base_temp_events() -> list[cases.IndividualCase]:
         extremeweatherbench.data,
     ).joinpath("base_temp_events.yaml")
     with importlib.resources.as_file(old_yaml) as f:
-        raw = cases._read_incoming_yaml(f)
-    return cases.load_individual_cases_from_dict(raw)
+        return cases.load_individual_cases_from_yaml(f)
 
 
 def _add_map_features(ax) -> None:

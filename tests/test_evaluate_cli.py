@@ -753,9 +753,7 @@ class TestOutputFormats:
 class TestHelperFunctions:
     """Test helper function functionality."""
 
-    @mock.patch(
-        "extremeweatherbench.evaluate_cli.cases.load_ewb_cases"
-    )
+    @mock.patch("extremeweatherbench.evaluate_cli.cases.load_ewb_cases")
     def test_load_default_cases(self, mock_load_yaml):
         """Test _load_default_cases function."""
         mock_cases = [{"id": 1}]

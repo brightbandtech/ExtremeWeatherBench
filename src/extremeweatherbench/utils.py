@@ -19,7 +19,6 @@ import shapely
 import sparse
 import tqdm
 import xarray as xr
-import yaml  # type: ignore[import]
 from joblib import Parallel
 
 from extremeweatherbench import progress

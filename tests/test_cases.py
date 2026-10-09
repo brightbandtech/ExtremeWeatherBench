@@ -169,7 +169,7 @@ class TestCaseOperator:
 
 
 class TestLoadIndividualCases:
-    """Test the load_individual_cases function."""
+    """Test the load_individual_cases_from_dict function."""
 
     def test_load_individual_cases_basic(self, cases_list_of_dicts):
         """Test loading individual cases from dictionary."""
@@ -394,54 +394,14 @@ class TestLoadIndividualCasesFromYaml:
 class TestLoadEventsYaml:
     """Test the load_ewb_cases function."""
 
-    @mock.patch("importlib.resources")
-    def test_load_ewb_cases_success(self, mock_resources):
-        """Test successful loading of events YAML."""
-        # Mock the resource access
-        mock_files = mock.Mock()
-        mock_resources.files.return_value = mock_files
-        mock_files.joinpath.return_value = "/mock/path/events.yaml"
+    def test_load_ewb_cases_success(self):
+        """The bundled events.yaml loads as IndividualCases; load_cases aliases it."""
+        result = cases.load_ewb_cases()
 
-        # Mock the file content
-        mock_yaml_content = [
-            {
-                "case_id_number": 999,
-                "title": "Mock Event",
-                "start_date": datetime.datetime(2021, 1, 1),
-                "end_date": datetime.datetime(2021, 1, 5),
-                "location": {
-                    "type": "centered_region",
-                    "parameters": {
-                        "latitude": 0.0,
-                        "longitude": 0.0,
-                        "bounding_box_degrees": 1.0,
-                    },
-                },
-                "event_type": "test_event",
-            }
-        ]
-
-        with (
-            mock.patch("importlib.resources.as_file") as mock_as_file,
-            mock.patch("extremeweatherbench.cases._read_incoming_yaml") as mock_read,
-        ):
-            mock_read.return_value = mock_yaml_content
-            mock_as_file.return_value.__enter__.return_value = "/mock/file"
-
-            result = cases.load_ewb_cases()
-
-            # Should return a list of IndividualCase objects, not the raw dict
-            assert isinstance(result, list)
-            assert all(isinstance(case, cases.IndividualCase) for case in result)
-            assert len(result) == 1
-
-            # Verify the case was loaded correctly
-            case = result[0]
-            assert case.case_id_number == 999
-            assert case.title == "Mock Event"
-            assert case.event_type == "test_event"
-
-            mock_read.assert_called_once()
+        assert result and all(isinstance(c, cases.IndividualCase) for c in result)
+        ids = [c.case_id_number for c in result]
+        assert len(ids) == len(set(ids))
+        assert cases.load_cases is cases.load_ewb_cases
 
 
 class TestReadIncomingYaml:
