@@ -386,13 +386,6 @@ class CravenBrooksSignificantSevere(DerivedVariable):
 
         cbss = cape * shear
 
-        # Assign attributes; ensure attributes from CAPE or shear aren't propagated
-        cbss.attrs = {
-            "long_name": "Craven-Brooks significant severe",
-            "units": "m³/s³",
-            "description": "Craven-Brooks significant severe parameter",
-        }
-
         logger.warning(
             "CBSS evaluation requires max over valid_time dimension to "
             "coincide with PPH/LSR being daily aggregates of reports"
@@ -402,11 +395,17 @@ class CravenBrooksSignificantSevere(DerivedVariable):
         )
         cbss = cbss.expand_dims(valid_time=[case_metadata.start_date])
         coords = {dim: cbss.coords[dim] for dim in cbss.sizes if dim != "level"}
+        # Set attrs on the output so CAPE's attrs never carry over, regardless of
+        # xarray's keep_attrs default for arithmetic and reductions.
         return xr.DataArray(
             cbss,
             coords=coords,
             dims=coords.keys(),
             name=self.name,
+            attrs={
+                "long_name": "Craven-Brooks significant severe parameter",
+                "units": "m^3/s^3",
+            },
         )
 
 
