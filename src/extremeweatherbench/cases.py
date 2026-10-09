@@ -61,12 +61,6 @@ class CaseOperator:
     forecast: "inputs.ForecastBase"
 
 
-def _read_incoming_yaml(input_pth: str | pathlib.Path) -> Any:
-    """Read a case metadata yaml file with yaml.safe_load."""
-    with open(input_pth, "rb") as f:
-        return yaml.safe_load(f)
-
-
 def build_case_operators(
     case_list: list[IndividualCase],
     evaluation_objects: list["inputs.EvaluationObject"],
@@ -151,7 +145,8 @@ def load_individual_cases_from_yaml(
     Returns:
         A list of IndividualCase objects.
     """
-    return load_individual_cases_from_dict(_read_incoming_yaml(yaml_file))
+    with open(yaml_file, "rb") as f:
+        return load_individual_cases_from_dict(yaml.safe_load(f))
 
 
 def load_ewb_cases() -> list[IndividualCase]:

@@ -1,6 +1,7 @@
 """Tests for defaults module."""
 
 import numpy as np
+import pytest
 import xarray as xr
 
 from extremeweatherbench import defaults, inputs, metrics
@@ -232,6 +233,37 @@ class TestCiraFcnv2PreprocessFunctions:
         heatwave_preprocess = defaults.cira_fcnv2_heatwave_forecast.preprocess
         freeze_preprocess = defaults.cira_fcnv2_freeze_forecast.preprocess
         assert heatwave_preprocess == freeze_preprocess
+
+
+TC_PREPROCESS_FUNCTIONS = [
+    defaults.preprocess_cira_icechunk_tc_forecast_dataset,
+    defaults.preprocess_hres_tc_forecast_dataset,
+]
+
+
+@pytest.mark.parametrize(
+    "name, values, expected",
+    [
+        ("geopotential", [90000.0, 50000.0], 40000.0 / 9.81),
+        ("geopotential_height", [9000.0, 5000.0], 4000.0),
+    ],
+)
+@pytest.mark.parametrize("preprocess", TC_PREPROCESS_FUNCTIONS)
+def test_tc_preprocess_geopotential_thickness(preprocess, name, values, expected):
+    """Thickness is in meters whether the input is geopotential or height."""
+    ds = xr.Dataset({name: (["level"], values)}, coords={"level": [300.0, 500.0]})
+    result = preprocess(ds)
+    np.testing.assert_allclose(result["geopotential_thickness"], expected)
+
+
+@pytest.mark.parametrize("preprocess", TC_PREPROCESS_FUNCTIONS)
+def test_tc_preprocess_unmapped_geopotential_raises(preprocess):
+    """Unmapped source names such as CIRA's ``z`` raise a pointer to the mapping."""
+    ds = xr.Dataset(
+        {"z": (["level"], [90000.0, 50000.0])}, coords={"level": [300.0, 500.0]}
+    )
+    with pytest.raises(KeyError, match="variable_mapping"):
+        preprocess(ds)
 
 
 class TestMaybeAddSpecificHumidity:
