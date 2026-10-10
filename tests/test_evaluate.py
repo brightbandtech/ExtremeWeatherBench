@@ -19,6 +19,7 @@ import xarray as xr
 
 from extremeweatherbench import (
     cases,
+    defaults,
     derived,
     evaluate,
     inputs,
@@ -306,7 +307,7 @@ class TestExtremeWeatherBench:
         )
 
         self.assert_cases_equal(
-            ewb.case_metadata, cases.load_individual_cases(sample_cases_list)
+            ewb.case_metadata, cases.load_individual_cases_from_dict(sample_cases_list)
         )
         assert ewb.evaluation_objects == [sample_evaluation_object]
         assert ewb.cache_dir is None
@@ -363,7 +364,7 @@ class TestExtremeWeatherBench:
         # Check that the first argument (case list) has the right structure
         passed_case_list = call_args[0]
         self.assert_cases_equal(
-            passed_case_list, cases.load_individual_cases(sample_cases_list)
+            passed_case_list, cases.load_individual_cases_from_dict(sample_cases_list)
         )
 
         # Check that the second argument (evaluation objects) is correct
@@ -2149,6 +2150,113 @@ class TestPipelineFunctions:
 
                 # Should call run_pipeline twice (for both forecast and target)
                 assert mock_run_pipeline.call_count == 2
+
+    def test_run_pipeline_tc_preprocess_after_cira_mapping(
+        self, sample_individual_case
+    ):
+        """CIRA ``z`` is mapped to ``geopotential`` before TC preprocess runs."""
+        dims = ["init_time", "latitude", "longitude", "lead_time"]
+        coords = {
+            "init_time": pd.date_range("2021-06-20", periods=3),
+            "latitude": [43.0, 45.0, 47.0],
+            "longitude": [238.0, 240.0, 242.0],
+            "lead_time": pd.to_timedelta([0, 6], unit="h"),
+            "level": [300.0, 500.0],
+        }
+        ds = xr.Dataset(
+            {
+                "z": (dims + ["level"], np.full((3, 3, 3, 2, 2), 5e4)),
+                "msl": (dims, np.full((3, 3, 3, 2), 1e5)),
+            },
+            coords=coords,
+        )
+        forecast = inputs.XarrayForecast(
+            ds=ds,
+            variables=[],
+            variable_mapping=inputs.CIRA_metadata_variable_mapping,
+            preprocess=defaults.preprocess_cira_icechunk_tc_forecast_dataset,
+            name="cira-tc",
+        )
+        result = evaluate.run_pipeline(sample_individual_case, forecast)
+        assert "geopotential_thickness" in result.data_vars
+        assert "z" not in result.data_vars
+        assert "geopotential" in result.data_vars
+
+    def test_run_pipeline_cira_kerchunk_forecast(self, sample_individual_case):
+        """A CIRA kerchunk reference (time axis, no lead_time) runs end to end.
+
+        Regression test for #428: lead_time must exist before the coverage check
+        and case subset, which run before preprocess for gridded data. The inits
+        start before the case, so only their later lead times overlap it.
+        """
+        init_time = pd.date_range("2021-06-15", periods=3)
+        ds = xr.Dataset(
+            {
+                "t2": (
+                    ["init_time", "time", "latitude", "longitude"],
+                    np.full((3, 41, 3, 3), 300.0),
+                )
+            },
+            coords={
+                "init_time": init_time,
+                "time": pd.date_range(init_time[0], periods=41, freq="6h"),
+                "latitude": [43.0, 45.0, 47.0],
+                "longitude": [238.0, 240.0, 242.0],
+            },
+        )
+        forecast = inputs.KerchunkForecast(
+            source="cira.parq",
+            name="cira-kerchunk",
+            variables=["surface_air_temperature"],
+            variable_mapping=inputs.CIRA_metadata_variable_mapping,
+        )
+        with mock.patch("xarray.open_dataset", return_value=ds):
+            result = evaluate.run_pipeline(sample_individual_case, forecast)
+        assert result.sizes["valid_time"] > 0
+        assert result["surface_air_temperature"].notnull().any()
+
+    @pytest.mark.parametrize(
+        "mapping, preprocess, warns",
+        [
+            # 1.0.x style: preprocess renames step -> lead_time, too late now
+            ({}, lambda ds: ds.rename(step="lead_time"), True),
+            ({"step": "lead_time"}, lambda ds: ds, False),
+            ({}, None, False),  # default preprocess: nothing to blame
+        ],
+    )
+    def test_run_pipeline_warns_preprocess_cannot_fix_coordinates(
+        self, sample_individual_case, mapping, preprocess, warns
+    ):
+        """Gridded preprocess can't create time coordinates; warn when missing."""
+        ds = xr.Dataset(
+            {"t2": (["init_time", "step"], np.zeros((2, 2)))},
+            coords={
+                "init_time": pd.date_range("2021-06-20", periods=2),
+                "step": pd.to_timedelta([0, 6], unit="h"),
+            },
+        )
+        kwargs = {"preprocess": preprocess} if preprocess else {}
+        forecast = inputs.XarrayForecast(
+            ds=ds, name="my-model", variables=[], variable_mapping=mapping, **kwargs
+        )
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            evaluate._warn_if_preprocess_cannot_fix_coordinates(
+                forecast.maybe_map_variable_names(ds), forecast
+            )
+        messages = [str(w.message) for w in caught if w.category is UserWarning]
+        assert bool(messages) is warns
+        if warns:
+            assert "my-model" in messages[0] and "lead_time" in messages[0]
+
+    def test_warn_preprocess_cannot_fix_target_time(self):
+        """A gridded target with a custom preprocess and no time coordinate warns."""
+        target = inputs.ERA5(variables=[], preprocess=lambda ds: ds)
+        with pytest.warns(UserWarning, match="valid_time"):
+            evaluate._warn_if_preprocess_cannot_fix_coordinates(
+                xr.Dataset(coords={"date": pd.date_range("2021-06-20", periods=2)}),
+                target,
+            )
 
     @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
     @mock.patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")

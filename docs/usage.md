@@ -81,7 +81,7 @@ To run an evaluation, there are three components required: a forecast, a target,
 
 ExtremeWeatherBench requires forecasts to have `init_time`, `lead_time`, `latitude`, and `longitude` dimensions at minimum. If not already in that naming convention, initializing a `ForecastBase` object with a `variable_mapping` to map to those names is required. Other dimensions such as pressure level (`level`) can be included.
 
-Targets require at least a `valid_time` with at least one spatial dimension. Examples include `location`, `station`, or (`latitude`, `longitude`). Forecasts are aligned to targets during the steps immediately prior to evaluating a metric.
+Targets require at least a `valid_time` (or `time`) coordinate with at least one spatial dimension; inputs without the expected time coordinates are skipped as having no data (see [Time coordinates](data.md#time-coordinates)). Examples include `location`, `station`, or (`latitude`, `longitude`). Forecasts are aligned to targets during the steps immediately prior to evaluating a metric.
 
 ```python
 import extremeweatherbench as ewb
@@ -123,13 +123,13 @@ era5_heatwave_target = ewb.inputs.ERA5(
 Note that EWB provides defaults for arguments, so most users will be able to instead write this (if defining variables with the intent of it applying to all metrics):
 
 ```python
-era5_heatwave_target = ewb.ERA5(variables=["surface_air_temperature"])
+era5_heatwave_target = ewb.inputs.ERA5(variables=["surface_air_temperature"])
 ```
 
 Or (if defining variables as arguments to the metrics):
 
 ```python
-era5_heatwave_target = ewb.ERA5()
+era5_heatwave_target = ewb.inputs.ERA5()
 ```
 
 > **Detailed Explanation**: Similarly to forecasts, we need to define the `source`, which here is the ARCO ERA5 provided by Google. `variables` are used to subset `ewb.inputs.ERA5` in an evaluation; `variable_mapping` defaults to `ewb.inputs.ERA5_metadata_variable_mapping` for many existing variables and likely is not required to be set unless your use case is for less common variables. Both forecasts and targets, if relevant, have an optional `chunks` parameter which defaults to what should be the most efficient value - usually `None` or `'auto'`, but can be changed as seen above. *If using the ARCO ERA5 and setting `chunks=None`, it is critical to order your subsetting by variables -> time -> `.sel` or `.isel` latitude & longitude -> rechunk. [See this Github comment](https://github.com/pydata/xarray/issues/8902#issuecomment-2036435045).

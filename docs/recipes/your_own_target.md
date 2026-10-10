@@ -61,10 +61,11 @@ class MERRA2(inputs.TargetBase):
 > **Detailed Explanation**: `zarr_target_subsetter` handles the two
 > steps that every gridded target needs: subsetting time with `.sel`
 > along `valid_time` (or `time`) and masking the dataset to the case's
-> `location` region. If your time coordinate has a different name, pass
-> `time_variable="my_time"` as a keyword argument. For targets that do
-> not use `valid_time` as their time dimension name, the helper
-> automatically checks for `"time"` as a fallback.
+> `location` region. Name your time coordinate `valid_time` (or `time`),
+> renaming it with `variable_mapping` if needed: EWB checks those names
+> for case coverage before calling `subset_data_to_case`, so a target
+> with any other time name is skipped as having no data (see
+> [Time coordinates](../data.md#time-coordinates)).
 
 ### Using the custom target
 
@@ -75,7 +76,7 @@ merra2_target = MERRA2(
 )
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MeanAbsoluteError(
@@ -163,7 +164,7 @@ class MyStationObs(inputs.TargetBase):
 - Use `case_metadata.start_date` and `case_metadata.end_date` for time
   filtering; these are `datetime.datetime` objects.
 - Longitude convention: EWB uses 0–360 internally. Convert from
-  −180–180 using `ewb.convert_longitude_to_360`.
+  −180–180 using `ewb.utils.convert_longitude_to_360`.
 
 
 ## Complete Example
@@ -202,7 +203,7 @@ class CustomGHCN(inputs.TargetBase):
     """GHCNh parquet via TargetBase, with explicit unit handling."""
 
     name: str = "CustomGHCN"
-    source: str = ewb.DEFAULT_GHCN_URI
+    source: str = ewb.inputs.DEFAULT_GHCN_URI
 
     def _open_data_from_source(self):
         return pl.scan_parquet(
@@ -235,15 +236,15 @@ class CustomGHCN(inputs.TargetBase):
 
 custom_target = CustomGHCN()
 
-forecast = ewb.ZarrForecast(
+forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MeanAbsoluteError(
@@ -256,7 +257,7 @@ eval_objects = [
     ),
 ]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=cases,
     evaluation_objects=eval_objects,
 )

@@ -3,7 +3,7 @@
 Comparing multiple AI weather prediction (AIWP) models against a shared
 target is one of the most common EWB workflows. Create one
 `EvaluationObject` per model, all sharing the same target and metric
-list, then pass them together to a single `ewb.evaluation` call. The
+list, then pass them together to a single `ewb.evaluate.ExtremeWeatherBench` call. The
 results `DataFrame` carries a `forecast_source` column that labels each
 row by model, making comparison straightforward. See
 [Usage](../usage.md) for the single-model baseline workflow.
@@ -26,7 +26,7 @@ model_names = [
 ]
 
 # One EvaluationObject per model; target and metrics are shared
-target = ewb.ERA5(variables=["surface_air_temperature"])
+target = ewb.inputs.ERA5(variables=["surface_air_temperature"])
 
 metrics_list = [
     ewb.metrics.MeanAbsoluteError(
@@ -44,7 +44,7 @@ metrics_list = [
 ]
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=metrics_list,
         target=target,
@@ -53,8 +53,10 @@ eval_objects = [
     for name in model_names
 ]
 
-cases = ewb.load_cases()
-runner = ewb.evaluation(case_metadata=cases, evaluation_objects=eval_objects)
+cases = ewb.cases.load_cases()
+runner = ewb.evaluate.ExtremeWeatherBench(
+    case_metadata=cases, evaluation_objects=eval_objects
+)
 outputs = runner.run_evaluation()
 outputs.to_csv("multi_model_heatwave.csv", index=False)
 ```
@@ -68,17 +70,17 @@ Each must have its own `name` to appear distinctly in the output:
 import extremeweatherbench as ewb
 from extremeweatherbench import inputs
 
-hres = ewb.ZarrForecast(
+hres = ewb.inputs.ZarrForecast(
     source=("gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr"),
     name="HRES",
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
 fcnv2_ifs = inputs.get_cira_icechunk("FOUR_v200_IFS")
 pangu_ifs = inputs.get_cira_icechunk("PANG_v100_IFS")
 
-target = ewb.ERA5(variables=["surface_air_temperature"])
+target = ewb.inputs.ERA5(variables=["surface_air_temperature"])
 
 metrics_list = [
     ewb.metrics.MeanAbsoluteError(
@@ -88,7 +90,7 @@ metrics_list = [
 ]
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=metrics_list,
         target=target,
@@ -97,8 +99,10 @@ eval_objects = [
     for model in [hres, fcnv2_ifs, pangu_ifs]
 ]
 
-cases = ewb.load_cases()
-runner = ewb.evaluation(case_metadata=cases, evaluation_objects=eval_objects)
+cases = ewb.cases.load_cases()
+runner = ewb.evaluate.ExtremeWeatherBench(
+    case_metadata=cases, evaluation_objects=eval_objects
+)
 outputs = runner.run_evaluation()
 ```
 
@@ -153,15 +157,17 @@ included in the run, for example to focus on North American events only:
 ```python
 import extremeweatherbench as ewb
 
-subsetter = ewb.RegionSubsetter(
-    latitude_min=15.0,
-    latitude_max=75.0,
-    longitude_min=230.0,
-    longitude_max=310.0,
+subsetter = ewb.regions.RegionSubsetter(
+    region={
+        "latitude_min": 15.0,
+        "latitude_max": 75.0,
+        "longitude_min": 230.0,
+        "longitude_max": 310.0,
+    },
 )
 
-runner = ewb.evaluation(
-    case_metadata=ewb.load_cases(),
+runner = ewb.evaluate.ExtremeWeatherBench(
+    case_metadata=ewb.cases.load_cases(),
     evaluation_objects=eval_objects,
     region_subsetter=subsetter,
 )
@@ -203,7 +209,7 @@ model_names = [
     "AURO_v100_IFS",
 ]
 
-target = ewb.ERA5(variables=["surface_air_temperature"])
+target = ewb.inputs.ERA5(variables=["surface_air_temperature"])
 
 metrics_list = [
     ewb.metrics.MeanAbsoluteError(
@@ -221,7 +227,7 @@ metrics_list = [
 ]
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=metrics_list,
         target=target,
@@ -230,7 +236,7 @@ eval_objects = [
     for name in model_names
 ]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=cases,
     evaluation_objects=eval_objects,
 )

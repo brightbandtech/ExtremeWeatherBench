@@ -1,6 +1,7 @@
 """Tests for defaults module."""
 
 import numpy as np
+import pytest
 import xarray as xr
 
 from extremeweatherbench import defaults, inputs, metrics
@@ -9,28 +10,37 @@ from extremeweatherbench import defaults, inputs, metrics
 class TestDefaults:
     """Test the defaults module."""
 
-    def test_preprocess_cira_kerchunk_forecast_dataset(self):
-        """Test the preprocess_cira_kerchunk_forecast_dataset function."""
-
-        # Create a mock dataset with 'time' coordinate matching expected output size
-        # The function creates lead_time with 41 values (0 to 240 by 6)
-        time_data = np.array([i for i in range(0, 241, 6)], dtype="timedelta64[h]")
-        temp_data = np.random.random(len(time_data))
-        mock_ds = xr.Dataset(
-            {"temperature": (["time"], temp_data)}, coords={"time": time_data}
+    @pytest.mark.parametrize(
+        "old, new",
+        [
+            ("preprocess_cira_kerchunk_forecast_dataset", None),
+            (
+                "preprocess_cira_kerchunk_tc_forecast_dataset",
+                "preprocess_cira_icechunk_tc_forecast_dataset",
+            ),
+            (
+                "preprocess_cira_kerchunk_ar_forecast_dataset",
+                "preprocess_cira_icechunk_ar_forecast_dataset",
+            ),
+            (
+                "preprocess_cira_kerchunk_severe_forecast_dataset",
+                "preprocess_cira_icechunk_severe_forecast_dataset",
+            ),
+        ],
+    )
+    def test_deprecated_kerchunk_preprocess(self, old, new):
+        """1.0.x kerchunk preprocess functions warn and match their replacement."""
+        ds = xr.Dataset(
+            {
+                "geopotential": (("level",), [9.0e4, 5.0e4]),
+                "specific_humidity": (("level",), [0.01, 0.002]),
+            },
+            coords={"level": [300, 500]},
         )
-
-        result = defaults.preprocess_cira_kerchunk_forecast_dataset(mock_ds)
-
-        # Check that 'time' was renamed to 'lead_time'
-        assert "lead_time" in result.coords
-        assert "time" not in result.coords
-
-        # Check that lead_time has the expected values (0 to 240 by 6)
-        expected_lead_times = np.array(
-            [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-        ).astype("timedelta64[ns]")
-        np.testing.assert_array_equal(result["lead_time"].values, expected_lead_times)
+        with pytest.warns(FutureWarning, match=old):
+            result = getattr(defaults, old)(ds.copy())
+        expected = getattr(defaults, new)(ds.copy()) if new else ds
+        xr.testing.assert_identical(result, expected)
 
     def test_get_brightband_evaluation_objects_returns_list(self):
         """Test that get_brightband_evaluation_objects returns a list."""
@@ -232,6 +242,37 @@ class TestCiraFcnv2PreprocessFunctions:
         heatwave_preprocess = defaults.cira_fcnv2_heatwave_forecast.preprocess
         freeze_preprocess = defaults.cira_fcnv2_freeze_forecast.preprocess
         assert heatwave_preprocess == freeze_preprocess
+
+
+TC_PREPROCESS_FUNCTIONS = [
+    defaults.preprocess_cira_icechunk_tc_forecast_dataset,
+    defaults.preprocess_hres_tc_forecast_dataset,
+]
+
+
+@pytest.mark.parametrize(
+    "name, values, expected",
+    [
+        ("geopotential", [90000.0, 50000.0], 40000.0 / 9.81),
+        ("geopotential_height", [9000.0, 5000.0], 4000.0),
+    ],
+)
+@pytest.mark.parametrize("preprocess", TC_PREPROCESS_FUNCTIONS)
+def test_tc_preprocess_geopotential_thickness(preprocess, name, values, expected):
+    """Thickness is in meters whether the input is geopotential or height."""
+    ds = xr.Dataset({name: (["level"], values)}, coords={"level": [300.0, 500.0]})
+    result = preprocess(ds)
+    np.testing.assert_allclose(result["geopotential_thickness"], expected)
+
+
+@pytest.mark.parametrize("preprocess", TC_PREPROCESS_FUNCTIONS)
+def test_tc_preprocess_unmapped_geopotential_raises(preprocess):
+    """Unmapped source names such as CIRA's ``z`` raise a pointer to the mapping."""
+    ds = xr.Dataset(
+        {"z": (["level"], [90000.0, 50000.0])}, coords={"level": [300.0, 500.0]}
+    )
+    with pytest.raises(KeyError, match="variable_mapping"):
+        preprocess(ds)
 
 
 class TestMaybeAddSpecificHumidity:

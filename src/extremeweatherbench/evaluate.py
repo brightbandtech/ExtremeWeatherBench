@@ -7,6 +7,7 @@ import dataclasses
 import logging
 import multiprocessing
 import pathlib
+import warnings
 from collections import OrderedDict
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Optional, Union
@@ -79,7 +80,7 @@ class ExtremeWeatherBench:
                 spatial region.
         """
         # Load the case metadata from the input
-        self.case_metadata = cases.load_individual_cases(case_metadata)
+        self.case_metadata = cases.load_individual_cases_from_dict(case_metadata)
         self.evaluation_objects = evaluation_objects
         self.cache_dir = pathlib.Path(cache_dir) if cache_dir else None
 
@@ -1229,6 +1230,38 @@ def _build_datasets(
     return (forecast_ds, target_ds)
 
 
+def _warn_if_preprocess_cannot_fix_coordinates(
+    data: xr.Dataset | xr.DataArray, input_data: "inputs.InputBase"
+) -> None:
+    """Warn if gridded data lacks its time coordinates and has a custom preprocess.
+
+    Gridded preprocess runs after the coverage check and case subset, so unlike
+    in 1.0.x it can't create or rename these coordinates; without them every
+    case is skipped as having no data.
+
+    Args:
+        data: The gridded data after variable mapping.
+        input_data: The input the data came from.
+    """
+    if input_data.preprocess is inputs._default_preprocess:
+        return
+    if isinstance(input_data, inputs.ForecastBase):
+        missing = [c for c in ("init_time", "lead_time") if c not in data.coords]
+    else:
+        has_time = "valid_time" in data.coords or "time" in data.coords
+        missing = [] if has_time else ["valid_time"]
+    if missing:
+        warnings.warn(
+            f"{input_data.name} has no {missing} coordinate after variable_mapping. "
+            "Gridded preprocess runs after the case subset and can't create or "
+            "rename coordinates, so every case will be skipped as having no "
+            "data. Rename them with variable_mapping instead; see "
+            "https://extremeweatherbench.readthedocs.io/en/latest/data/#time-coordinates",
+            UserWarning,
+            stacklevel=2,
+        )
+
+
 def run_pipeline(
     case_metadata: "cases.IndividualCase",
     input_data: "inputs.InputBase",
@@ -1263,6 +1296,8 @@ def run_pipeline(
 
     # Get the appropriate source module for the data type
     source_module = sources.get_backend_module(type(data))
+    if isinstance(data, (xr.Dataset, xr.DataArray)):
+        _warn_if_preprocess_cannot_fix_coordinates(data, input_data)
 
     # Checks if the data has valid times and spatial overlap. This must come after
     # maybe_map_variable_names to ensure variable names are mapped correctly.

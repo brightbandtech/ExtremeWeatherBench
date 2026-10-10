@@ -2058,6 +2058,30 @@ class TestLongitudeCoordinateMismatch:
         # Should handle antimeridian crossing correctly
         assert len(masked_dataset.longitude) > 0
 
+    def test_wrapping_region_no_longitude_overlap_returns_empty(self):
+        """Wrapping region with no overlapping longitudes yields an empty subset."""
+        lats = np.linspace(30, 60, 31)
+        lons = np.linspace(20, 60, 41)
+        data = np.random.random((len(lats), len(lons)))
+        dataset = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+        region = regions.BoundingBoxRegion.create_region(
+            latitude_min=35.0,
+            latitude_max=55.0,
+            longitude_min=175.0,
+            longitude_max=-175.0,
+        )
+
+        masked_dataset = region.mask(dataset)
+
+        assert isinstance(masked_dataset, xr.Dataset)
+        assert "temperature" in masked_dataset.data_vars
+        assert masked_dataset.sizes["longitude"] == 0
+        assert masked_dataset.sizes["latitude"] == 21
+
     def test_case_20_specific_scenario(self):
         """Test the specific Case 20 scenario that was failing."""
         # Simulate a typical forecast dataset with 0-360 longitude

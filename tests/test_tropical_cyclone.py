@@ -1185,10 +1185,16 @@ class TestFillTrackGapsFromFields:
         The SLP min at ts 1 sits at lat 14, which becomes
         the "previous" anchor for ts 2. With chaining, ts 2
         interpolates between lat 14 and 18 (expect ~16);
-        without chaining it would use 10 and 18 (expect ~14.7).
+        without chaining it would use 10 and 18 (expect ~15.3).
         We place the ts 2 SLP min at lat 16 so it is only
         chosen when the chained anchor shifts the expected
-        position northward."""
+        position northward.
+
+        Each gap timestep has exactly ``n_candidates`` cells
+        below the flat background, so the candidate set does
+        not depend on how argpartition breaks ties among
+        background cells. At ts 2 a decoy sits near the
+        unchained expected position."""
         n_lat, n_lon = 41, 21
         lat = np.linspace(8, 20, n_lat)
         lon = np.linspace(123, 127, n_lon)
@@ -1222,17 +1228,21 @@ class TestFillTrackGapsFromFields:
         wind_all = np.full((4, n_lat, n_lon), 5.0)
         c_mid = np.argmin(np.abs(lon - 125.0))
 
-        # ts 1: SLP min at lat 14
+        # ts 1: SLP min at lat 14 (expected ~12.7). The second
+        # candidate is a decoy farther from the expected position.
         r_ts1 = np.argmin(np.abs(lat - 14.0))
         slp_all[1, r_ts1, c_mid] = 99700.0
         wind_all[1, r_ts1, c_mid] = 15.0
+        slp_all[1, np.argmin(np.abs(lat - 9.8)), c_mid] = 99750.0
 
         # ts 2: SLP min at lat 16 (only reachable via
         # chained anchor at lat 14, not via endpoint
-        # midpoint at lat ~14.7)
+        # interpolation at lat ~15.3)
         r_ts2 = np.argmin(np.abs(lat - 16.0))
         slp_all[2, r_ts2, c_mid] = 99700.0
         wind_all[2, r_ts2, c_mid] = 15.0
+        # Decoy closest to the unchained expected position (~15.3)
+        slp_all[2, np.argmin(np.abs(lat - 14.9)), c_mid] = 99750.0
 
         result = tropical_cyclone._fill_track_gaps_from_fields(
             detections,
@@ -1243,9 +1253,12 @@ class TestFillTrackGapsFromFields:
             lat,
             lon,
             wind_search_radius_gridpts=1,
+            n_candidates=2,
         )
 
         assert len(result) == 4
+        ts1_fill = [d for d in result if d["lead_time_index"] == 1]
+        np.testing.assert_allclose(ts1_fill[0]["latitude"], lat[r_ts1])
         ts2_fill = [d for d in result if d["lead_time_index"] == 2]
         assert len(ts2_fill) == 1
         np.testing.assert_allclose(

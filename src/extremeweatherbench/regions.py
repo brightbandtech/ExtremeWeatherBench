@@ -67,9 +67,16 @@ class Region(abc.ABC):
     def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
         """Mask a dataset to the region.
 
+        Selects the latitudes and longitudes inside the region's bounding box.
+        For regions that cross the antimeridian or prime meridian, the selected
+        longitudes are shifted by 360 where needed to form one increasing run
+        (e.g. -10..10 for a 350-10 region, 170..190 for a 170-(-170) region).
+        If no grid points fall inside the region, the result has a zero-length
+        latitude or longitude dimension.
+
         Args:
             dataset: The dataset to mask.
-            drop: Whether to drop coordinates outside the region bounds.
+            drop: Deprecated and ignored.
 
         Returns:
             The subset dataset.
@@ -123,7 +130,7 @@ class Region(abc.ABC):
                 region_longitude_min
                 + (dataset.longitude - region_longitude_min) % 360.0
             )
-            if float(longitude.max()) >= 360.0:
+            if (longitude >= 360.0).any():
                 longitude = longitude - 360.0
             dataset = dataset.assign_coords(longitude=longitude).sortby("longitude")
         return dataset
