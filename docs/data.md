@@ -264,7 +264,8 @@ the case's data), which means they can't create or rename the coordinates EWB
 uses to find a case: the time coordinates above, `latitude`/`longitude`, or the
 0–360 longitude convention. Fix those with `variable_mapping`, or in the
 dataset you pass to `XarrayForecast`. Use `preprocess` for variables, such as
-unit conversions or derived fields.
+unit conversions or derived fields. If gridded data with a custom `preprocess`
+reaches the check without its time coordinates, EWB warns with this advice.
 
 ## Variable mapping
 
