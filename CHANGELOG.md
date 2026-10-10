@@ -1,0 +1,357 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+This file is the source of truth for what each tagged version shipped.
+GitHub's auto-generated release notes can list PRs that were already
+squash-merged into `main`, because `develop` still contains those original
+commits. Prefer this changelog when writing GitHub release notes.
+
+## [1.1.0] - 2026-10-10
+
+### Added
+
+- Unified evaluation progress bar in `progress.py`: one 0–100% bar with
+  ETA in both serial and parallel mode, plus `--no-progress` and
+  `EWB_DISABLE_PROGRESS` ([#381](https://github.com/brightbandtech/ExtremeWeatherBench/pull/381)).
+- Optional `output_format="xarray"` (a flat Dataset) and CLI writes to
+  netCDF or zarr, including `--sparse`
+  ([#399](https://github.com/brightbandtech/ExtremeWeatherBench/pull/399),
+  [#407](https://github.com/brightbandtech/ExtremeWeatherBench/pull/407)).
+- Python 3.14 support
+  ([#386](https://github.com/brightbandtech/ExtremeWeatherBench/pull/386)).
+- Hypothesis property tests for forecast/target input variation
+  ([#388](https://github.com/brightbandtech/ExtremeWeatherBench/pull/388)).
+- CAPE accuracy note in the docs
+  ([#384](https://github.com/brightbandtech/ExtremeWeatherBench/pull/384)).
+- A docs check in the test suite: every `ewb.*` reference in `README.md`
+  and `docs/` must exist, Python snippets must parse, their
+  `extremeweatherbench` imports must resolve, and calls must use real
+  keyword arguments
+  ([#423](https://github.com/brightbandtech/ExtremeWeatherBench/pull/423)).
+- A "Time coordinates" docs section describing which coordinates EWB uses
+  to decide whether an input covers a case
+  ([#426](https://github.com/brightbandtech/ExtremeWeatherBench/pull/426)).
+- A warning when a forecast's `valid_time` spans `init_time` and
+  `lead_time` but differs from their sum, which usually means `lead_time`
+  is in the wrong units (integers are read as hours)
+  ([#426](https://github.com/brightbandtech/ExtremeWeatherBench/pull/426)).
+- A warning when gridded data with a custom `preprocess` reaches the
+  coverage check without its time coordinates; previously every case was
+  skipped with only an INFO-level "no data" log
+  ([#429](https://github.com/brightbandtech/ExtremeWeatherBench/pull/429)).
+
+### Changed
+
+- Peak metrics (`MaximumMeanAbsoluteError`, `MinimumMeanAbsoluteError`,
+  `MaximumLowestMeanAbsoluteError`) reduce each forecast initialization
+  over its own `lead_time` window, not across different model runs at a
+  fixed lead time. Completeness guards count present values rather than
+  coordinate slots
+  ([#393](https://github.com/brightbandtech/ExtremeWeatherBench/pull/393)).
+- CAPE now marches the moist adiabat and uses a single epsilon constant.
+  Numeric CAPE output changes (about 2.6% of the mean signal on the ERA5
+  reference profiles). Stored CAPE-derived scores will not match 1.0.2
+  ([#384](https://github.com/brightbandtech/ExtremeWeatherBench/pull/384)).
+- Package imports are lazy via `lazy-loader`. Legacy aliases such as
+  `ewb.forecasts.ZarrForecast` and `ewb.targets.ERA5` no longer work;
+  use `ewb.inputs.ZarrForecast` and `ewb.inputs.ERA5`
+  ([#352](https://github.com/brightbandtech/ExtremeWeatherBench/pull/352)).
+- Requires Python `>=3.12,<3.15`. Python 3.11 is no longer supported
+  ([#386](https://github.com/brightbandtech/ExtremeWeatherBench/pull/386)).
+- `cartopy` moved out of core dependencies into the `data-prep` extra.
+  Natural Earth land masks now use pooch and geopandas
+  ([#386](https://github.com/brightbandtech/ExtremeWeatherBench/pull/386)).
+- Dependency refresh: `icechunk>=2.1.2`, `kerchunk>=0.2.10` from PyPI
+  (git override removed), `pandas>=2.2.3,<3`, `numba>=0.66`, and
+  `virtualizarr>=2.7.3` in `data-prep`
+  ([#386](https://github.com/brightbandtech/ExtremeWeatherBench/pull/386)).
+- `MaximumMeanAbsoluteError` honors the instance `reduce_spatial_dims`
+  instead of hardcoding latitude/longitude
+  ([#383](https://github.com/brightbandtech/ExtremeWeatherBench/pull/383)).
+- Evaluation reuses forecast and target datasets within a process,
+  groups operators that share a case and forecast, and computes aligned
+  data once so each metric does not rebuild the same dask graph
+  ([#399](https://github.com/brightbandtech/ExtremeWeatherBench/pull/399)).
+- Gridded `preprocess` functions run after the coverage check and case
+  subset, so they only process the case's data. They can no longer create
+  or rename the coordinates EWB uses to find a case (time coordinates,
+  `latitude`/`longitude`, the 0–360 longitude convention); a 1.0.x
+  preprocess that did so must move that work to `variable_mapping` or the
+  dataset passed to `XarrayForecast`
+  ([#399](https://github.com/brightbandtech/ExtremeWeatherBench/pull/399),
+  [#429](https://github.com/brightbandtech/ExtremeWeatherBench/pull/429)).
+- The coverage check decides from one time source, in order:
+  `init_time` + `lead_time` (forecasts; a forecast's own `valid_time` is
+  ignored), then `valid_time`, then `time`
+  ([#426](https://github.com/brightbandtech/ExtremeWeatherBench/pull/426)).
+- `KerchunkForecast` converts CIRA's `time` axis to `lead_time` when it
+  opens a reference, so CIRA kerchunk data needs no preprocess
+  ([#429](https://github.com/brightbandtech/ExtremeWeatherBench/pull/429)).
+- `DurationMeanError` keeps only the case dayofyear slice of
+  climatology before stacking to valid time
+  ([#400](https://github.com/brightbandtech/ExtremeWeatherBench/pull/400)).
+- Atmospheric river objects use 2D labels plus union-find instead of a
+  4D connected-component scan, skip unused forecast
+  `(lead, valid_time)` pairs, and stream masks one lead at a time
+  ([#401](https://github.com/brightbandtech/ExtremeWeatherBench/pull/401),
+  [#408](https://github.com/brightbandtech/ExtremeWeatherBench/pull/408)).
+- Tropical cyclone spatial masks use a chunked haversine grid instead
+  of a Python loop over IBTrACS points
+  ([#402](https://github.com/brightbandtech/ExtremeWeatherBench/pull/402)).
+- LSR parquet reads filter `valid_time` to the case window, with a
+  fallback to the full file if the store rejects filters
+  ([#403](https://github.com/brightbandtech/ExtremeWeatherBench/pull/403)).
+- Unique target pipelines are computed once in the parent and reused
+  across forecast workers
+  ([#408](https://github.com/brightbandtech/ExtremeWeatherBench/pull/408)).
+- The tropical cyclone geopotential-thickness preprocess functions share
+  one implementation and read only EWB variable names: `geopotential`
+  (m²/s², divided by g) or, newly, `geopotential_height` (m). Anything
+  else raises a `KeyError` pointing at `variable_mapping`
+  ([#420](https://github.com/brightbandtech/ExtremeWeatherBench/pull/420)).
+- Ruff and the pre-commit hook are pinned to 0.16.2, with matching
+  lint fixes
+  ([#404](https://github.com/brightbandtech/ExtremeWeatherBench/pull/404)).
+- Physical constants live in a single `constants.py` module; `calc` and
+  `_cape` import them from there instead of keeping their own copies
+  ([#411](https://github.com/brightbandtech/ExtremeWeatherBench/pull/411)).
+- Tabular targets (GHCN, LSR, ...) run `preprocess` after variable
+  mapping, so preprocess functions see EWB variable names. IBTrACS still
+  preprocesses on its raw source columns. A preprocess function that
+  reads source column names now raises `KeyError`
+  ([#413](https://github.com/brightbandtech/ExtremeWeatherBench/pull/413)).
+- Docs and README examples use the namespaced API (`ewb.inputs.*`,
+  `ewb.evaluate.ExtremeWeatherBench`, `ewb.cases.load_cases`, ...)
+  instead of removed top-level names
+  ([#423](https://github.com/brightbandtech/ExtremeWeatherBench/pull/423)).
+
+### Deprecated
+
+- `defaults.preprocess_cira_kerchunk_forecast_dataset` (no preprocess is
+  needed) and the `preprocess_cira_kerchunk_{tc,ar,severe}_forecast_dataset`
+  functions (use the matching `preprocess_cira_icechunk_*` function, which
+  handles both stores). They raise a `FutureWarning` and will be removed
+  in a future release
+  ([#429](https://github.com/brightbandtech/ExtremeWeatherBench/pull/429)).
+
+### Removed
+
+- Python 3.11 support
+  ([#386](https://github.com/brightbandtech/ExtremeWeatherBench/pull/386)).
+- Unused core pins (`eccodes`, `frozenlist`, `pyogrio`) and `cartopy`
+  from the default install
+  ([#386](https://github.com/brightbandtech/ExtremeWeatherBench/pull/386)).
+- `cases.load_individual_cases` (use
+  `cases.load_individual_cases_from_dict`),
+  `cases.load_ewb_events_yaml_into_case_list` (use `cases.load_cases` or
+  `cases.load_ewb_cases`), `cases.read_incoming_yaml`, and
+  `utils.read_event_yaml` (use `cases.load_individual_cases_from_yaml`
+  to load cases from your own YAML file)
+  ([#422](https://github.com/brightbandtech/ExtremeWeatherBench/pull/422)).
+
+### Fixed
+
+- `KerchunkForecast` no longer clobbers anonymous S3 access, so public
+  CIRA/NODD kerchunk references open without credentials
+  ([#382](https://github.com/brightbandtech/ExtremeWeatherBench/pull/382)).
+- `open_kerchunk_reference` no longer mutates the caller's
+  `storage_options` dict
+  ([#382](https://github.com/brightbandtech/ExtremeWeatherBench/pull/382)).
+- Documented example config uses `case_list` (the name the CLI expects)
+  ([#382](https://github.com/brightbandtech/ExtremeWeatherBench/pull/382)).
+- `check_for_spatial_data` no longer crashes on antimeridian-crossing
+  `-180/180` grids, and now requires a match on both latitude and
+  longitude
+  ([#387](https://github.com/brightbandtech/ExtremeWeatherBench/pull/387)).
+- Peak metrics and `DurationMeanError` return NaN on degenerate time
+  axes instead of raising
+  ([#387](https://github.com/brightbandtech/ExtremeWeatherBench/pull/387)).
+- Integer `lead_time` values are treated as hours, not nanoseconds, in
+  `convert_init_time_to_valid_time`
+  ([#387](https://github.com/brightbandtech/ExtremeWeatherBench/pull/387)).
+- `maybe_densify_dataarray` copies instead of mutating the parent
+  dataset
+  ([#383](https://github.com/brightbandtech/ExtremeWeatherBench/pull/383)).
+- Landfall, timestep-completeness, and temporal-resolution helpers no
+  longer materialize whole arrays to answer emptiness/shape questions
+  ([#383](https://github.com/brightbandtech/ExtremeWeatherBench/pull/383)).
+- `outputs` is exported from the package loader, and empty-fallback
+  time dims no longer poison Dataset dtypes
+  ([#407](https://github.com/brightbandtech/ExtremeWeatherBench/pull/407)).
+- Point observations (GHCN, LSR) use a `location` dimension instead of
+  a unique-lat × unique-lon mesh. Alignment samples the forecast at
+  those stations, which avoids out-of-memory on large freeze cases and
+  makes spatial-mean metrics average stations only
+  ([#410](https://github.com/brightbandtech/ExtremeWeatherBench/pull/410)).
+- `Region.mask` keeps only the longitudes inside antimeridian- and
+  prime-meridian-crossing regions instead of the full longitude axis
+  ([#416](https://github.com/brightbandtech/ExtremeWeatherBench/pull/416)).
+- `Region.mask` returns an empty subset instead of raising `ValueError`
+  when a wrapping region has no longitudes in the dataset
+  ([#424](https://github.com/brightbandtech/ExtremeWeatherBench/pull/424)).
+- Forecasts whose `valid_time` is a non-indexed coordinate (all CIRA
+  icechunk models: FourCastNetv2, GraphCast, Pangu, ...) are no longer
+  rejected as having no data for the case. With xarray 2026.7, slicing a
+  non-indexed coordinate returns nothing instead of raising, so these
+  forecasts were silently skipped and, for example, `applied_freeze.py`
+  produced zero rows
+  ([#391](https://github.com/brightbandtech/ExtremeWeatherBench/issues/391),
+  [#426](https://github.com/brightbandtech/ExtremeWeatherBench/pull/426)).
+  The data check now uses each forecast's `init_time` + `lead_time`, so
+  forecasts initialized before a case whose lead times reach into it are
+  also kept.
+- Kerchunk examples in the docs point at references that exist
+  (`gs://extremeweatherbench/<MODEL>.parq`)
+  ([#429](https://github.com/brightbandtech/ExtremeWeatherBench/pull/429)).
+- `CravenBrooksSignificantSevere` output carries its own attributes
+  instead of CAPE's
+  ([#363](https://github.com/brightbandtech/ExtremeWeatherBench/issues/363),
+  [#421](https://github.com/brightbandtech/ExtremeWeatherBench/pull/421)).
+- `cases.load_cases()` no longer logs a bogus deprecation warning
+  ([#422](https://github.com/brightbandtech/ExtremeWeatherBench/pull/422)).
+- The CAPE accuracy note points at `constants.py` for `EPSILON` and
+  `MOIST_ASCENT_SUBSTEPS`
+  ([#423](https://github.com/brightbandtech/ExtremeWeatherBench/pull/423)).
+
+## [1.0.2.post1] - 2026-04-30
+
+Documentation-only post-release so PyPI includes the docs refresh.
+
+### Changed
+
+- Rebuilt case-study docs, filled in cookbook recipes, and switched the
+  docs toolchain to zensical
+  ([#370](https://github.com/brightbandtech/ExtremeWeatherBench/pull/370),
+  [#369](https://github.com/brightbandtech/ExtremeWeatherBench/pull/369)).
+
+## [1.0.2] - 2026-04-30
+
+### Added
+
+- Rank-oriented copula skill score (ROCSS)
+  ([#300](https://github.com/brightbandtech/ExtremeWeatherBench/pull/300)).
+- Temperature event finder and climatology scripts, including updated
+  2 m temperature quantile climatology
+  ([#345](https://github.com/brightbandtech/ExtremeWeatherBench/pull/345),
+  [#349](https://github.com/brightbandtech/ExtremeWeatherBench/pull/349),
+  [#354](https://github.com/brightbandtech/ExtremeWeatherBench/pull/354)).
+- Marginal severe and temperature event cases
+  ([#351](https://github.com/brightbandtech/ExtremeWeatherBench/pull/351)).
+- `overlap_target_threshold` on `EarlySignal`
+  ([#350](https://github.com/brightbandtech/ExtremeWeatherBench/pull/350)).
+- Heatwave preprocess that removes ocean gridpoints
+  ([#348](https://github.com/brightbandtech/ExtremeWeatherBench/pull/348)).
+- Icechunk as a core dependency, with example scripts and the CIRA
+  store updated accordingly
+  ([#335](https://github.com/brightbandtech/ExtremeWeatherBench/pull/335),
+  [#333](https://github.com/brightbandtech/ExtremeWeatherBench/pull/333)).
+
+### Changed
+
+- Dask and distributed moved to core dependencies
+  ([#336](https://github.com/brightbandtech/ExtremeWeatherBench/pull/336)).
+- Atmospheric river detection: pressure ceiling, cleaner derived
+  variable, latitude filter above 15°, and forecast parallelization
+  ([#344](https://github.com/brightbandtech/ExtremeWeatherBench/pull/344),
+  [#365](https://github.com/brightbandtech/ExtremeWeatherBench/pull/365),
+  [#334](https://github.com/brightbandtech/ExtremeWeatherBench/pull/334)).
+- Tropical cyclone tracking, landfall handling, and case bounds
+  (including removal of non-landfalling TCs)
+  ([#339](https://github.com/brightbandtech/ExtremeWeatherBench/pull/339),
+  [#338](https://github.com/brightbandtech/ExtremeWeatherBench/pull/338),
+  [#342](https://github.com/brightbandtech/ExtremeWeatherBench/pull/342),
+  [#355](https://github.com/brightbandtech/ExtremeWeatherBench/pull/355),
+  [#361](https://github.com/brightbandtech/ExtremeWeatherBench/pull/361),
+  [#362](https://github.com/brightbandtech/ExtremeWeatherBench/pull/362)).
+- Temperature event bounds, duration logic, and GHCNh filtering
+  ([#353](https://github.com/brightbandtech/ExtremeWeatherBench/pull/353),
+  [#357](https://github.com/brightbandtech/ExtremeWeatherBench/pull/357),
+  [#359](https://github.com/brightbandtech/ExtremeWeatherBench/pull/359),
+  [#346](https://github.com/brightbandtech/ExtremeWeatherBench/pull/346)).
+
+### Fixed
+
+- Mixed-layer CAPE/CIN: three CIN computation bugs
+  ([#366](https://github.com/brightbandtech/ExtremeWeatherBench/pull/366)).
+- `EarlySignal` no longer fails on dask-backed arrays
+  ([#347](https://github.com/brightbandtech/ExtremeWeatherBench/pull/347),
+  [#340](https://github.com/brightbandtech/ExtremeWeatherBench/pull/340)).
+- Numba thread safety when used with dask
+  ([#337](https://github.com/brightbandtech/ExtremeWeatherBench/pull/337)).
+- Level chunking for `nantrapezoid_pressure_levels`
+  ([#343](https://github.com/brightbandtech/ExtremeWeatherBench/pull/343)).
+- Flaky pressure test from an unseeded fixture
+  ([#367](https://github.com/brightbandtech/ExtremeWeatherBench/pull/367)).
+
+## [1.0.1] - 2026-03-20
+
+### Changed
+
+- Installation instructions in the README
+  ([#327](https://github.com/brightbandtech/ExtremeWeatherBench/pull/327)).
+
+## [1.0.0] - 2026-01-26
+
+First stable release, published to PyPI.
+
+### Added
+
+- Public import style `import extremeweatherbench as ewb`
+  ([#321](https://github.com/brightbandtech/ExtremeWeatherBench/pull/321),
+  [#325](https://github.com/brightbandtech/ExtremeWeatherBench/pull/325)).
+- Golden tests for guarding significant version changes
+  ([#323](https://github.com/brightbandtech/ExtremeWeatherBench/pull/323)).
+
+### Changed
+
+- PyPI packaging and install documentation
+  ([#315](https://github.com/brightbandtech/ExtremeWeatherBench/pull/315)).
+
+## [0.3.0] - 2026-01-26
+
+Automated git comparison with 0.2.0 is unreliable after a
+`git-filter-repo` cleanup. Notable changes from
+[#322](https://github.com/brightbandtech/ExtremeWeatherBench/pull/322):
+
+### Added
+
+- Forecast wrapper for custom xarray datasets.
+- CIRA icechunk store.
+
+### Changed
+
+- Case YAML is a list of dicts (the `cases` key is no longer required).
+- Geopotential calculations now convert to geopotential height
+  correctly.
+
+### Removed
+
+- `IndividualCaseCollection`.
+
+### Fixed
+
+- `DurationMeanError` and IBTrACS memory issues.
+
+## [0.2.0] - 2025-12-02
+
+### Changed
+
+- Dependency and lockfile updates ahead of the 1.0 packaging work.
+
+## [0.1.0] - 2025-01-14
+
+Initial tagged preview.
+
+[unreleased]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.0.2.post1...v1.1.0
+[1.0.2.post1]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.0.2...v1.0.2.post1
+[1.0.2]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v0.3.0...v1.0.0
+[0.3.0]: https://github.com/brightbandtech/ExtremeWeatherBench/releases/tag/v0.3.0
+[0.2.0]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/brightbandtech/ExtremeWeatherBench/releases/tag/v0.1.0

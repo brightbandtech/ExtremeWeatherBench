@@ -19,46 +19,32 @@ import numpy as np
 import numpy.typing as npt
 from numba import njit, prange
 
-# ============================================================================
-# Physical Constants
-# ============================================================================
-
-# Thermodynamic constants
-KAPPA = 2.0 / 7.0  # Poisson constant R/Cp for dry air (dimensionless)
-GRAVITY = 9.80665  # Gravitational acceleration (m/s^2)
-Rd = 287.058  # Gas constant for dry air (J/kg/K)
-Cp = 1005.7  # Specific heat at constant pressure for dry air (J/kg/K)
-
-# Water vapor constants
-EPSILON = 0.622  # Ratio of molecular weights of water vapor to dry air (dimensionless)
-VIRTUAL_TEMP_COEFF = (
-    0.61  # Coefficient for virtual temperature calculation (dimensionless)
+from extremeweatherbench.constants import (
+    A_BOLTON,
+    B_BOLTON,
+    E0_BOLTON,
+    EPSILON,
+    GRAVITY,
+    KAPPA,
+    KELVIN_TO_CELSIUS,
+    LCL_DENOM,
+    LCL_OFFSET,
+    L_V_0,
+    L_V_TEMP_COEFF,
+    MAX_VAPOR_PRESSURE_FRACTION,
+    MIN_TV,
+    MOIST_ASCENT_STEPS,
+    MOIST_ASCENT_SUBSTEPS,
+    P_REF,
+    VIRTUAL_TEMP_COEFF,
+    Cp,
+    Rd,
 )
 
-# Latent heat constants
-L_V_0 = 2.501e6  # Latent heat of vaporization at 0°C (J/kg)
-L_V_TEMP_COEFF = 2370.0  # Temperature dependence of latent heat (J/kg/K)
-
-# Reference values
-P_REF = 1000.0  # Reference pressure for potential temperature (hPa)
-KELVIN_TO_CELSIUS = 273.15  # Conversion factor from Kelvin to Celsius (K)
-
-# Bolton (1980) formula constants for saturation vapor pressure
-# e_s = E0 * exp(A * T_c / (T_c + B))
-# where T_c is temperature in Celsius
-E0_BOLTON = 6.112  # Reference vapor pressure (hPa)
-A_BOLTON = 17.67  # Empirical constant (dimensionless)
-B_BOLTON = 243.5  # Empirical constant (°C)
-
-# Bolton (1980) LCL formula constants
-LCL_OFFSET = 56.0  # Empirical constant for LCL calculation (K)
-LCL_DENOM = 800.0  # Empirical constant for LCL calculation (K)
-
-# Numerical integration parameters
-MOIST_ASCENT_STEPS = 50  # Number of steps for moist adiabat integration
-
-# Data processing parameters
-RADIUS_DEG = 2.0  # Default radius for sample data extraction (degrees)
+# Re-export package constants as this module's globals. Numba nopython
+# kernels bind those names at compile time; they cannot follow
+# ``constants.EPSILON`` attribute lookups. constants.py is a leaf so
+# this import cannot cycle.
 
 
 # ============================================================================
@@ -97,11 +83,9 @@ def mixing_ratio_inline(pressure: float, vapor_pressure: float) -> float:
     Returns:
         The mixing ratio in kg/kg.
     """
-    # Prevent supersaturation: cap vapor pressure at 0.9999 * pressure
-    # This handles both real supersaturation in data and numerical precision issues
-    max_vapor_pressure = 0.9999 * pressure
-    if vapor_pressure > max_vapor_pressure:
-        vapor_pressure = max_vapor_pressure
+    # Cap vapor pressure so the mixing-ratio denominator stays positive.
+    max_vapor_pressure = MAX_VAPOR_PRESSURE_FRACTION * pressure
+    vapor_pressure = min(vapor_pressure, max_vapor_pressure)
     return EPSILON * vapor_pressure / (pressure - vapor_pressure)
 
 
@@ -116,7 +100,7 @@ def virtual_temperature_inline(temperature: float, w: float) -> float:
     Returns:
         The virtual temperature in Kelvin.
     """
-    return temperature * (1.0 + 0.61 * w)
+    return temperature * (1.0 + VIRTUAL_TEMP_COEFF * w)
 
 
 @njit(inline="always", fastmath=True)
@@ -164,10 +148,6 @@ def compute_buoyancy_energy_inline(
     Returns:
         The buoyancy energy in J/kg.
     """
-    # Minimum reasonable virtual temperature (in K) to avoid division issues
-    # ~100 K is well below any realistic atmospheric temperature
-    MIN_TV = 100.0
-
     if env_tv_avg < MIN_TV or not np.isfinite(env_tv_avg):
         return 0.0
 
@@ -193,7 +173,9 @@ def lcl(pressure: float, temperature: float, dewpoint: float) -> tuple[float, fl
     """
     # LCL temperature (Bolton 1980, eq. 15)
     t_lcl = (
-        1.0 / (1.0 / (dewpoint - 56.0) + np.log(temperature / dewpoint) / 800.0) + 56.0
+        1.0
+        / (1.0 / (dewpoint - LCL_OFFSET) + np.log(temperature / dewpoint) / LCL_DENOM)
+        + LCL_OFFSET
     )
 
     # LCL pressure (Bolton 1980, eq. 22)
@@ -247,31 +229,21 @@ def insert_lcl_level(
         else:
             break
 
-    # Check if LCL is already at an existing level (within 0.1 hPa)
-    if insert_idx < n and abs(pressure[insert_idx] - p_lcl) < 0.1:
-        # Copy arrays to maintain consistent types
-        new_p = np.empty(n, dtype=np.float64)
-        new_t = np.empty(n, dtype=np.float64)
-        new_td = np.empty(n, dtype=np.float64)
-        new_z = np.empty(n, dtype=np.float64)
-        for i in range(n):
-            new_p[i] = pressure[i]
-            new_t[i] = temperature[i]
-            new_td[i] = dewpoint[i]
-            new_z[i] = geopotential[i]
-        return new_p, new_t, new_td, new_z, insert_idx
-
-    if insert_idx > 0 and abs(pressure[insert_idx - 1] - p_lcl) < 0.1:
-        new_p = np.empty(n, dtype=np.float64)
-        new_t = np.empty(n, dtype=np.float64)
-        new_td = np.empty(n, dtype=np.float64)
-        new_z = np.empty(n, dtype=np.float64)
-        for i in range(n):
-            new_p[i] = pressure[i]
-            new_t[i] = temperature[i]
-            new_td[i] = dewpoint[i]
-            new_z[i] = geopotential[i]
-        return new_p, new_t, new_td, new_z, insert_idx - 1
+    # Check if LCL is already at an existing level (within 0.1 hPa). Either way
+    # the arrays are rebuilt as float64, so every return path has the same type
+    # even when the caller passes float32; the level above is checked first, as
+    # it was before.
+    lcl_on_level_above = insert_idx < n and abs(pressure[insert_idx] - p_lcl) < 0.1
+    lcl_on_level_below = insert_idx > 0 and abs(pressure[insert_idx - 1] - p_lcl) < 0.1
+    if lcl_on_level_above or lcl_on_level_below:
+        matched_idx = insert_idx if lcl_on_level_above else insert_idx - 1
+        return (
+            pressure.astype(np.float64),
+            temperature.astype(np.float64),
+            dewpoint.astype(np.float64),
+            geopotential.astype(np.float64),
+            matched_idx,
+        )
 
     # Pre-allocate new arrays
     new_pressure = np.empty(n + 1, dtype=np.float64)
@@ -280,11 +252,10 @@ def insert_lcl_level(
     new_geopotential = np.empty(n + 1, dtype=np.float64)
 
     # Copy data before LCL
-    for i in range(insert_idx):
-        new_pressure[i] = pressure[i]
-        new_temperature[i] = temperature[i]
-        new_dewpoint[i] = dewpoint[i]
-        new_geopotential[i] = geopotential[i]
+    new_pressure[:insert_idx] = pressure[:insert_idx]
+    new_temperature[:insert_idx] = temperature[:insert_idx]
+    new_dewpoint[:insert_idx] = dewpoint[:insert_idx]
+    new_geopotential[:insert_idx] = geopotential[:insert_idx]
 
     # Insert LCL level — interpolate all environmental fields in log-pressure.
     # The temperature at the LCL level must be the *environmental* temperature
@@ -319,11 +290,10 @@ def insert_lcl_level(
         new_geopotential[insert_idx] = geopotential[-1]
 
     # Copy data after LCL
-    for i in range(insert_idx, n):
-        new_pressure[i + 1] = pressure[i]
-        new_temperature[i + 1] = temperature[i]
-        new_dewpoint[i + 1] = dewpoint[i]
-        new_geopotential[i + 1] = geopotential[i]
+    new_pressure[insert_idx + 1 :] = pressure[insert_idx:]
+    new_temperature[insert_idx + 1 :] = temperature[insert_idx:]
+    new_dewpoint[insert_idx + 1 :] = dewpoint[insert_idx:]
+    new_geopotential[insert_idx + 1 :] = geopotential[insert_idx:]
 
     return new_pressure, new_temperature, new_dewpoint, new_geopotential, insert_idx
 
@@ -353,23 +323,62 @@ def moist_ascent(p_target: float, p_lcl: float, t_lcl: float) -> float:
     log_p_current = log_p_start
 
     for _ in range(MOIST_ASCENT_STEPS):
-        p_current = np.exp(log_p_current)
+        t_current += moist_lapse_dt_dlogp(t_current, np.exp(log_p_current)) * d_log_p
+        log_p_current += d_log_p
 
-        # Inlined saturation vapor pressure and mixing ratio
-        e_s = saturation_vapor_pressure_inline(t_current)
-        w_s = mixing_ratio_inline(p_current, e_s)
+    return t_current
 
-        # Latent heat and moist adiabatic factor
-        L_v = L_V_0 - L_V_TEMP_COEFF * (t_current - KELVIN_TO_CELSIUS)
 
-        numerator = 1.0 + L_v * w_s / (Rd * t_current)
-        denominator = 1.0 + L_v * L_v * w_s * EPSILON / (
-            Cp * Rd * t_current * t_current
-        )
+@njit(fastmath=False)
+def moist_lapse_dt_dlogp(temperature: float, pressure: float) -> float:
+    """Rate of change of parcel temperature with log pressure, saturated.
 
-        dt_dlogp = KAPPA * t_current * numerator / denominator
+    Args:
+        temperature: The parcel temperature in Kelvin.
+        pressure: The parcel pressure in hPa.
 
-        t_current += dt_dlogp * d_log_p
+    Returns:
+        dT/d(ln p) in Kelvin.
+    """
+    e_s = saturation_vapor_pressure_inline(temperature)
+    w_s = mixing_ratio_inline(pressure, e_s)
+
+    L_v = L_V_0 - L_V_TEMP_COEFF * (temperature - KELVIN_TO_CELSIUS)
+
+    numerator = 1.0 + L_v * w_s / (Rd * temperature)
+    denominator = 1.0 + L_v * L_v * w_s * EPSILON / (
+        Cp * Rd * temperature * temperature
+    )
+
+    return KAPPA * temperature * numerator / denominator
+
+
+@njit(fastmath=False)
+def moist_ascent_gap(p_target: float, p_start: float, t_start: float) -> float:
+    """Continue a moist adiabat from one level to the next one above it.
+
+    Unlike moist_ascent this does not begin at the LCL, so a caller walking up
+    a profile can carry the parcel temperature forward and integrate each gap
+    once instead of re-integrating the whole column at every level.
+
+    Args:
+        p_target: The pressure to ascend to, in hPa.
+        p_start: The pressure already reached, in hPa.
+        t_start: The parcel temperature at p_start, in Kelvin.
+
+    Returns:
+        The parcel temperature at p_target in Kelvin.
+    """
+    if p_target >= p_start:
+        return t_start
+
+    d_log_p = (np.log(p_target) - np.log(p_start)) / MOIST_ASCENT_SUBSTEPS
+
+    t_current = t_start
+    log_p_current = np.log(p_start)
+
+    for _ in range(MOIST_ASCENT_SUBSTEPS):
+        t_current += moist_lapse_dt_dlogp(t_current, np.exp(log_p_current)) * d_log_p
         log_p_current += d_log_p
 
     return t_current
@@ -454,7 +463,7 @@ def compute_ml_cape_cin_from_profile(
     p_lcl, t_lcl = lcl(p_surface, ml_temp, ml_dewpoint)
 
     # Step 2b: Insert LCL into profile for better resolution
-    pressure, temperature, dewpoint, geopotential, lcl_idx = insert_lcl_level(
+    pressure, temperature, dewpoint, geopotential, _lcl_idx = insert_lcl_level(
         pressure, temperature, dewpoint, geopotential, p_lcl, t_lcl
     )
 
@@ -465,6 +474,13 @@ def compute_ml_cape_cin_from_profile(
     parcel_tv = np.empty(n_levels, dtype=np.float64)
     env_tv = np.empty(n_levels, dtype=np.float64)
 
+    # Pressure descends with height, so every level above the LCL is reached
+    # by continuing the adiabat from the level below it. Carrying the parcel
+    # temperature up the column integrates each gap once, where restarting
+    # from the LCL for every level re-covers the gaps below it every time.
+    t_moist = t_lcl
+    p_moist = p_lcl
+
     for i in range(n_levels):
         p = pressure[i]
 
@@ -473,7 +489,9 @@ def compute_ml_cape_cin_from_profile(
             t_parcel = ml_temp * (p / p_surface) ** KAPPA
             w_parcel = w_ml
         else:
-            t_parcel = moist_ascent(p, p_lcl, t_lcl)
+            t_moist = moist_ascent_gap(p, p_moist, t_moist)
+            p_moist = p
+            t_parcel = t_moist
             e_parcel = saturation_vapor_pressure_inline(t_parcel)
             w_parcel = mixing_ratio_inline(p, e_parcel)
 

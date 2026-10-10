@@ -9,11 +9,11 @@ logger.setLevel(logging.INFO)
 
 # Load case data from the default events.yaml
 # Users can also define their own cases_dict structure
-case_yaml = ewb.load_cases()
+case_yaml = ewb.cases.load_cases()
 
 
 # ERA5 target
-era5_target = ewb.targets.ERA5(
+era5_target = ewb.inputs.ERA5(
     variables=[
         ewb.derived.AtmosphericRiverVariables(
             output_variables=["atmospheric_river_land_intersection"]
@@ -22,7 +22,7 @@ era5_target = ewb.targets.ERA5(
 )
 
 # Forecast (HRES)
-hres_forecast = ewb.forecasts.ZarrForecast(
+hres_forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
     variables=[
@@ -30,7 +30,7 @@ hres_forecast = ewb.forecasts.ZarrForecast(
             output_variables=["atmospheric_river_land_intersection"]
         )
     ],
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
 )
 
 grap_forecast = ewb.inputs.get_cira_icechunk(
@@ -56,7 +56,7 @@ pang_forecast = ewb.inputs.get_cira_icechunk(
 )
 # Create a list of evaluation objects for atmospheric river
 ar_evaluation_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="atmospheric_river",
         metric_list=[
             ewb.metrics.CriticalSuccessIndex(),
@@ -66,7 +66,7 @@ ar_evaluation_objects = [
         target=era5_target,
         forecast=hres_forecast,
     ),
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="atmospheric_river",
         metric_list=[
             ewb.metrics.CriticalSuccessIndex(),
@@ -76,7 +76,7 @@ ar_evaluation_objects = [
         target=era5_target,
         forecast=grap_forecast,
     ),
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="atmospheric_river",
         metric_list=[
             ewb.metrics.CriticalSuccessIndex(),
@@ -91,7 +91,7 @@ ar_evaluation_objects = [
 if __name__ == "__main__":
     # Initialize ExtremeWeatherBench; will only run on cases with event_type
     # atmospheric_river
-    ar_ewb = ewb.evaluation(
+    ar_ewb = ewb.evaluate.ExtremeWeatherBench(
         case_metadata=case_yaml,
         evaluation_objects=ar_evaluation_objects,
     )

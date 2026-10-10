@@ -194,7 +194,7 @@ class TestThresholdMetrics:
         assert isinstance(csi_metric, metrics.ThresholdMetric)
         assert isinstance(csi_metric, metrics.BaseMetric)
         assert hasattr(csi_metric, "compute_metric")
-        assert hasattr(csi_metric, "__call__")
+        assert callable(csi_metric)
         assert csi_metric.forecast_threshold == 15000
         assert csi_metric.target_threshold == 0.3
 
@@ -727,10 +727,41 @@ class TestMaximumMeanAbsoluteError:
             result = metric._compute_metric(forecast, target)
             # If it succeeds, check it returns something
             assert result is not None
-        except Exception:
+        except (ValueError, TypeError, KeyError, AttributeError):
             # If computation fails due to data structure issues,
             # at least test instantiation works
             assert isinstance(metric, metrics.MaximumMeanAbsoluteError)
+
+    def test_reduce_spatial_dims_is_honored(self, monkeypatch):
+        """A non-default reduce_spatial_dims must reach the spatial mean
+        reduction rather than being silently overridden by a hardcoded pair."""
+        times = pd.date_range("2020-01-01", periods=4, freq="h")
+        forecast = (
+            xr.DataArray(
+                np.arange(4, dtype=float),
+                dims=["valid_time"],
+                coords={"valid_time": times},
+            )
+            .expand_dims(["latitude", "longitude"])
+            .expand_dims(lead_time=[0])
+        )
+        target = xr.DataArray(
+            np.arange(4, dtype=float), dims=["valid_time"], coords={"valid_time": times}
+        ).expand_dims(["latitude", "longitude"])
+
+        seen_reduce_dims = []
+        original_reduce_dataarray = metrics.utils.reduce_dataarray
+
+        def spy(da, method, reduce_dims, **kwargs):
+            seen_reduce_dims.append(list(reduce_dims))
+            return original_reduce_dataarray(da, method, reduce_dims, **kwargs)
+
+        monkeypatch.setattr(metrics.utils, "reduce_dataarray", spy)
+
+        metric = metrics.MaximumMeanAbsoluteError(reduce_spatial_dims=["longitude"])
+        metric._compute_metric(forecast, target)
+
+        assert seen_reduce_dims == [["longitude"], ["longitude"]], seen_reduce_dims
 
 
 class TestMinimumMeanAbsoluteError:
@@ -762,7 +793,7 @@ class TestMinimumMeanAbsoluteError:
             result = metric._compute_metric(forecast, target)
             # If it succeeds, check it returns something
             assert result is not None
-        except Exception:
+        except (ValueError, TypeError, KeyError, AttributeError):
             # If computation fails due to data structure issues,
             # at least test instantiation works
             assert isinstance(metric, metrics.MinimumMeanAbsoluteError)
@@ -816,7 +847,7 @@ class TestMaximumLowestMeanAbsoluteError:
             result = metric._compute_metric(forecast, target)
             # If it succeeds, check structure
             assert isinstance(result, (xr.Dataset, xr.DataArray))
-        except Exception:
+        except (ValueError, TypeError, KeyError, AttributeError):
             # If computation fails due to data structure issues, at least test
             # instantiation works
             assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
@@ -870,7 +901,7 @@ class TestMaximumLowestMeanAbsoluteError:
             )
             # Verify result is returned
             assert result is not None
-        except Exception:
+        except (ValueError, TypeError, KeyError, AttributeError):
             # If it still fails due to complex data requirements,
             # just verify the metric can be instantiated
             assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
@@ -927,10 +958,208 @@ class TestMaximumLowestMeanAbsoluteError:
                 extra_param=123,
             )
             assert result is not None
-        except Exception:
+        except (ValueError, TypeError, KeyError, AttributeError):
             # If it fails due to data structure, at least we tested
             # the kwargs filtering path
             assert isinstance(metric, metrics.MaximumLowestMeanAbsoluteError)
+
+
+def _sparse_init_cadence_case(
+    peak_hour_utc: int = 0,
+    init_freq: str = "72h",
+    damping_scale_hours: float = 400.0,
+):
+    """Build a forecast/target pair with a WP-MIP style init cadence.
+
+    Initializations are 00Z only and spaced ``init_freq`` apart, with 6-hourly
+    lead times out to 240 h. The signal is a pure diurnal cycle whose amplitude
+    decays with lead time, so the forecast's peak error grows monotonically
+    with lead time and nothing else does. Because the initializations are
+    sparse, any single lead time is populated only once per ``init_freq``,
+    which is what makes a reduction over valid_time at fixed lead time
+    degenerate to an instantaneous snapshot.
+
+    Args:
+        peak_hour_utc: UTC hour at which the diurnal cycle peaks.
+        init_freq: Spacing between initializations.
+        damping_scale_hours: e-folding scale of the amplitude decay.
+
+    Returns:
+        A (forecast, target) DataArray pair.
+    """
+    inits = pd.date_range("2020-06-01", "2020-06-13", freq=init_freq)
+    lead_times = pd.timedelta_range("0h", "240h", freq="6h")
+    valid_times = pd.date_range("2020-06-08", "2020-06-14", freq="6h")
+    latitudes = np.array([30.0, 31.0])
+    longitudes = np.array([260.0, 261.0])
+
+    def temperature(valid_time, lead_hours):
+        amplitude = 5.0 * np.exp(-lead_hours / damping_scale_hours)
+        phase = 2 * np.pi * (valid_time.hour - peak_hour_utc) / 24
+        return 300.0 + amplitude * np.cos(phase)
+
+    init_set = set(inits)
+    forecast_values = np.full(
+        (len(lead_times), len(valid_times), len(latitudes), len(longitudes)), np.nan
+    )
+    for i, lead_time in enumerate(lead_times):
+        for j, valid_time in enumerate(valid_times):
+            if (valid_time - lead_time) in init_set:
+                forecast_values[i, j] = temperature(
+                    valid_time, lead_time / pd.Timedelta("1h")
+                )
+
+    forecast = xr.DataArray(
+        forecast_values,
+        dims=["lead_time", "valid_time", "latitude", "longitude"],
+        coords={
+            "lead_time": lead_times,
+            "valid_time": valid_times,
+            "latitude": latitudes,
+            "longitude": longitudes,
+        },
+    )
+    target = xr.DataArray(
+        np.stack(
+            [
+                np.full((len(latitudes), len(longitudes)), temperature(v, 0.0))
+                for v in valid_times
+            ]
+        ),
+        dims=["valid_time", "latitude", "longitude"],
+        coords={
+            "valid_time": valid_times,
+            "latitude": latitudes,
+            "longitude": longitudes,
+        },
+    )
+    return forecast, target
+
+
+class TestPeakMetricsWithSparseInitCadence:
+    """Regression tests for peak metrics under a sparse initialization cadence.
+
+    These lock in the per-initialization reduction. Reducing over valid_time at
+    a fixed lead time instead returns a single instantaneous value whose time of
+    day is ``lead_time mod 24 h``, which makes the metric measure the diurnal
+    cycle rather than forecast error.
+    """
+
+    @pytest.mark.parametrize(
+        "metric_class",
+        [metrics.MaximumMeanAbsoluteError, metrics.MaximumLowestMeanAbsoluteError],
+    )
+    def test_error_grows_monotonically_with_lead_time(self, metric_class):
+        """A forecast that only damps with lead time must score worse with lead."""
+        forecast, target = _sparse_init_cadence_case()
+
+        result = metric_class()._compute_metric(forecast, target)
+
+        values = result.sortby("lead_time").values
+        assert len(values) >= 3
+        assert np.all(np.isfinite(values))
+        assert np.all(np.diff(values) > 0), (
+            f"{metric_class.__name__} is not monotonic in lead time: {values}"
+        )
+
+    @pytest.mark.parametrize(
+        "metric_class",
+        [metrics.MaximumMeanAbsoluteError, metrics.MaximumLowestMeanAbsoluteError],
+    )
+    def test_one_value_per_initialization_at_the_derived_lead_time(self, metric_class):
+        """Each init contributes once, at the lead time of the target's extreme."""
+        forecast, target = _sparse_init_cadence_case()
+
+        result = metric_class()._compute_metric(forecast, target)
+
+        assert "init_time" in result.coords
+        init_times = pd.to_datetime(result.init_time.values)
+        assert len(set(init_times)) == len(init_times)
+        # Every init is 00Z and spaced 72 h apart, so the derived lead times
+        # inherit that spacing exactly.
+        lead_hours = result.sortby("lead_time").lead_time / np.timedelta64(1, "h")
+        assert np.all(np.diff(lead_hours.values) == 72)
+        assert np.all(lead_hours.values >= 0)
+
+    def test_maximum_mae_uses_the_forecast_peak_not_a_snapshot(self):
+        """The compared value is each run's window maximum, not one lead's value."""
+        forecast, target = _sparse_init_cadence_case()
+        metric = metrics.MaximumMeanAbsoluteError()
+
+        result = metric._compute_metric(forecast, target)
+
+        target_peak = target.mean(["latitude", "longitude"]).max().item()
+        forecast_by_init = forecast.mean(["latitude", "longitude"])
+        for lead_time, init_time, error in zip(
+            result.lead_time.values, result.init_time.values, result.values
+        ):
+            run = forecast_by_init.where(
+                forecast_by_init.valid_time - forecast_by_init.lead_time == init_time,
+                drop=True,
+            )
+            peak_time = init_time + lead_time
+            window = run.where(
+                (run.valid_time >= peak_time - np.timedelta64(12, "h"))
+                & (run.valid_time <= peak_time + np.timedelta64(12, "h"))
+            )
+            expected = np.nanmax(window.values)
+            assert error == pytest.approx(abs(expected - target_peak), abs=1e-9)
+
+    @pytest.mark.parametrize("peak_hour_utc", [0, 6, 12, 18])
+    def test_maximum_lowest_mae_does_not_depend_on_time_of_day(self, peak_hour_utc):
+        """The metric must not silently drop cases whose peak falls at 00Z or 18Z.
+
+        The previous grouping by UTC calendar day only yielded a complete day
+        for certain peak hours, which filtered cases by longitude.
+        """
+        forecast, target = _sparse_init_cadence_case(peak_hour_utc=peak_hour_utc)
+
+        result = metrics.MaximumLowestMeanAbsoluteError()._compute_metric(
+            forecast, target
+        )
+
+        assert result.sizes["lead_time"] >= 3
+        assert np.all(np.isfinite(result.values))
+
+    def test_denser_init_cadence_yields_the_same_errors(self):
+        """Scores must depend on the forecast, not on how often it is launched."""
+        sparse_forecast, target = _sparse_init_cadence_case(init_freq="72h")
+        dense_forecast, _ = _sparse_init_cadence_case(init_freq="24h")
+        metric = metrics.MaximumMeanAbsoluteError()
+
+        sparse_result = metric._compute_metric(sparse_forecast, target)
+        dense_result = metric._compute_metric(dense_forecast, target)
+
+        shared = np.intersect1d(sparse_result.lead_time, dense_result.lead_time)
+        assert len(shared) >= 3
+        np.testing.assert_allclose(
+            sparse_result.sel(lead_time=shared).values,
+            dense_result.sel(lead_time=shared).values,
+        )
+
+    def test_no_qualifying_initialization_yields_an_empty_result(self):
+        """A case no run covers scores nothing rather than raising."""
+        forecast, target = _sparse_init_cadence_case()
+        # Only lead 0 is populated, so no run spans a full day of the window.
+        forecast = forecast.where(forecast.lead_time == np.timedelta64(0, "h"))
+
+        result = metrics.MaximumLowestMeanAbsoluteError()._compute_metric(
+            forecast, target
+        )
+
+        assert result.sizes["lead_time"] == 0
+        assert "init_time" in result.coords
+        assert len(result.to_dataframe(name="value").reset_index()) == 0
+
+    def test_initializations_after_the_target_extreme_are_dropped(self):
+        """A run launched after the peak did not forecast it."""
+        forecast, target = _sparse_init_cadence_case()
+
+        result = metrics.MaximumMeanAbsoluteError()._compute_metric(forecast, target)
+
+        peak_times = result.init_time.values + result.lead_time.values
+        assert len(set(peak_times)) == 1
+        assert np.all(result.init_time.values <= peak_times[0])
 
 
 class TestDurationMeanError:
@@ -1044,7 +1273,7 @@ class TestDurationMeanError:
             result = metric._compute_metric(forecast, target)
             # If it succeeds, check it returns something
             assert result is not None
-        except Exception:
+        except (ValueError, TypeError, KeyError, AttributeError):
             # If computation fails due to data structure issues,
             # at least test instantiation works
             assert isinstance(metric, metrics.OnsetMeanError)
@@ -2484,8 +2713,8 @@ class TestLandfallMetrics:
                 assert coord_name in result.coords, (
                     f"Missing metadata coord: {coord_name}"
                 )
-            assert abs(float(result.forecast_landfall_latitude) - 16.1) < 0.01
-            assert abs(float(result.target_landfall_latitude) - 16.0) < 0.01
+            assert abs(result.forecast_landfall_latitude.item() - 16.1) < 0.01
+            assert abs(result.target_landfall_latitude.item() - 16.0) < 0.01
 
     def test_first_approach_skips_init_with_late_track_start(self):
         """Verify approach='first' filters out init_times whose
@@ -2757,7 +2986,7 @@ class TestLandfallMetrics:
                 f"Displacement {result.values[0]:.1f} km should be small (FL vs FL)"
             )
             # Verify metadata uses the Florida target
-            assert abs(float(result.target_landfall_latitude) - 29.5) < 0.01
+            assert abs(result.target_landfall_latitude.item() - 29.5) < 0.01
 
     def test_multi_landfall_displacement_next_approach(self):
         """Verify approach='next' also uses first forecast landfall
@@ -3686,7 +3915,7 @@ class TestLandfallMetrics:
             },
         )
 
-        fc_out, tgt_out = calc.filter_by_landfall_time_window(
+        fc_out, _tgt_out = calc.filter_by_landfall_time_window(
             fc, tgt, window_hours=12.0
         )
         assert len(fc_out) == 1
@@ -4278,7 +4507,7 @@ class TestMaybeComputeLandfalls:
 
             mock_find.side_effect = mock_find_func
 
-            result_forecast, result_target = metric.maybe_compute_landfalls(
+            _result_forecast, _result_target = metric.maybe_compute_landfalls(
                 forecast, target
             )
 
@@ -4330,7 +4559,7 @@ class TestMaybeComputeLandfalls:
             mock_find.return_value = _empty
 
             # Only provide forecast_landfall, not target_landfall
-            result_forecast, result_target = metric.maybe_compute_landfalls(
+            _result_forecast, _result_target = metric.maybe_compute_landfalls(
                 forecast, target, forecast_landfall=forecast_landfall
             )
 
@@ -4355,7 +4584,7 @@ class TestMaybeComputeLandfalls:
             mock_find.return_value = _empty
 
             # Only provide target_landfall, not forecast_landfall
-            result_forecast, result_target = metric.maybe_compute_landfalls(
+            _result_forecast, _result_target = metric.maybe_compute_landfalls(
                 forecast, target, target_landfall=target_landfall
             )
 
@@ -4802,9 +5031,11 @@ class TestEarlySignal:
 
     @staticmethod
     def _resolve(result):
-        """Compute dask results; pass through numpy/sparse."""
+        """Compute dask results and densify sparse ones; pass through numpy."""
         if hasattr(result, "compute"):
-            return result.compute()
+            result = result.compute()
+        if isinstance(result.data, sparse.COO):
+            result = result.copy(data=result.data.todense())
         return result
 
     @pytest.mark.parametrize("backend", ["numpy", "dask", "sparse"])

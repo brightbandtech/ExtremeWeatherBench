@@ -8,7 +8,7 @@ import pandas as pd
 from extremeweatherbench import utils
 
 if TYPE_CHECKING:
-    import extremeweatherbench.regions as regions
+    from extremeweatherbench import regions
 
 
 def safely_pull_variables(
@@ -43,7 +43,7 @@ def safely_pull_variables(
         >>> list(result.columns)
         ['temp']
     """
-    import extremeweatherbench.defaults as defaults
+    from extremeweatherbench import defaults
 
     # Get column names from DataFrame
     available_columns = list(data.columns)

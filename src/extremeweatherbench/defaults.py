@@ -1,10 +1,11 @@
 import logging
 import operator
+import warnings
 
-import numpy as np
 import xarray as xr
 
 from extremeweatherbench import calc, derived, inputs, utils
+from extremeweatherbench.constants import GRAVITY_ROUNDED
 
 # Suppress noisy log messages
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
@@ -71,9 +72,38 @@ def preprocess_heatwave_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     return ds
 
 
+def _add_tc_geopotential_thickness(ds: xr.Dataset) -> xr.Dataset:
+    """Add the 300-500 hPa geopotential thickness (m) used for TC tracking.
+
+    Reads the EWB variable ``geopotential`` (m^2/s^2) or ``geopotential_height``
+    (m); their units are fixed, so no scale factor is guessed. Map a source
+    field (e.g. CIRA's ``z``) to one of them with the input's
+    ``variable_mapping``, which the pipeline applies before preprocess.
+
+    Raises:
+        KeyError: If neither variable is present.
+    """
+    for name, units_per_meter in (
+        ("geopotential", GRAVITY_ROUNDED),
+        ("geopotential_height", 1.0),
+    ):
+        if name in ds:
+            thickness = calc.geopotential_thickness(
+                ds[name], top_level=300, bottom_level=500
+            )
+            ds["geopotential_thickness"] = thickness / units_per_meter
+            return ds
+    raise KeyError(
+        "TC preprocess needs 'geopotential' (m^2/s^2) or 'geopotential_height' "
+        "(m). Map your source variable to one of them with variable_mapping."
+    )
+
+
 def preprocess_cira_icechunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """A preprocess function for CIRA icechunk data that includes geopotential thickness
-    calculation required for tropical cyclone tracks.
+    """Add the geopotential thickness needed for tropical cyclone tracks.
+
+    Works for CIRA icechunk and kerchunk data (``get_cira_icechunk`` or
+    ``KerchunkForecast``), which have the same layout once opened.
 
     Args:
         ds: The forecast dataset.
@@ -81,34 +111,33 @@ def preprocess_cira_icechunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     Returns:
         The forecast dataset with geopotential thickness.
     """
-    # Calculate the geopotential thickness required for tropical cyclone tracks
-    ds["geopotential_thickness"] = (
-        calc.geopotential_thickness(ds["z"], top_level=300, bottom_level=500) / 9.81
+    return _add_tc_geopotential_thickness(ds)
+
+
+def _maybe_add_specific_humidity(ds: xr.Dataset) -> xr.Dataset:
+    """Add specific humidity from temperature and RH if it is missing.
+
+    Accepts original CIRA names (t, r, q) or mapped EWB names.
+    """
+    if "specific_humidity" in ds.variables or "q" in ds.variables:
+        return ds
+    air_temperature = ds["air_temperature"] if "air_temperature" in ds else ds["t"]
+    relative_humidity = (
+        ds["relative_humidity"] if "relative_humidity" in ds else ds["r"]
+    )
+    ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
+        air_temperature=air_temperature,
+        relative_humidity=relative_humidity / 100,
+        levels=ds["level"],
     )
     return ds
 
 
 def preprocess_cira_icechunk_ar_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """Preprocess CIRA icechunk data for atmospheric rivers.
+    """Preprocess CIRA data for atmospheric rivers.
 
-    Args:
-        ds: The forecast dataset to rename.
-
-    Returns:
-        The renamed forecast dataset.
-    """
-    if "q" not in ds.variables:
-        # Calculate specific humidity from relative humidity and air temperature
-        ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
-            air_temperature=ds["t"],
-            relative_humidity=ds["r"] / 100,  # Convert relative humidity to percentage
-            levels=ds["level"],
-        )
-    return ds
-
-
-def preprocess_cira_icechunk_severe_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """Preprocess CIRA icechunk data for severe convection.
+    Works for CIRA icechunk and kerchunk data (``get_cira_icechunk`` or
+    ``KerchunkForecast``), which have the same layout once opened.
 
     Args:
         ds: The forecast dataset.
@@ -116,111 +145,97 @@ def preprocess_cira_icechunk_severe_forecast_dataset(ds: xr.Dataset) -> xr.Datas
     Returns:
         The forecast dataset with specific humidity if not already calculated.
     """
-    if "q" not in ds.variables:
-        # Calculate specific humidity from relative humidity and air temperature
-        ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
-            air_temperature=ds["t"],
-            relative_humidity=ds["r"] / 100,  # Convert relative humidity to percentage
-            levels=ds["level"],
-        )
-    return ds
+    return _maybe_add_specific_humidity(ds)
 
 
-def preprocess_cira_kerchunk_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """A preprocess function for CIRA kerchunk data that renames the time coordinate to
-    lead_time, creates a valid_time coordinate, and sets the lead time range and
-    resolution not present in the original dataset.
+def preprocess_cira_icechunk_severe_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """Preprocess CIRA data for severe convection.
+
+    Works for CIRA icechunk and kerchunk data (``get_cira_icechunk`` or
+    ``KerchunkForecast``), which have the same layout once opened.
 
     Args:
         ds: The forecast dataset.
 
     Returns:
-        The preprocessed forecast dataset.
+        The forecast dataset with specific humidity if not already calculated.
     """
-
-    ds = ds.rename({"time": "lead_time"})
-    # The evaluation configuration is used to set the lead time range and resolution.
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
-    return ds
+    return _maybe_add_specific_humidity(ds)
 
 
-def preprocess_cira_kerchunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """A preprocess function for CIRA kerchunk data that includes geopotential thickness
-    calculation required for tropical cyclone tracks.
+def _warn_kerchunk_preprocess_deprecated(name: str, advice: str) -> None:
+    """Warn that a CIRA kerchunk preprocess function is deprecated (1.1.0)."""
+    warnings.warn(
+        f"{name} is deprecated and will be removed in a future version; {advice}.",
+        FutureWarning,
+        stacklevel=3,
+    )
 
-    This function renames the time coordinate to lead_time,
-    creates a valid_time coordinate, and sets the lead time range and resolution not
-    present in the original dataset.
+
+def preprocess_cira_kerchunk_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """Deprecated: return CIRA kerchunk data unchanged.
+
+    ``KerchunkForecast`` sets ``lead_time`` when it opens CIRA references, so no
+    preprocess is needed.
 
     Args:
-        ds: The forecast dataset to rename.
+        ds: The forecast dataset.
 
     Returns:
-        The renamed forecast dataset.
+        The forecast dataset, unchanged.
     """
-    ds = ds.rename({"time": "lead_time"})
-    # The evaluation configuration is used to set the lead time range and resolution.
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
-
-    # Calculate the geopotential thickness required for tropical cyclone tracks
-    ds["geopotential_thickness"] = (
-        calc.geopotential_thickness(ds["z"], top_level=300, bottom_level=500) / 9.81
+    _warn_kerchunk_preprocess_deprecated(
+        "preprocess_cira_kerchunk_forecast_dataset", "no preprocess is needed"
     )
     return ds
 
 
-# Preprocess function for CIRA data using Brightband kerchunk parquets
+def preprocess_cira_kerchunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """Deprecated: use ``preprocess_cira_icechunk_tc_forecast_dataset``.
+
+    Args:
+        ds: The forecast dataset.
+
+    Returns:
+        The forecast dataset with geopotential thickness.
+    """
+    _warn_kerchunk_preprocess_deprecated(
+        "preprocess_cira_kerchunk_tc_forecast_dataset",
+        "use preprocess_cira_icechunk_tc_forecast_dataset",
+    )
+    return preprocess_cira_icechunk_tc_forecast_dataset(ds)
+
+
 def preprocess_cira_kerchunk_ar_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """Preprocess CIRA kerchunk data for atmospheric rivers.
+    """Deprecated: use ``preprocess_cira_icechunk_ar_forecast_dataset``.
 
     Args:
         ds: The forecast dataset.
 
     Returns:
-        The renamed forecast dataset with specific humidity if not already calculated.
+        The forecast dataset with specific humidity if not already calculated.
     """
-    ds = ds.rename({"time": "lead_time"})
-    # The evaluation configuration is used to set the lead time range and resolution.
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
-    if "q" not in ds.variables:
-        # Calculate specific humidity from relative humidity and air temperature
-        ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
-            air_temperature=ds["t"],
-            relative_humidity=ds["r"] / 100,  # Convert relative humidity to percentage
-            levels=ds["level"],
-        )
-    return ds
+    _warn_kerchunk_preprocess_deprecated(
+        "preprocess_cira_kerchunk_ar_forecast_dataset",
+        "use preprocess_cira_icechunk_ar_forecast_dataset",
+    )
+    return preprocess_cira_icechunk_ar_forecast_dataset(ds)
 
 
-# Preprocess function for CIRA data using Brightband kerchunk parquets
 def preprocess_cira_kerchunk_severe_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """Preprocess CIRA kerchunk data for severe convection.
+    """Deprecated: use ``preprocess_cira_icechunk_severe_forecast_dataset``.
 
     Args:
         ds: The forecast dataset.
 
     Returns:
-        The renamed forecast dataset with specific humidity if not already calculated.
+        The forecast dataset with specific humidity if not already calculated.
     """
-    ds = ds.rename({"time": "lead_time"})
-    # The evaluation configuration is used to set the lead time range and resolution.
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
-    if "q" not in ds.variables:
-        # Calculate specific humidity from relative humidity and air temperature
-        ds["specific_humidity"] = calc.specific_humidity_from_relative_humidity(
-            air_temperature=ds["t"],
-            relative_humidity=ds["r"] / 100,  # Convert relative humidity to percentage
-            levels=ds["level"],
-        )
-    return ds
+    _warn_kerchunk_preprocess_deprecated(
+        "preprocess_cira_kerchunk_severe_forecast_dataset",
+        "use preprocess_cira_icechunk_severe_forecast_dataset",
+    )
+    return preprocess_cira_icechunk_severe_forecast_dataset(ds)
 
 
 # Preprocessing function for HRES data that includes geopotential thickness calculation
@@ -234,13 +249,7 @@ def preprocess_hres_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     Returns:
         The forecast dataset with geopotential thickness.
     """
-
-    # Calculate the geopotential thickness required for tropical cyclone tracks
-    ds["geopotential_thickness"] = (
-        calc.geopotential_thickness(ds["geopotential"], top_level=300, bottom_level=500)
-        / 9.81
-    )
-    return ds
+    return _add_tc_geopotential_thickness(ds)
 
 
 def get_climatology(quantile: float = 0.85) -> xr.DataArray:
@@ -263,7 +272,7 @@ def get_climatology(quantile: float = 0.85) -> xr.DataArray:
         raise ValueError(f"Quantile must be one of {_QUANTILE_LIST}")
     idx = _QUANTILE_LIST.index(quantile)
     return xr.open_zarr(
-        "gs://extremeweatherbench/datasets/surface_air_temperature_1990_2019_climatology.zarr",  # noqa: E501
+        "gs://extremeweatherbench/datasets/surface_air_temperature_1990_2019_climatology.zarr",
         storage_options={"anon": True},
         chunks={},
     )["2m_temperature"].isel(quantile=idx)
@@ -361,7 +370,7 @@ def get_brightband_evaluation_objects() -> list[inputs.EvaluationObject]:
         routine.
     """
     # Import metrics here to avoid circular import
-    import extremeweatherbench.metrics as metrics
+    from extremeweatherbench import metrics
 
     heatwave_metric_list: list[metrics.BaseMetric] = [
         metrics.MaximumMeanAbsoluteError(),

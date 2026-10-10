@@ -9,7 +9,7 @@ This script:
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -17,8 +17,7 @@ import xarray as xr
 import yaml
 from scipy.ndimage import label
 
-import extremeweatherbench.calc as calc
-import extremeweatherbench.cases as cases
+from extremeweatherbench import calc, cases
 
 # Radius of Earth in km (mean radius)
 EARTH_RADIUS_KM = 6371.0
@@ -53,16 +52,14 @@ def has_case_for_dates(
         # Check if it's the right region
         is_aus_title = "australia" in event.title.lower()
 
-        if is_australia and is_aus_title:
-            return True
-        elif not is_australia and not is_aus_title:
+        if is_australia and is_aus_title or not is_australia and not is_aus_title:
             return True
 
     return False
 
 
 def get_connected_blob(
-    mask: np.ndarray, start_indices: List[Tuple[int, int]]
+    mask: np.ndarray, start_indices: list[tuple[int, int]]
 ) -> np.ndarray:
     """Get all connected points in a blob using flood fill.
 
@@ -74,7 +71,7 @@ def get_connected_blob(
         2D boolean array of connected region
     """
     # Label connected components
-    labeled, num_features = label(mask)
+    labeled, _num_features = label(mask)
 
     # Find which labels correspond to our start indices
     blob_mask = np.zeros_like(mask, dtype=bool)
@@ -94,10 +91,10 @@ def get_pph_bounding_box(
     buffer_km: float = 250,
     threshold: float = 0.01,
     max_distance_km: float = 2000,
-    max_blob_size_km: Optional[float] = None,
+    max_blob_size_km: float | None = None,
     case_title: str = "",
-    all_cases: Optional[list[cases.IndividualCase]] = None,
-) -> Optional[Dict[str, Any]]:
+    all_cases: list[cases.IndividualCase] | None = None,
+) -> dict[str, Any] | None:
     """Calculate bounding box around PPH peak with distance constraint.
 
     Approach:
@@ -263,7 +260,7 @@ def _create_single_bbox(
     active_lons: np.ndarray,
     buffer_km: float,
     valid_time: pd.Timestamp,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a single bounding box from a set of coordinates.
 
     Args:
@@ -340,7 +337,7 @@ def _create_single_bbox(
 
 def match_pph_times_to_events(
     pph_data: xr.DataArray, case_list: list[cases.IndividualCase]
-) -> Dict[int, Dict[str, Any]]:
+) -> dict[int, dict[str, Any]]:
     """Match PPH valid times to severe convection events.
 
     Args:
@@ -373,13 +370,13 @@ def match_pph_times_to_events(
 
 def create_bounding_boxes(
     pph_data: xr.DataArray,
-    event_time_map: Dict[int, Dict[str, Any]],
+    event_time_map: dict[int, dict[str, Any]],
     all_cases: list[cases.IndividualCase],
     buffer_km: float = 250,
     threshold: float = 0.01,
     max_distance_km: float = 2000,
-    max_blob_size_km: Optional[float] = None,
-) -> List[Dict[str, Any]]:
+    max_blob_size_km: float | None = None,
+) -> list[dict[str, Any]]:
     """Create bounding boxes for matched events.
 
     For each event time:
@@ -429,7 +426,7 @@ def create_bounding_boxes(
 
 
 def save_bounding_boxes(
-    bounding_boxes: List[Dict[str, Any]], output_path: Union[str, Path]
+    bounding_boxes: list[dict[str, Any]], output_path: str | Path
 ) -> pd.DataFrame:
     """Save bounding boxes to YAML and CSV files.
 
@@ -445,7 +442,7 @@ def save_bounding_boxes(
     # Save as YAML
     yaml_path = output_path_obj.with_suffix(".yaml")
     with open(yaml_path, "w") as f:
-        yaml.dump({"bounding_boxes": bounding_boxes}, f, default_flow_style=False)  # noqa: E501
+        yaml.dump({"bounding_boxes": bounding_boxes}, f, default_flow_style=False)
 
     # Save as CSV (flattened)
     csv_data = []
@@ -482,14 +479,14 @@ def save_bounding_boxes(
 
 
 def main(
-    pph_data: Optional[Union[xr.DataArray, str]] = None,
+    pph_data: xr.DataArray | str | None = None,
     events_yaml_path: str = "src/extremeweatherbench/data/events.yaml",
     output_path: str = "data_prep/pph_severe_convection_bounding_boxes",
     buffer_km: float = 250,
     threshold: float = 0.01,
     max_distance_km: float = 2000,
-    max_blob_size_km: Optional[float] = None,
-) -> Tuple[List[Dict[str, Any]], pd.DataFrame]:
+    max_blob_size_km: float | None = None,
+) -> tuple[list[dict[str, Any]], pd.DataFrame]:
     """Main function to create bounding boxes.
 
     Args:

@@ -3,12 +3,12 @@
 import datetime
 import operator
 
+import joblib
 import numpy as np
 import pandas as pd
 import pytest
 import sparse
 import xarray as xr
-import yaml
 
 from extremeweatherbench import utils
 
@@ -61,25 +61,6 @@ def test_remove_ocean_gridpoints():
     assert isinstance(result, xr.Dataset)
     assert "temperature" in result.data_vars
     assert result.sizes == ds.sizes
-
-
-def test_read_event_yaml(tmp_path):
-    """Test reading events yaml from file."""
-    # Create a temporary yaml file
-    yaml_content = {
-        "cases": {"test_case": {"start_date": "2020-01-01", "end_date": "2020-01-02"}}
-    }
-
-    yaml_file = tmp_path / "test_events.yaml"
-    with open(yaml_file, "w") as f:
-        yaml.dump(yaml_content, f)
-
-    result = utils.read_event_yaml(yaml_file)
-
-    assert isinstance(result, dict)
-    assert "cases" in result
-    assert "test_case" in result["cases"]
-    assert result["cases"]["test_case"]["start_date"] == "2020-01-01"
 
 
 def test_derive_indices_from_init_time_and_lead_time():
@@ -151,6 +132,23 @@ def test_min_if_all_timesteps_present():
     assert np.isnan(result_incomplete.values)
 
 
+def test_min_if_all_timesteps_present_does_not_materialize_for_the_size_check():
+    """.size is shape-derived and known without computing; reading .values
+    to get the size would force a dask-backed day fully into memory."""
+    import dask
+    import dask.array as dask_array
+
+    def boom():
+        raise AssertionError("da.values was read to check the timestep count")
+
+    arr = dask_array.from_delayed(dask.delayed(boom)(), shape=(4,), dtype=float)
+    da = xr.DataArray(arr, dims=["time"])
+
+    result = utils.min_if_all_timesteps_present(da, 6)
+
+    assert result.chunks is not None, "result should still be a lazy dask array"
+
+
 def test_min_if_all_timesteps_present_forecast():
     """Test returning minimum for forecast with valid_time dimension."""
     # Test with complete timesteps
@@ -178,6 +176,159 @@ def test_min_if_all_timesteps_present_forecast():
     assert np.all(np.isnan(result_incomplete.values))
 
 
+def test_min_if_all_timesteps_present_rejects_nan_padded_day():
+    """A day padded out with NaNs is incomplete even if the coordinate is full."""
+    da = xr.DataArray([1.0, np.nan, np.nan, np.nan], dims=["time"])
+
+    result = utils.min_if_all_timesteps_present(da, 6)
+
+    assert np.isnan(result.values)
+
+
+def test_min_if_all_timesteps_present_forecast_counts_values_per_lead():
+    """Completeness is judged per lead time, not from the shared valid_time axis.
+
+    The valid_time coordinate is the union over all lead times, so it is denser
+    than any single lead time's sampling. Counting its length passes every lead
+    time through and lets a single sample masquerade as a daily minimum.
+    """
+    valid_times = pd.date_range("2020-01-01", periods=4, freq="6h")
+    values = np.full((3, 4), np.nan)
+    # One sample per lead time, at a different hour for each: exactly what a
+    # sparse initialization cadence produces on a union valid_time axis.
+    values[0, 0], values[1, 1], values[2, 2] = 5.0, 6.0, 7.0
+    da = xr.DataArray(
+        values,
+        dims=["lead_time", "valid_time"],
+        coords={"lead_time": [0, 6, 12], "valid_time": valid_times},
+    )
+
+    result = utils.min_if_all_timesteps_present_forecast(da, 6)
+
+    assert da.valid_time.size == 4
+    assert np.all(np.isnan(result.values))
+
+    complete = da.copy()
+    complete.values[0, :] = [5.0, 4.0, 3.0, 6.0]
+    result = utils.min_if_all_timesteps_present_forecast(complete, 6)
+    assert result.sel(lead_time=0).item() == 3.0
+    assert np.all(np.isnan(result.sel(lead_time=[6, 12]).values))
+
+
+def test_expected_timesteps_per_day():
+    """Timesteps per day come from the lead_time spacing, not valid_time."""
+    lead_times = pd.timedelta_range("0h", "48h", freq="6h")
+    da = xr.DataArray(
+        np.zeros(len(lead_times)), dims=["lead_time"], coords={"lead_time": lead_times}
+    )
+    assert utils.expected_timesteps_per_day(da) == 4
+
+    hourly = xr.DataArray(
+        np.zeros(3),
+        dims=["lead_time"],
+        coords={"lead_time": pd.timedelta_range("0h", "2h", freq="1h")},
+    )
+    assert utils.expected_timesteps_per_day(hourly) == 24
+
+    single = xr.DataArray(
+        [0.0], dims=["lead_time"], coords={"lead_time": [pd.Timedelta("0h")]}
+    )
+    assert utils.expected_timesteps_per_day(single) == 1
+
+
+def test_expected_timesteps_per_day_accepts_integer_hour_lead_times():
+    """Integer lead times mean hours, the convention used across the codebase."""
+    da = xr.DataArray(
+        np.zeros(9), dims=["lead_time"], coords={"lead_time": np.arange(0, 54, 6)}
+    )
+    assert utils.expected_timesteps_per_day(da) == 4
+
+
+def _sparse_init_forecast(init_freq="72h"):
+    """Forecast on a (lead_time, valid_time) grid with 00Z-only inits."""
+    inits = set(pd.date_range("2020-06-01", "2020-06-13", freq=init_freq))
+    lead_times = pd.timedelta_range("0h", "240h", freq="6h")
+    valid_times = pd.date_range("2020-06-08", "2020-06-14", freq="6h")
+
+    values = np.full((len(lead_times), len(valid_times)), np.nan)
+    for i, lead_time in enumerate(lead_times):
+        for j, valid_time in enumerate(valid_times):
+            if (valid_time - lead_time) in inits:
+                values[i, j] = valid_time.hour + lead_time / pd.Timedelta("1h") / 100
+
+    return xr.DataArray(
+        values,
+        dims=["lead_time", "valid_time"],
+        coords={"lead_time": lead_times, "valid_time": valid_times},
+    )
+
+
+def test_reduce_forecast_over_window_per_init_reduces_along_each_run():
+    """Each init contributes one value, reduced over its own lead times."""
+    forecast = _sparse_init_forecast()
+    center = np.datetime64("2020-06-11T00:00:00")
+
+    result = utils.reduce_forecast_over_window_per_init(forecast, center, 24, "max")
+
+    assert result.dims == ("lead_time",)
+    assert "init_time" in result.coords
+    # No lead time has more than one sample inside the window, so a reduction
+    # over valid_time would have had a single value to work with.
+    in_window = forecast.where(
+        (forecast.valid_time >= center - np.timedelta64(12, "h"))
+        & (forecast.valid_time <= center + np.timedelta64(12, "h"))
+    )
+    assert in_window.notnull().sum("valid_time").max().item() == 1
+    # The per-init reduction sees the whole diurnal cycle instead.
+    assert result.sizes["lead_time"] >= 3
+    init_times = pd.to_datetime(result.init_time.values)
+    assert all(t.hour == 0 for t in init_times)
+    lead_hours = result.lead_time / np.timedelta64(1, "h")
+    np.testing.assert_array_equal(
+        lead_hours.values, (center - result.init_time.values) / np.timedelta64(1, "h")
+    )
+
+
+def test_reduce_forecast_over_window_per_init_honors_required_timesteps():
+    """Initializations covering less than the requested window are dropped."""
+    forecast = _sparse_init_forecast()
+    center = np.datetime64("2020-06-11T00:00:00")
+
+    permissive = utils.reduce_forecast_over_window_per_init(
+        forecast, center, 24, "min", required_timesteps=1
+    )
+    strict = utils.reduce_forecast_over_window_per_init(
+        forecast, center, 24, "min", required_timesteps=99
+    )
+
+    assert permissive.sizes["lead_time"] > 0
+    assert strict.sizes["lead_time"] == 0
+    assert "init_time" in strict.coords
+
+
+def test_reduce_forecast_over_window_per_init_drops_negative_lead_times():
+    """Runs launched after the target time are not forecasts of it."""
+    forecast = _sparse_init_forecast(init_freq="24h")
+    center = np.datetime64("2020-06-08T00:00:00")
+
+    result = utils.reduce_forecast_over_window_per_init(forecast, center, 24, "max")
+
+    assert result.sizes["lead_time"] > 0
+    assert np.all(result.lead_time.values >= np.timedelta64(0, "h"))
+
+
+def test_reduce_forecast_over_window_per_init_outside_the_window():
+    """A window with no forecast coverage yields an empty, well-formed result."""
+    forecast = _sparse_init_forecast()
+
+    result = utils.reduce_forecast_over_window_per_init(
+        forecast, np.datetime64("2021-01-01T00:00:00"), 24, "max"
+    )
+
+    assert result.sizes["lead_time"] == 0
+    assert "init_time" in result.coords
+
+
 def test_determine_temporal_resolution():
     """Test determining time resolution in hours."""
     # Create dataset with 6-hourly resolution
@@ -198,6 +349,39 @@ def test_determine_temporal_resolution():
 
     result_hourly = utils.determine_temporal_resolution(ds_hourly)
     assert result_hourly == 1  # 1-hour resolution
+
+
+def test_determine_temporal_resolution_diffs_a_plain_array(monkeypatch):
+    """Diffing data.valid_time dispatches through xarray's DataArray
+    machinery; diffing the index's plain ndarray skips that overhead."""
+    ds = xr.Dataset(
+        {"t": ("valid_time", np.zeros(4))},
+        coords={"valid_time": pd.date_range("2021-01-01", periods=4, freq="6h")},
+    )
+    seen_types = []
+    original_diff = np.diff
+
+    def spy_diff(a, *args, **kwargs):
+        seen_types.append(type(a))
+        return original_diff(a, *args, **kwargs)
+
+    monkeypatch.setattr(np, "diff", spy_diff)
+
+    utils.determine_temporal_resolution(ds)
+
+    assert seen_types == [np.ndarray], seen_types
+
+
+def test_determine_temporal_resolution_without_a_valid_time_index():
+    """Falls back to the coordinate's values when valid_time isn't indexed."""
+    ds = xr.Dataset(
+        {"t": ("step", np.zeros(5))},
+        coords={
+            "step": np.arange(5),
+            "valid_time": ("step", pd.date_range("2021-01-01", periods=5, freq="3h")),
+        },
+    )
+    assert utils.determine_temporal_resolution(ds) == 3.0
 
 
 def test_determine_temporal_resolution_multiple_resolutions():
@@ -248,6 +432,136 @@ def test_convert_init_time_to_valid_time():
     assert "lead_time" in result.dims
     # Should have swapped init_time for valid_time in the primary dimension
     assert "init_time" not in result.dims or "valid_time" in result.dims
+
+
+def test_convert_init_time_to_valid_time_preserves_valid_time_mask():
+    """valid_time_mask must follow convert onto (lead_time, valid_time)."""
+    inits = pd.date_range("2020-01-01", periods=2, freq="12h")
+    leads = pd.to_timedelta([0, 6, 12], unit="h")
+    mask = np.array(
+        [
+            [True, True, False],
+            [True, False, True],
+        ]
+    )
+    ds = xr.Dataset(
+        {"temp": (["init_time", "lead_time"], np.arange(6).reshape(2, 3))},
+        coords={
+            "init_time": inits,
+            "lead_time": leads,
+            "valid_time_mask": (["init_time", "lead_time"], mask),
+        },
+    )
+    result = utils.convert_init_time_to_valid_time(ds)
+    assert result.valid_time_mask.dims == ("lead_time", "valid_time") or (
+        result.valid_time_mask.dims == ("valid_time", "lead_time")
+    )
+    mask_out = result.valid_time_mask.transpose("lead_time", "valid_time")
+    for i, lead in enumerate(leads):
+        for init, keep in zip(inits, mask[:, i]):
+            vt = init + lead
+            got = bool(mask_out.sel(lead_time=lead, valid_time=vt).values)
+            assert got is bool(keep)
+
+
+def test_stack_valid_time_pairs_keeps_only_true_mask_cells():
+    """Stack helper must drop reindex-fill (lead, valid_time) pairs."""
+    inits = pd.date_range("2020-01-01", periods=2, freq="12h")
+    leads = pd.to_timedelta([0, 6], unit="h")
+    values = np.arange(4, dtype=float).reshape(2, 2)
+    mask = np.array([[True, False], [True, True]])
+    ds = xr.Dataset(
+        {"temp": (["init_time", "lead_time"], values)},
+        coords={
+            "init_time": inits,
+            "lead_time": leads,
+            "valid_time_mask": (["init_time", "lead_time"], mask),
+        },
+    )
+    converted = utils.convert_init_time_to_valid_time(ds)
+    stacked = utils.stack_valid_time_pairs(converted)
+    assert stacked.sizes["sample"] == int(mask.sum())
+    expected = values[mask]
+    np.testing.assert_array_equal(np.sort(stacked["temp"].values), np.sort(expected))
+
+
+def test_stack_valid_time_pairs_reduces_dask_chunks():
+    """Valid-pair stack must drop fill chunks from the dask graph."""
+    inits = pd.date_range("2020-01-01", periods=2, freq="12h")
+    leads = pd.to_timedelta([0, 6, 12], unit="h")
+    values = np.arange(6, dtype=float).reshape(2, 3)
+    mask = np.array([[True, False, True], [False, True, False]])
+    ds = xr.Dataset(
+        {"temp": (["init_time", "lead_time"], values)},
+        coords={
+            "init_time": inits,
+            "lead_time": leads,
+            "valid_time_mask": (["init_time", "lead_time"], mask),
+        },
+    ).chunk({"init_time": 1, "lead_time": 1})
+    converted = utils.convert_init_time_to_valid_time(ds)
+    stacked = utils.stack_valid_time_pairs(converted)
+    assert stacked["temp"].data.npartitions == int(mask.sum())
+
+
+def test_unstack_valid_time_pairs_restores_values():
+    """Unstack must restore valid cells and leave fills as NaN."""
+    inits = pd.date_range("2020-01-01", periods=2, freq="12h")
+    leads = pd.to_timedelta([0, 6], unit="h")
+    values = np.array([[1.0, 2.0], [3.0, 4.0]])
+    mask = np.array([[True, False], [True, True]])
+    ds = xr.Dataset(
+        {"temp": (["init_time", "lead_time"], values)},
+        coords={
+            "init_time": inits,
+            "lead_time": leads,
+            "valid_time_mask": (["init_time", "lead_time"], mask),
+        },
+    )
+    converted = utils.convert_init_time_to_valid_time(ds)
+    restored = utils.unstack_valid_time_pairs(
+        utils.stack_valid_time_pairs(converted), like=converted
+    )
+    keep = converted.valid_time_mask.astype(bool)
+    xr.testing.assert_equal(
+        restored["temp"].where(keep).reset_coords(drop=True),
+        converted["temp"].where(keep).reset_coords(drop=True),
+    )
+
+
+def test_convert_init_time_to_valid_time_matches_outer_concat():
+    """Dense fixture must match concat of swapped leads with join='outer'."""
+    inits = pd.date_range("2020-01-01", periods=4, freq="12h")
+    leads = pd.to_timedelta([0, 6, 12, 18, 24], unit="h")
+    temp = np.arange(4 * 5 * 3 * 4, dtype=float).reshape(4, 5, 3, 4)
+    ds = xr.Dataset(
+        {
+            "temp": (
+                ["init_time", "lead_time", "latitude", "longitude"],
+                temp,
+            )
+        },
+        coords={
+            "init_time": inits,
+            "lead_time": leads,
+            "latitude": np.linspace(0, 10, 3),
+            "longitude": np.linspace(0, 20, 4),
+            "cycle": ("init_time", ["a", "b", "c", "d"]),
+        },
+    )
+    expected = ds.assign_coords(valid_time=ds.init_time + ds.lead_time)
+    expected = xr.concat(
+        [
+            expected.sel(lead_time=lead).swap_dims({"init_time": "valid_time"})
+            for lead in expected.lead_time
+        ],
+        "lead_time",
+        coords="different",
+        compat="equals",
+        join="outer",
+    )
+    result = utils.convert_init_time_to_valid_time(ds)
+    xr.testing.assert_equal(result, expected)
 
 
 def test_maybe_get_closest_timestamp_to_center_of_valid_times_single_output():
@@ -953,6 +1267,16 @@ class TestConvertDayYearofDayToTime:
         assert len(result.valid_time) == 6
         # Should still be a DataArray
         assert isinstance(result, xr.DataArray)
+
+    def test_non_january_dayofyear(self):
+        """Times come from dayofyear and hour, not a Jan 1 date_range."""
+        ds = xr.Dataset(
+            {"temperature": (["dayofyear", "hour"], [[1.0], [2.0]])},
+            coords={"dayofyear": [171, 172], "hour": [0]},
+        )
+        result = utils.convert_day_yearofday_to_time(ds, year=2021)
+        assert result.valid_time.values[0] == np.datetime64("2021-06-20")
+        assert result.valid_time.values[1] == np.datetime64("2021-06-21")
 
     def test_dataarray_preserves_data_values(self):
         """Test that DataArray data values are preserved."""
@@ -1923,6 +2247,26 @@ class TestMaybeDensifyDataArray:
         assert result.shape == (3, 2, 2)
         assert list(result.dims) == ["time", "latitude", "longitude"]
 
+    def test_dataset_variable_stays_sparse_after_densifying_a_pulled_copy(self):
+        """Densifying a DataArray pulled from a Dataset must not densify the
+        Dataset's own copy, since both share the same underlying Variable."""
+        import sparse
+
+        coords = ([0, 1, 2], [0, 1, 0])
+        data = [1.0, 2.0, 3.0]
+        sparse_array = sparse.COO(coords, data, shape=(3, 2))
+        ds = xr.Dataset(
+            {"t": (["latitude", "longitude"], sparse_array)},
+            coords={"latitude": [10.0, 20.0, 30.0], "longitude": [100.0, 110.0]},
+        )
+
+        result = utils.maybe_densify_dataarray(ds["t"])
+
+        assert isinstance(result.data, np.ndarray)
+        assert isinstance(ds["t"].data, sparse.COO), (
+            "densifying the pulled-out copy densified the dataset's own variable too"
+        )
+
 
 class TestCreateNanDataArray:
     """Tests for _create_nan_dataarray function."""
@@ -2064,3 +2408,87 @@ class TestIsValidLandfall:
         # This should return True because init_time IS in coords
         # (even though it's not a dimension)
         assert utils.is_valid_landfall(da) is True
+
+    def test_does_not_pull_the_full_array_into_memory(self, monkeypatch):
+        """notnull().any() must reduce chunk by chunk rather than reading a
+        full-size .values and building a same-size boolean array beside it."""
+        da = xr.DataArray(
+            np.array([np.nan, 1.0, np.nan]),
+            dims=["init_time"],
+            coords={"init_time": pd.date_range("2023-09-14", periods=3)},
+        )
+        accessed_sizes = []
+        original_values = xr.DataArray.values.fget
+
+        def spy_values(self):
+            accessed_sizes.append(self.size)
+            return original_values(self)
+
+        monkeypatch.setattr(xr.DataArray, "values", property(spy_values))
+
+        assert utils.is_valid_landfall(da) is True
+        assert all(size <= 1 for size in accessed_sizes), accessed_sizes
+
+
+class TestParallelTqdmPreClose:
+    """Test ParallelTqdm's pre_close hook."""
+
+    def test_pre_close_runs_before_case_bar_closes(self, monkeypatch):
+        """pre_close must run before ParallelTqdm closes its own case bar."""
+        order = []
+
+        original_make_case_bar = utils.progress.make_case_bar
+
+        def tracking_make_case_bar(*args, **kwargs):
+            bar = original_make_case_bar(*args, **kwargs)
+            original_close = bar.close
+
+            def tracked_close(*a, **k):
+                order.append("case_bar")
+                return original_close(*a, **k)
+
+            bar.close = tracked_close
+            return bar
+
+        monkeypatch.setattr(utils.progress, "make_case_bar", tracking_make_case_bar)
+
+        def pre_close():
+            order.append("pre_close")
+
+        # n_jobs must be >1: joblib's n_jobs==1 path runs sequentially
+        # and never calls dispatch_one_batch, so the case bar (and thus
+        # this test) needs real batched dispatch to be meaningful.
+        parallel = utils.ParallelTqdm(
+            n_jobs=2,
+            backend="threading",
+            total_tasks=4,
+            disable_progressbar=True,
+            pre_close=pre_close,
+        )
+        parallel(joblib.delayed(lambda x: x)(i) for i in range(4))
+
+        assert order == ["pre_close", "case_bar"]
+
+    def test_pre_close_runs_even_without_dispatch(self):
+        """pre_close still runs when the case bar was never created."""
+        calls = []
+        parallel = utils.ParallelTqdm(
+            n_jobs=1,
+            backend="threading",
+            total_tasks=0,
+            disable_progressbar=True,
+            pre_close=lambda: calls.append(1),
+        )
+        parallel(iter([]))
+        assert calls == [1]
+
+    def test_pre_close_defaults_to_none_without_error(self):
+        """ParallelTqdm still works when pre_close isn't provided."""
+        parallel = utils.ParallelTqdm(
+            n_jobs=1,
+            backend="threading",
+            total_tasks=1,
+            disable_progressbar=True,
+        )
+        result = parallel([joblib.delayed(lambda x: x)(1)])
+        assert result == [1]

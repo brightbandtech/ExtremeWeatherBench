@@ -1,5 +1,7 @@
 """Tests for the derived module."""
 
+from typing import ClassVar
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -108,7 +110,7 @@ def sample_dataset():
 class ValidDerivedVariable(derived.DerivedVariable):
     """A valid test implementation of DerivedVariable for testing purposes."""
 
-    variables = ["test_variable_1", "test_variable_2"]
+    variables: ClassVar[list] = ["test_variable_1", "test_variable_2"]
 
     def derive_variable(self, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Test implementation that sums two variables."""
@@ -118,7 +120,7 @@ class ValidDerivedVariable(derived.DerivedVariable):
 class MinimalDerivedVariable(derived.DerivedVariable):
     """A minimal test implementation with one required variable."""
 
-    variables = ["single_variable"]
+    variables: ClassVar[list] = ["single_variable"]
 
     def derive_variable(self, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Test implementation that returns the variable unchanged."""
@@ -128,7 +130,7 @@ class MinimalDerivedVariable(derived.DerivedVariable):
 class DerivedVariableWithoutName(derived.DerivedVariable):
     """A test implementation that returns a DataArray without a name."""
 
-    variables = ["single_variable"]
+    variables: ClassVar[list] = ["single_variable"]
 
     def derive_variable(self, data: xr.Dataset, **kwargs) -> xr.DataArray:
         """Test implementation that returns DataArray without name."""
@@ -142,7 +144,7 @@ class DerivedVariableForTesting(derived.DerivedVariable):
     _maybe_convert_variable_to_string."""
 
     name = "TestDerivedVar"
-    variables = ["input_var1", "input_var2"]
+    variables: ClassVar[list] = ["input_var1", "input_var2"]
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
@@ -292,7 +294,7 @@ class TestMaybeDeriveVariablesFunction:
         """Test that kwargs are passed to derived variable compute methods."""
 
         class TestDerivedVariableWithKwargs(derived.DerivedVariable):
-            variables = ["test_variable_1"]
+            variables: ClassVar[list] = ["test_variable_1"]
 
             def derive_variable(self, data: xr.Dataset, **kwargs) -> xr.DataArray:
                 multiplier = kwargs.get("multiplier", 1)
@@ -309,7 +311,7 @@ class TestMaybeDeriveVariablesFunction:
         """Test derived variable with missing required variables."""
 
         class TestMissingVarDerived(derived.DerivedVariable):
-            variables = ["nonexistent_variable"]
+            variables: ClassVar[list] = ["nonexistent_variable"]
 
             def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
                 return data[self.variables[0]]
@@ -378,7 +380,7 @@ class TestMaybeDeriveVariablesFunction:
         """Test that exceptions from derived variable compute methods propagate."""
 
         class TestExceptionDerived(derived.DerivedVariable):
-            variables = ["test_variable_1"]
+            variables: ClassVar[list] = ["test_variable_1"]
 
             def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
                 raise RuntimeError("Test exception from derive_variable")
@@ -393,13 +395,13 @@ class TestMaybeDeriveVariablesFunction:
         """Test behavior with multiple derived variables - only first is processed."""
 
         class TestDuplicateName1(derived.DerivedVariable):
-            variables = ["test_variable_1"]
+            variables: ClassVar[list] = ["test_variable_1"]
 
             def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
                 return data[self.variables[0]] * 2
 
         class TestDuplicateName2(derived.DerivedVariable):
-            variables = ["test_variable_2"]
+            variables: ClassVar[list] = ["test_variable_2"]
 
             def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
                 return data[self.variables[0]] * 3
@@ -426,7 +428,7 @@ class TestMaybeDeriveVariablesFunction:
         """Test early return when first derived var returns dataset with diff dims."""
 
         class TestEarlyReturnDataset(derived.DerivedVariable):
-            variables = ["test_variable_1"]
+            variables: ClassVar[list] = ["test_variable_1"]
 
             def derive_variable(self, data: xr.Dataset) -> xr.Dataset:
                 # Return dataset with different dims - should trigger early return
@@ -435,7 +437,7 @@ class TestMaybeDeriveVariablesFunction:
                 )
 
         class TestNeverExecuted(derived.DerivedVariable):
-            variables = ["test_variable_2"]
+            variables: ClassVar[list] = ["test_variable_2"]
 
             def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
                 # This should never be called due to early return
@@ -457,7 +459,7 @@ class TestMaybeDeriveVariablesFunction:
         """Test derived variable that returns Dataset with matching dimensions."""
 
         class TestDatasetMatchingDims(derived.DerivedVariable):
-            variables = ["test_variable_1"]
+            variables: ClassVar[list] = ["test_variable_1"]
 
             def derive_variable(self, data: xr.Dataset) -> xr.Dataset:
                 # Return a dataset with same dimensions as input but multiple variables
@@ -494,13 +496,13 @@ class TestMaybeDeriveVariablesFunction:
         """Test mix of derived variables - only first is processed."""
 
         class TestDataArrayOutput(derived.DerivedVariable):
-            variables = ["test_variable_1"]
+            variables: ClassVar[list] = ["test_variable_1"]
 
             def derive_variable(self, data: xr.Dataset) -> xr.DataArray:
                 return data["test_variable_1"] * 3
 
         class TestDatasetOutput(derived.DerivedVariable):
-            variables = ["test_variable_2"]
+            variables: ClassVar[list] = ["test_variable_2"]
 
             def derive_variable(self, data: xr.Dataset) -> xr.Dataset:
                 # Return dataset with matching dimensions
@@ -530,7 +532,7 @@ class TestMaybeDeriveVariablesFunction:
         """Test derived variable that returns neither DataArray nor Dataset."""
 
         class TestInvalidReturnType(derived.DerivedVariable):
-            variables = ["test_variable_1"]
+            variables: ClassVar[list] = ["test_variable_1"]
 
             @classmethod
             def derive_variable(cls, data: xr.Dataset):
@@ -552,7 +554,7 @@ class TestMaybeDeriveVariablesFunction:
 class RecursiveDerivedVariable(derived.DerivedVariable):
     """A test derived variable that requires another derived variable."""
 
-    variables = [ValidDerivedVariable]
+    variables: ClassVar[list] = [ValidDerivedVariable]
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
@@ -565,7 +567,7 @@ class RecursiveDerivedVariable(derived.DerivedVariable):
 class DeeplyNestedDerivedVariable(derived.DerivedVariable):
     """A test derived variable that requires a recursive derived variable."""
 
-    variables = [RecursiveDerivedVariable]
+    variables: ClassVar[list] = [RecursiveDerivedVariable]
 
     @classmethod
     def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
@@ -742,7 +744,7 @@ class TestEdgeCasesAndErrorConditions:
         """Test handling of a simple derived variable instance."""
 
         class TestSelfReferencing(derived.DerivedVariable):
-            variables = ["base_var"]
+            variables: ClassVar[list] = ["base_var"]
 
             @classmethod
             def derive_variable(cls, data: xr.Dataset) -> xr.DataArray:
@@ -924,7 +926,7 @@ class TestNormalizeVariable:
 class MultiOutputDerivedVariable(derived.DerivedVariable):
     """A derived variable that outputs multiple variables."""
 
-    variables = ["eastward_wind", "northward_wind"]
+    variables: ClassVar[list] = ["eastward_wind", "northward_wind"]
 
     def derive_variable(self, data: xr.Dataset, **kwargs) -> xr.Dataset:
         """Compute multiple output variables."""
@@ -1028,3 +1030,25 @@ class TestOutputVariables:
         expected_mag = np.sqrt(u**2 + v**2)
 
         xr.testing.assert_allclose(result["magnitude"], expected_mag)
+
+
+def test_cbss_attrs_not_copied_from_cape(sample_dataset, monkeypatch):
+    """CBSS output carries its own attrs, not those of the CAPE or shear inputs."""
+    from unittest.mock import Mock
+
+    data = sample_dataset.assign(air_temperature=sample_dataset["geopotential"] * 0)
+    template = data["air_pressure_at_mean_sea_level"]
+    cape = xr.full_like(template, 1000.0).assign_attrs(long_name="CAPE", units="J/kg")
+    shear = xr.full_like(template, 20.0).assign_attrs(long_name="Shear", units="m/s")
+    monkeypatch.setattr(derived.sc, "compute_mixed_layer_cape", lambda **_: cape)
+    monkeypatch.setattr(derived.sc, "low_level_shear", lambda **_: shear)
+
+    result = derived.CravenBrooksSignificantSevere().derive_variable(
+        data, Mock(start_date=pd.Timestamp("2021-06-20"))
+    )
+
+    assert result.attrs == {
+        "long_name": "Craven-Brooks significant severe parameter",
+        "units": "m^3/s^3",
+    }
+    np.testing.assert_allclose(result.values, 20000.0)

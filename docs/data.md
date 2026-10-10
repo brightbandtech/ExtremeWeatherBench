@@ -45,7 +45,8 @@ All forecast classes extend `ForecastBase` and share four required arguments:
 
 Forecasts must expose four dimensions: `init_time`, `lead_time`, `latitude`, and
 `longitude`. The `lead_time` dimension must be `timedelta64` — EWB uses it together
-with `init_time` to derive `valid_time` at evaluation time.
+with `init_time` to derive `valid_time` at evaluation time (see
+[Time coordinates](#time-coordinates)).
 
 > **Detailed Explanation**: EWB works in init-time / lead-time space rather than
 > valid-time space so it can evaluate forecasts issued from multiple initialization
@@ -62,12 +63,12 @@ object storage or a local path.
 ```python
 import extremeweatherbench as ewb
 
-hres_forecast = ewb.forecasts.ZarrForecast(
+hres_forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
     variables=["surface_air_temperature"],
     # built-in mapping for ECMWF HRES from WeatherBench2
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 ```
@@ -84,20 +85,24 @@ AWS Open Data.
 ```python
 import extremeweatherbench as ewb
 
-cira_kerchunk_forecast = ewb.forecasts.KerchunkForecast(
-    source="s3://noaa-oar-mlwp-data/FourCastNetv2/kerchunk.parq",
-    name="FourCastNetv2",
+cira_kerchunk_forecast = ewb.inputs.KerchunkForecast(
+    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+    name="FourCastNetv2_GFS",
     variables=["surface_air_temperature"],
-    variable_mapping=ewb.CIRA_metadata_variable_mapping,
-    storage_options={
-        "remote_protocol": "s3",
-        "remote_options": {"anon": True},
-    },
+    variable_mapping=ewb.inputs.CIRA_metadata_variable_mapping,
 )
 ```
 
 Both parquet and JSON kerchunk formats are supported. The underlying engine is
-`xarray-kerchunk`. For CIRA models stored in [icechunk](https://icechunk.io/) format, use
+`xarray-kerchunk`. EWB hosts references for each CIRA model at
+`gs://extremeweatherbench/<MODEL>.parq` (e.g. `FOUR_v200_IFS`, `PANG_v100_GFS`);
+the default `storage_options` read them and the CIRA S3 data anonymously. NOAA's
+own references (`s3://noaa-oar-mlwp-data/parquet/<MODEL>_combined_all.parq`) also
+need `"target_options": {"anon": True}`. CIRA references store forecast steps
+along a `time` axis; `KerchunkForecast` converts it to `lead_time` when it opens
+the data, so no `preprocess` is needed. For event-specific fields, use the same
+functions as the icechunk store (e.g.
+`ewb.defaults.preprocess_cira_icechunk_tc_forecast_dataset`). For CIRA models stored in [icechunk](https://icechunk.io/) format, use
 `ewb.inputs.get_cira_icechunk()` as a convenience wrapper instead.
 
 ### XarrayForecast
@@ -111,7 +116,7 @@ import extremeweatherbench as ewb
 
 ds = xr.open_mfdataset("my_forecast_*.nc", combine="by_coords")
 
-my_forecast = ewb.forecasts.XarrayForecast(
+my_forecast = ewb.inputs.XarrayForecast(
     ds=ds,
     name="MyModel",
     variables=["surface_air_temperature"],
@@ -148,7 +153,7 @@ zarr hosted by Google and requires no credentials:
 ```python
 import extremeweatherbench as ewb
 
-era5_target = ewb.targets.ERA5(
+era5_target = ewb.inputs.ERA5(
     variables=["surface_air_temperature"],
     storage_options={"remote_options": {"anon": True}},
 )
@@ -173,7 +178,7 @@ Network. Data is loaded lazily as a Polars `LazyFrame` and filtered to the case
 bounding box at evaluation time.
 
 ```python
-ghcn_target = ewb.targets.GHCN(variables=["surface_air_temperature"])
+ghcn_target = ewb.inputs.GHCN(variables=["surface_air_temperature"])
 ```
 
 Default URI:
@@ -189,7 +194,7 @@ automatically before computing metrics.
 `LSR` provides local storm reports from the SPC's report database (US) as well as compiled reports from Canada and Australia. Report types are encoded numerically at metric computation time: wind = 1, hail = 2, tornado = 3. Case date ranges should span 12 UTC to 12 UTC the following day to match the SPC reporting window.
 
 ```python
-lsr_target = ewb.targets.LSR(
+lsr_target = ewb.inputs.LSR(
     storage_options={"remote_options": {"anon": True}},
 )
 ```
@@ -206,7 +211,7 @@ gs://extremeweatherbench/datasets/
 proxy used as a skill baseline for severe convection forecasts which uses the LSR data for hail and tornadoes. Unlike `LSR`, it is stored as a zarr on GCS.
 
 ```python
-pph_target = ewb.targets.PPH(
+pph_target = ewb.inputs.PPH(
     storage_options={"remote_options": {"anon": True}},
 )
 ```
@@ -225,12 +230,42 @@ order (USA → WMO → regional agencies) and converts units from knots to m/s a
 hPa to Pa.
 
 ```python
-ibtracs_target = ewb.targets.IBTrACS()
+ibtracs_target = ewb.inputs.IBTrACS()
 ```
 
 No `storage_options` are required because the data is fetched over HTTPS directly
 from NCEI. The IBTrACS class evaluates variables `surface_wind_speed` and
 `air_pressure_at_mean_sea_level` by default.
+
+## Time coordinates
+
+Before evaluating a case, EWB checks that each input has data in the case's
+time window. It reads the window from the first of these that the data has;
+that source alone decides:
+
+1. `init_time` and `lead_time` (forecasts): the valid times are
+   `init_time + lead_time`, so a forecast initialized before a case still
+   counts if its lead times reach into it. A `valid_time` coordinate on a
+   forecast is ignored here; if it spans both `init_time` and `lead_time`
+   and differs from their sum, EWB warns, since that usually means
+   `lead_time` is in the wrong units (integers are read as hours).
+2. `valid_time` (targets), indexed or not.
+3. `time`, for data with neither of the above.
+
+For gridded (xarray) inputs the check runs after `variable_mapping` and before
+your `preprocess` function, so these coordinates must exist in the source data
+or be renamed to them with `variable_mapping`. Data with none of them, or with
+a differently named time coordinate, is treated as having no data: each case
+is skipped with the log message `Data input <name> has no data for case time
+range ...`.
+
+Gridded `preprocess` functions run after the case subset (so they only touch
+the case's data), which means they can't create or rename the coordinates EWB
+uses to find a case: the time coordinates above, `latitude`/`longitude`, or the
+0–360 longitude convention. Fix those with `variable_mapping`, or in the
+dataset you pass to `XarrayForecast`. Use `preprocess` for variables, such as
+unit conversions or derived fields. If gridded data with a custom `preprocess`
+reaches the check without its time coordinates, EWB warns with this advice.
 
 ## Variable mapping
 
@@ -240,11 +275,11 @@ constructing any forecast or target:
 
 ```python
 my_mapping = {
-    "t2m": "surface_air_temperature",     # 2-m temperature → EWB name
-    "u10": "surface_eastward_wind",        # 10-m U wind → EWB name
-    "v10": "surface_northward_wind",       # 10-m V wind → EWB name
-    "prediction_timedelta": "lead_time",   # timedelta dim → EWB name
-    "time": "init_time",                   # init-time dim → EWB name
+    "t2m": "surface_air_temperature",  # 2-m temperature → EWB name
+    "u10": "surface_eastward_wind",  # 10-m U wind → EWB name
+    "v10": "surface_northward_wind",  # 10-m V wind → EWB name
+    "prediction_timedelta": "lead_time",  # timedelta dim → EWB name
+    "time": "init_time",  # init-time dim → EWB name
 }
 ```
 

@@ -24,10 +24,7 @@ Two things are required of every subclass:
 class DerivedVariable(abc.ABC):
     variables: list[str]  # raw inputs required
 
-    def derive_variable(
-        self, data: xr.Dataset, *args, **kwargs
-    ) -> xr.DataArray:
-        ...
+    def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray: ...
 ```
 
 > **Detailed Explanation**: EWB calls `derive_variable` after subsetting
@@ -60,12 +57,9 @@ class DewpointDepression(DerivedVariable):
     def __init__(self, name: str = "dewpoint_depression"):
         super().__init__(name=name)
 
-    def derive_variable(
-        self, data: xr.Dataset, *args, **kwargs
-    ) -> xr.DataArray:
+    def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         depression = (
-            data["surface_air_temperature"]
-            - data["surface_dewpoint_temperature"]
+            data["surface_air_temperature"] - data["surface_dewpoint_temperature"]
         )
         depression.name = self.name
         return depression
@@ -88,16 +82,18 @@ my_metric = ewb.metrics.MeanAbsoluteError(
 )
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[my_metric],
-        target=ewb.ERA5(),
+        target=ewb.inputs.ERA5(),
         forecast=my_forecast,
     ),
 ]
 
-cases = ewb.load_cases()
-runner = ewb.evaluation(case_metadata=cases, evaluation_objects=eval_objects)
+cases = ewb.cases.load_cases()
+runner = ewb.evaluate.ExtremeWeatherBench(
+    case_metadata=cases, evaluation_objects=eval_objects
+)
 outputs = runner.run_evaluation()
 ```
 
@@ -128,12 +124,10 @@ class WindSpeed500hPa(DerivedVariable):
     def __init__(self, name: str = "wind_speed_500hPa"):
         super().__init__(name=name)
 
-    def derive_variable(
-        self, data: xr.Dataset, *args, **kwargs
-    ) -> xr.DataArray:
+    def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         u500 = data["eastward_wind"].sel(level=500)
         v500 = data["northward_wind"].sel(level=500)
-        speed = np.sqrt(u500 ** 2 + v500 ** 2)
+        speed = np.sqrt(u500**2 + v500**2)
         speed.name = self.name
         return speed
 ```
@@ -166,9 +160,7 @@ class HeatStressIndex(DerivedVariable):
             output_variables = ["heat_index", "wbgt_approx"]
         super().__init__(name=name, output_variables=output_variables)
 
-    def derive_variable(
-        self, data: xr.Dataset, *args, **kwargs
-    ) -> xr.Dataset:
+    def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         t = data["surface_air_temperature"] - 273.15  # to °C
         rh = data["surface_relative_humidity"]
 
@@ -178,15 +170,13 @@ class HeatStressIndex(DerivedVariable):
             + 1.61139411 * t
             + 2.338549 * rh
             - 0.14611605 * t * rh
-            - 0.01230809 * t ** 2
-            - 0.01642482 * rh ** 2
+            - 0.01230809 * t**2
+            - 0.01642482 * rh**2
         )
         # Very rough WBGT approximation
         wbgt = 0.7 * (t - (100 - rh) / 5) + 0.3 * t
 
-        return xr.Dataset(
-            {"heat_index": hi, "wbgt_approx": wbgt}
-        )
+        return xr.Dataset({"heat_index": hi, "wbgt_approx": wbgt})
 ```
 
 Specify a single output variable when creating the metric:
@@ -243,12 +233,9 @@ class DewpointDepression(DerivedVariable):
     def __init__(self, name: str = "dewpoint_depression"):
         super().__init__(name=name)
 
-    def derive_variable(
-        self, data: xr.Dataset, *args, **kwargs
-    ) -> xr.DataArray:
+    def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         depression = (
-            data["surface_air_temperature"]
-            - data["surface_dewpoint_temperature"]
+            data["surface_air_temperature"] - data["surface_dewpoint_temperature"]
         )
         depression.name = self.name
         return depression
@@ -256,14 +243,14 @@ class DewpointDepression(DerivedVariable):
 
 dd = DewpointDepression()
 
-forecast = ewb.ZarrForecast(
+forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
-target = ewb.ERA5(
+target = ewb.inputs.ERA5(
     variables=[
         "surface_air_temperature",
         "surface_dewpoint_temperature",
@@ -271,7 +258,7 @@ target = ewb.ERA5(
 )
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MeanAbsoluteError(
@@ -284,7 +271,7 @@ eval_objects = [
     ),
 ]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=cases,
     evaluation_objects=eval_objects,
 )

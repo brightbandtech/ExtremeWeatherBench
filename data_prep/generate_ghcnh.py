@@ -16,15 +16,16 @@ REJECTED_QC_CODES = {"2", "3", "6", "7"}
 
 async def download_station_list():
     """Download and parse the official GHCNh station list."""
-    station_list_url = "https://www.ncei.noaa.gov/oa/global-historical-climatology-network/hourly/doc/ghcnh-station-list.txt"  # noqa: E501
+    station_list_url = "https://www.ncei.noaa.gov/oa/global-historical-climatology-network/hourly/doc/ghcnh-station-list.txt"
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(station_list_url) as response:
-            if response.status == 200:
-                content = await response.text()
-                return parse_station_list(content)
-            else:
-                raise Exception(f"Failed to download station list: {response.status}")
+    async with (
+        aiohttp.ClientSession() as session,
+        session.get(station_list_url) as response,
+    ):
+        if response.status == 200:
+            content = await response.text()
+            return parse_station_list(content)
+        raise RuntimeError(f"Failed to download station list: {response.status}")
 
 
 def parse_station_list(content):
@@ -64,7 +65,7 @@ def parse_station_list(content):
 
 def construct_station_download_url(station_id, year):
     """Construct download URL for a specific station and year."""
-    base_url = "https://www.ncei.noaa.gov/oa/global-historical-climatology-network/hourly/access/by-year"  # noqa: E501
+    base_url = "https://www.ncei.noaa.gov/oa/global-historical-climatology-network/hourly/access/by-year"
     filename = f"GHCNh_{station_id}_{year}.psv"
     return f"{base_url}/{year}/psv/{filename}"
 
@@ -142,8 +143,7 @@ async def download_and_process_station_file(
                 # Check if it's actually data (not an error page)
                 if len(content) > 100:  # Reasonable minimum for valid data
                     # Write temporary file
-                    with open(temp_path, "wb") as file:
-                        file.write(content)
+                    temp_path.write_bytes(content)
 
                     # Immediately process and append to main parquet
                     success = process_file_immediately_and_append(
@@ -177,8 +177,6 @@ _batch_size = 50  # Process 50 files before writing to parquet
 
 def process_file_immediately_and_append(file_path, main_parquet_file):
     """Process a single PSV file and store for batch append to parquet."""
-    global _batch_data_frames
-
     try:
         # Process the PSV file
         df = process_psv_file(file_path)
@@ -217,8 +215,6 @@ def process_file_immediately_and_append(file_path, main_parquet_file):
 
 def flush_batch_to_parquet(main_parquet_file):
     """Write accumulated batch of DataFrames to parquet file."""
-    global _batch_data_frames
-
     if not _batch_data_frames:
         return
 

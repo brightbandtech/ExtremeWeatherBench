@@ -1,6 +1,6 @@
 # Single Case
 
-Running EWB across all 337 default cases is the standard workflow, but
+Running EWB across all default cases is the standard workflow, but
 sometimes you only need to evaluate one specific event — to debug a
 result, inspect a forecast failure, or prototype a new metric. This
 recipe shows two approaches: filtering from the default case list, and
@@ -15,21 +15,21 @@ Load all EWB cases, then keep only the one you care about using its
 ```python
 import extremeweatherbench as ewb
 
-all_cases = ewb.load_cases()
+all_cases = ewb.cases.load_cases()
 
 # Keep only case 28 (inspect the full list to find your case)
 single_case = [c for c in all_cases if c.case_id_number == 28]
 
-target = ewb.ERA5(variables=["surface_air_temperature"])
-forecast = ewb.ZarrForecast(
+target = ewb.inputs.ERA5(variables=["surface_air_temperature"])
+forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MeanAbsoluteError(
@@ -46,7 +46,7 @@ eval_objects = [
     ),
 ]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=single_case,
     evaluation_objects=eval_objects,
 )
@@ -54,10 +54,10 @@ outputs = runner.run_evaluation()
 print(outputs)
 ```
 
-> **Detailed Explanation**: `ewb.load_cases()` returns a list of
+> **Detailed Explanation**: `ewb.cases.load_cases()` returns a list of
 > `IndividualCase` objects. Each object has `case_id_number`, `title`,
 > `start_date`, `end_date`, `location`, and `event_type` attributes.
-> Passing a single-element list to `ewb.evaluation` is identical to
+> Passing a single-element list to `ewb.evaluate.ExtremeWeatherBench` is identical to
 > running all cases — the evaluation engine is a loop over that list.
 
 ## Approach 2 — Define a case from scratch
@@ -87,16 +87,16 @@ pnw_heat_dome = IndividualCase(
     event_type="heat_wave",
 )
 
-target = ewb.ERA5(variables=["surface_air_temperature"])
-forecast = ewb.ZarrForecast(
+target = ewb.inputs.ERA5(variables=["surface_air_temperature"])
+forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MeanAbsoluteError(
@@ -113,7 +113,7 @@ eval_objects = [
     ),
 ]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=[pnw_heat_dome],
     evaluation_objects=eval_objects,
 )
@@ -124,7 +124,7 @@ outputs = runner.run_evaluation()
 > `latitude_min`, `latitude_max`, `longitude_min`, and `longitude_max`.
 > Longitudes must be in the 0–360 convention to match EWB's internal
 > coordinate system. You can convert from −180–180 with
-> `ewb.convert_longitude_to_360`. The `event_type` field must match the
+> `ewb.utils.convert_longitude_to_360`. The `event_type` field must match the
 > `event_type` on at least one `EvaluationObject`; otherwise, the case
 > is skipped by the pipeline.
 
@@ -136,10 +136,10 @@ If you maintain your own YAML of case definitions (same schema as EWB's
 ```python
 import extremeweatherbench as ewb
 
-my_cases = ewb.load_individual_cases_from_yaml("path/to/my_cases.yaml")
+my_cases = ewb.cases.load_individual_cases_from_yaml("path/to/my_cases.yaml")
 single_case = [c for c in my_cases if c.case_id_number == 1]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=single_case,
     evaluation_objects=eval_objects,
 )
@@ -189,17 +189,17 @@ demo_case = IndividualCase(
 )
 cases = [demo_case]
 
-forecast = ewb.ZarrForecast(
+forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
-target = ewb.ERA5(variables=["surface_air_temperature"])
+target = ewb.inputs.ERA5(variables=["surface_air_temperature"])
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MeanAbsoluteError(
@@ -216,7 +216,7 @@ eval_objects = [
     ),
 ]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=cases,
     evaluation_objects=eval_objects,
 )

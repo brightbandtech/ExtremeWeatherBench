@@ -1,6 +1,7 @@
 """Tests for extremeweatherbench.sources modules."""
 
 import datetime
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -976,3 +977,175 @@ class TestXarrayDatasetModule:
 
         result = xarray_dataset.check_for_spatial_data(ds, region)
         assert result is False
+
+    def test_check_for_spatial_data_prime_meridian_crossing_region(self):
+        """Test check_for_spatial_data for a region straddling longitude 0."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+
+        # Region spans -30 to 30, a single lobe that straddles 0/360.
+        region = BoundingBoxRegion(
+            latitude_min=20.0,
+            latitude_max=40.0,
+            longitude_min=-30.0,
+            longitude_max=30.0,
+        )
+
+        # -180/180 axis with values on both sides of 0.
+        data = np.random.randn(3, 3)  # 3x3 spatial grid
+        ds_180 = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={
+                "latitude": [25.0, 30.0, 35.0],
+                "longitude": [-10.0, 0.0, 10.0],
+            },
+        )
+        assert xarray_dataset.check_for_spatial_data(ds_180, region) is True
+
+        # 0-360 axis with values on both sides of the 360/0 wrap.
+        data = np.random.randn(3, 2)  # 3x2 spatial grid
+        ds_0360 = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={
+                "latitude": [25.0, 30.0, 35.0],
+                "longitude": [350.0, 5.0],
+            },
+        )
+        assert xarray_dataset.check_for_spatial_data(ds_0360, region) is True
+
+    def test_check_for_spatial_data_lobe_ending_at_prime_meridian(self):
+        """Test check_for_spatial_data for a lobe ending exactly at longitude 0."""
+        from extremeweatherbench.regions import BoundingBoxRegion
+
+        # Region spans -100 to 0, so the lobe's upper bound is exactly 0.
+        region = BoundingBoxRegion(
+            latitude_min=20.0,
+            latitude_max=40.0,
+            longitude_min=-100.0,
+            longitude_max=0.0,
+        )
+
+        data = np.random.randn(3, 1)  # 3x1 spatial grid
+        ds = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={
+                "latitude": [25.0, 30.0, 35.0],
+                "longitude": [-50.0],
+            },
+        )
+
+        result = xarray_dataset.check_for_spatial_data(ds, region)
+        assert result is True
+
+
+def _forecast_with_unindexed_valid_time(init_start: str) -> xr.Dataset:
+    """Forecast-shaped Dataset whose valid_time is a non-indexed coordinate."""
+    lead = pd.to_timedelta(np.arange(0, 4) * 6, unit="h")
+    init = pd.date_range(init_start, periods=3, freq="12h")
+    ds = xr.Dataset(
+        {"t2": (["init_time", "lead_time"], np.zeros((3, 4)))},
+        coords={
+            "init_time": init,
+            "lead_time": lead,
+            "valid_time": ("lead_time", init[0] + lead),
+        },
+    )
+    assert "valid_time" not in ds.xindexes
+    return ds
+
+
+@pytest.mark.parametrize(
+    "module, as_dataarray",
+    [(xarray_dataset, False), (xarray_dataarray, True)],
+    ids=["dataset", "dataarray"],
+)
+class TestCheckForValidTimesUnindexedCoords:
+    """Regression tests for #391: valid times decide, indexed or not."""
+
+    start, end = datetime.datetime(2021, 2, 10), datetime.datetime(2021, 2, 22)
+
+    def _check(self, module, as_dataarray, data):
+        if as_dataarray:
+            data = data["t2"]
+        return module.check_for_valid_times(data, self.start, self.end)
+
+    def test_forecast_in_range(self, module, as_dataarray):
+        """A forecast (CIRA-like valid_time along lead_time) in range is found."""
+        data = _forecast_with_unindexed_valid_time("2021-02-10T12")
+        assert self._check(module, as_dataarray, data)
+
+    def test_forecast_out_of_range(self, module, as_dataarray):
+        """A forecast whose init + lead times miss the case range is False."""
+        data = _forecast_with_unindexed_valid_time("2020-09-30T12")
+        assert not self._check(module, as_dataarray, data)
+
+    def test_forecast_ignores_lead_only_valid_time(self, module, as_dataarray):
+        """A valid_time along lead_time only (first init's) does not decide."""
+        data = _forecast_with_unindexed_valid_time("2021-02-10T12")
+        data = data.assign_coords(valid_time=data.valid_time - pd.Timedelta("365D"))
+        assert self._check(module, as_dataarray, data)
+
+    def test_valid_time_decides_over_init_time(self, module, as_dataarray):
+        """Without lead_time, valid_time decides even if init_time is in range."""
+        data = xr.Dataset(
+            {"t2": (["valid_time", "init_time"], np.zeros((2, 2)))},
+            coords={
+                "valid_time": pd.date_range("2020-01-01", periods=2, freq="D"),
+                "init_time": pd.date_range("2021-02-12", periods=2, freq="D"),
+            },
+        )
+        assert not self._check(module, as_dataarray, data)
+
+    @pytest.mark.parametrize(
+        "first_init, expected", [("2021-02-01", True), ("2021-01-01", False)]
+    )
+    def test_init_and_lead_time_without_valid_time(
+        self, module, as_dataarray, first_init, expected
+    ):
+        """Inits before the case still count when their leads reach into it."""
+        lead = pd.to_timedelta(np.arange(0, 241, 6), unit="h")
+        data = xr.Dataset(
+            {"t2": (["init_time", "lead_time"], np.zeros((5, lead.size)))},
+            coords={
+                "init_time": pd.date_range(first_init, periods=5, freq="D"),
+                "lead_time": lead,
+            },
+        )
+        assert self._check(module, as_dataarray, data) is expected
+
+    @pytest.mark.parametrize("lead_days", [False, True])
+    def test_warns_when_2d_valid_time_disagrees(self, module, as_dataarray, lead_days):
+        """Integer lead_time in days (read as hours) mismatches valid_time."""
+        init = pd.date_range("2021-02-10", periods=2, freq="D")
+        lead = np.arange(3)
+        valid = init.values[:, None] + pd.to_timedelta(lead, unit="D").values
+        data = xr.Dataset(
+            {"t2": (["init_time", "lead_time"], np.zeros((2, 3)))},
+            coords={
+                "init_time": init,
+                "lead_time": lead if lead_days else lead * 24,
+                "valid_time": (["init_time", "lead_time"], valid),
+            },
+        )
+        if lead_days:
+            with pytest.warns(UserWarning, match="init_time \\+ lead_time"):
+                self._check(module, as_dataarray, data)
+        else:
+            with warnings.catch_warnings():
+                warnings.simplefilter("error")
+                self._check(module, as_dataarray, data)
+
+    def test_no_warning_for_lead_only_valid_time(self, module, as_dataarray):
+        """CIRA-like valid_time along lead_time only is not compared."""
+        data = _forecast_with_unindexed_valid_time("2021-02-10T12")
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            self._check(module, as_dataarray, data)
+
+    def test_time_fallback_and_no_time_coordinate(self, module, as_dataarray):
+        """A plain time coordinate is used last; no time coordinate is False."""
+        data = xr.Dataset(
+            {"t2": ("time", np.zeros(2))},
+            coords={"time": pd.date_range("2021-02-15", periods=2, freq="D")},
+        )
+        assert self._check(module, as_dataarray, data)
+        assert not self._check(module, as_dataarray, data.drop_vars("time"))

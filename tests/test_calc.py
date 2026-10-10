@@ -1000,6 +1000,8 @@ class TestFindLandIntersection:
         # Should return intersection
         assert isinstance(result, xr.DataArray)
         assert result.shape == mask.shape
+        expected = xr.where(mask.astype(bool) & land_mask.astype(bool), 1, 0)
+        xr.testing.assert_equal(result, expected)
 
 
 class TestNantrapezoidPressureLevels:

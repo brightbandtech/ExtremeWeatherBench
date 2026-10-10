@@ -10,22 +10,22 @@ Usage:
 import extremeweatherbench as ewb
 
 # Define targets (observation data)
-era5_heatwave_target = ewb.targets.ERA5(
+era5_heatwave_target = ewb.inputs.ERA5(
     variables=["surface_air_temperature"],
     chunks=None,
 )
 
 # Define forecasts
-fcnv2_forecast = ewb.forecasts.KerchunkForecast(
+fcnv2_forecast = ewb.inputs.KerchunkForecast(
     name="fcnv2_forecast",
     source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
     variables=["surface_air_temperature"],
-    variable_mapping=ewb.CIRA_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.CIRA_metadata_variable_mapping,
 )
 
 # Define evaluation objects
 evaluation_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MaximumMeanAbsoluteError(),
@@ -38,20 +38,20 @@ evaluation_objects = [
 
 # Load case data from the default events.yaml
 # Users can also define their own cases_dict structure
-cases_list = ewb.load_cases()
+case_list = ewb.cases.load_cases()
 
-# Alternatively, users could define custom cases like this:
-# cases_list = [
+# Alternatively, users could define custom cases like this (needs `import datetime`):
+# case_list = [
 #         {
 #             "case_id_number": 1,
 #             "title": "Custom Heat Wave Case",
-#             "start_date": "2021-06-01T00:00:00",
-#             "end_date": "2021-06-15T00:00:00",
+#             "start_date": datetime.datetime(2021, 6, 1),
+#             "end_date": datetime.datetime(2021, 6, 15),
 #             "location": {
 #                 "type": "centered_region",
 #                 "parameters": {
 #                     "latitude": 40.0,
-#                     "longitude": -100.0,
+#                     "longitude": 260.0,
 #                     "bounding_box_degrees": 5.0,
 #                 },
 #             },

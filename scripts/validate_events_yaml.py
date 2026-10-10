@@ -13,14 +13,14 @@ This script validates that the events.yaml file follows the required format:
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import yaml
 
 
 def validate_datetime_format(
     date_value: Any, field_name: str, case_num: int
-) -> List[str]:
+) -> list[str]:
     """Validate that a date value is in YYYY-MM-DD HH:MM:SS format."""
     errors: list[str] = []
 
@@ -61,7 +61,7 @@ def validate_datetime_format(
     return errors
 
 
-def validate_location(location: Dict[str, Any], case_num: int) -> List[str]:
+def validate_location(location: dict[str, Any], case_num: int) -> list[str]:
     """Validate location structure."""
     errors = []
 
@@ -130,7 +130,7 @@ def validate_location(location: Dict[str, Any], case_num: int) -> List[str]:
     return errors
 
 
-def validate_yaml_spacing(file_path: Path) -> List[str]:
+def validate_yaml_spacing(file_path: Path) -> list[str]:
     """Validate that YAML spacing is consistent throughout the file."""
     errors = []
 
@@ -151,32 +151,22 @@ def validate_yaml_spacing(file_path: Path) -> List[str]:
         if content.startswith("- case_id_number:"):
             expected_indent = 0
             indent_levels[0] = leading_spaces
-        elif (
-            content.startswith("title:")
-            or content.startswith("start_date:")
-            or content.startswith("end_date:")
-            or content.startswith("location:")
-            or content.startswith("event_type:")
+        elif content.startswith(
+            ("title:", "start_date:", "end_date:", "location:", "event_type:")
         ):
             expected_indent = 1
-            if 0 in indent_levels:
-                if 1 not in indent_levels:
-                    indent_levels[1] = leading_spaces
-        elif content.startswith("type:") or content.startswith("parameters:"):
+            if 0 in indent_levels and 1 not in indent_levels:
+                indent_levels[1] = leading_spaces
+        elif content.startswith(("type:", "parameters:")):
             expected_indent = 2
-            if 1 in indent_levels:
-                if 2 not in indent_levels:
-                    indent_levels[2] = leading_spaces
-        elif (
-            content.startswith("latitude")
-            or content.startswith("longitude")
-            or content.startswith("bounding_box")
-            or content.startswith("shapefile_path")
+            if 1 in indent_levels and 2 not in indent_levels:
+                indent_levels[2] = leading_spaces
+        elif content.startswith(
+            ("latitude", "longitude", "bounding_box", "shapefile_path")
         ):
             expected_indent = 3
-            if 2 in indent_levels:
-                if 3 not in indent_levels:
-                    indent_levels[3] = leading_spaces
+            if 2 in indent_levels and 3 not in indent_levels:
+                indent_levels[3] = leading_spaces
         else:
             continue  # Skip validation for other lines
 
@@ -192,7 +182,7 @@ def validate_yaml_spacing(file_path: Path) -> List[str]:
     return errors
 
 
-def validate_events_yaml(file_path: Path) -> List[str]:
+def validate_events_yaml(file_path: Path) -> list[str]:
     """Main validation function for events.yaml."""
     errors = []
 
@@ -246,11 +236,10 @@ def validate_events_yaml(file_path: Path) -> List[str]:
             previous_case_id = case_id
 
         # Validate title is a string
-        if "title" in case:
-            if not isinstance(case["title"], str):
-                errors.append(
-                    f"Case {case.get('case_id_number', i + 1)}: title must be a string"
-                )
+        if "title" in case and not isinstance(case["title"], str):
+            errors.append(
+                f"Case {case.get('case_id_number', i + 1)}: title must be a string"
+            )
 
         # Validate date formats
         case_num = case.get("case_id_number", i + 1)

@@ -1,5 +1,7 @@
 """Tests for inputs module."""
 
+import copy
+import logging
 from unittest import mock
 
 import numpy as np
@@ -8,8 +10,10 @@ import polars as pl
 import pytest
 import sparse
 import xarray as xr
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
-from extremeweatherbench import inputs
+from extremeweatherbench import cases, inputs, regions, utils
 
 
 class TestInputBase:
@@ -436,7 +440,7 @@ class TestMaybeMapVariableNames:
 
         mock_data = MockData()
 
-        with pytest.raises(ValueError, match="Data type .* not supported"):
+        with pytest.raises(TypeError, match="Data type .* not supported"):
             test_input.maybe_map_variable_names(mock_data)
 
     def test_maybe_map_variable_names_empty_variable_mapping(
@@ -508,7 +512,7 @@ class TestForecastBase:
             storage_options={},
         )
 
-        with pytest.raises(ValueError, match="Expected xarray Dataset"):
+        with pytest.raises(TypeError, match="Expected xarray Dataset"):
             forecast.subset_data_to_case("invalid_data", mock.Mock())
 
     @mock.patch("extremeweatherbench.utils.derive_indices_from_init_time_and_lead_time")
@@ -757,6 +761,52 @@ class TestForecastBase:
             # Should process normally without issues
             assert isinstance(result, xr.Dataset)
 
+    def test_forecast_subset_keeps_valid_time_mask_on_lead_valid_time(self):
+        """Subset must expose a (lead, valid_time) mask of overlapping pairs."""
+        inits = pd.date_range("2021-06-20", periods=3, freq="12h")
+        leads = pd.to_timedelta([0, 6, 12, 24], unit="h")
+        lats = np.array([44.0, 45.0, 46.0])
+        lons = np.array([-121.0, -120.0, -119.0])
+        data = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["init_time", "lead_time", "latitude", "longitude"],
+                    np.ones((3, 4, 3, 3)),
+                )
+            },
+            coords={
+                "init_time": inits,
+                "lead_time": leads,
+                "latitude": lats,
+                "longitude": lons,
+            },
+        )
+        case = cases.IndividualCase(
+            case_id_number=1,
+            title="mask-pairs",
+            start_date=pd.Timestamp("2021-06-20 12:00"),
+            end_date=pd.Timestamp("2021-06-21 00:00"),
+            location=regions.CenteredRegion(
+                latitude=45.0, longitude=-120.0, bounding_box_degrees=4.0
+            ),
+            event_type="heat_wave",
+        )
+        forecast = inputs.ZarrForecast(
+            name="test",
+            source="test.zarr",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+        result = forecast.subset_data_to_case(data, case)
+        assert "valid_time_mask" in result.coords
+        mask = result.valid_time_mask
+        assert set(mask.dims) == {"lead_time", "valid_time"}
+        assert bool(mask.any())
+        n_true = int(mask.astype(bool).sum())
+        stacked = utils.stack_valid_time_pairs(result)
+        assert stacked.sizes["sample"] == n_true
+
     def test_forecast_base_duplicate_init_times_preserves_first_occurrence(self):
         """Test that when duplicates exist, the first occurrence is preserved."""
         # Create dataset with specific values to test which occurrence is kept
@@ -929,6 +979,47 @@ class TestKerchunkForecast:
         )
         assert result == sample_forecast_dataset
 
+    @mock.patch("extremeweatherbench.inputs.open_kerchunk_reference")
+    def test_kerchunk_forecast_default_storage_options_forwards_none(
+        self, mock_open_kerchunk, sample_forecast_dataset
+    ):
+        """Test unconfigured storage_options forwards None to the opener."""
+        mock_open_kerchunk.return_value = sample_forecast_dataset
+
+        forecast = inputs.KerchunkForecast(
+            name="test",
+            source="test.parq",
+            variables=["temperature"],
+            variable_mapping={},
+        )
+
+        forecast._open_data_from_source()
+
+        mock_open_kerchunk.assert_called_once_with(
+            "test.parq",
+            storage_options=None,
+            chunks="auto",
+        )
+
+    @mock.patch("xarray.open_dataset")
+    def test_kerchunk_forecast_default_resolves_to_anonymous_options(
+        self, mock_open_dataset, sample_forecast_dataset
+    ):
+        """Test the None default resolves to anonymous S3 access options."""
+        mock_open_dataset.return_value = sample_forecast_dataset
+
+        forecast = inputs.KerchunkForecast(
+            name="test",
+            source="test.parq",
+            variables=["temperature"],
+            variable_mapping={},
+        )
+
+        forecast._open_data_from_source()
+
+        _, call_kwargs = mock_open_dataset.call_args
+        assert call_kwargs["storage_options"] == inputs.DEFAULT_KERCHUNK_STORAGE_OPTIONS
+
 
 class TestERA5:
     """Test the ERA5 target class."""
@@ -1014,6 +1105,66 @@ class TestERA5:
         # Should have overlapping time values
         assert len(aligned_target.time) > 0
         assert len(aligned_forecast.valid_time) > 0
+
+    def test_align_skips_interp_when_lat_lon_match(self):
+        """Skip spatial interp when forecast and target grids already match."""
+        times = pd.date_range("2021-06-20", periods=4, freq="6h")
+        lat = np.linspace(40, 50, 5)
+        lon = np.linspace(100, 110, 6)
+        data = np.ones((4, 5, 6))
+        target = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["valid_time", "latitude", "longitude"],
+                    data,
+                )
+            },
+            coords={"valid_time": times, "latitude": lat, "longitude": lon},
+        )
+        forecast = target.copy(deep=True)
+        with mock.patch.object(xr.Dataset, "interp") as mock_interp:
+            aligned_fc, aligned_tg = inputs.align_forecast_to_target(forecast, target)
+            mock_interp.assert_not_called()
+        np.testing.assert_array_equal(
+            aligned_fc.latitude.values, aligned_tg.latitude.values
+        )
+
+    def test_align_interps_when_lat_lon_differ(self):
+        """Mismatched lat/lon still interpolates forecast onto the target."""
+        times = pd.date_range("2021-06-20", periods=4, freq="6h")
+        target = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["valid_time", "latitude", "longitude"],
+                    np.ones((4, 5, 6)),
+                )
+            },
+            coords={
+                "valid_time": times,
+                "latitude": np.linspace(40, 50, 5),
+                "longitude": np.linspace(100, 110, 6),
+            },
+        )
+        forecast = xr.Dataset(
+            {
+                "surface_air_temperature": (
+                    ["valid_time", "latitude", "longitude"],
+                    np.ones((4, 4, 5)),
+                )
+            },
+            coords={
+                "valid_time": times,
+                "latitude": np.linspace(40, 50, 4),
+                "longitude": np.linspace(100, 110, 5),
+            },
+        )
+        aligned_fc, aligned_tg = inputs.align_forecast_to_target(forecast, target)
+        np.testing.assert_array_equal(
+            aligned_fc.latitude.values, aligned_tg.latitude.values
+        )
+        np.testing.assert_array_equal(
+            aligned_fc.longitude.values, aligned_tg.longitude.values
+        )
 
     def test_era5_maybe_align_forecast_to_target_different_grid(
         self, sample_era5_dataset
@@ -1105,6 +1256,322 @@ class TestERA5:
         assert len(aligned_forecast.valid_time) > 0
 
 
+def _gridded_forecast(times, lats, lons, *, leads=None, value=1.0) -> xr.Dataset:
+    """Build a dense gridded forecast on (valid_time, lat, lon)."""
+    if leads is None:
+        data = np.full((len(times), len(lats), len(lons)), value)
+        dims = ["valid_time", "latitude", "longitude"]
+        coords = {"valid_time": times, "latitude": lats, "longitude": lons}
+    else:
+        data = np.full((len(leads), len(times), len(lats), len(lons)), value)
+        dims = ["lead_time", "valid_time", "latitude", "longitude"]
+        coords = {
+            "lead_time": leads,
+            "valid_time": times,
+            "latitude": lats,
+            "longitude": lons,
+        }
+    return xr.Dataset(
+        {"surface_air_temperature": (dims, data)},
+        coords=coords,
+    )
+
+
+def _point_dataset_location_dim(times, lats, lons, values) -> xr.Dataset:
+    """Point obs as (valid_time, location) with lat/lon coords."""
+    n_loc = len(lats)
+    data = np.broadcast_to(np.asarray(values), (len(times), n_loc)).copy()
+    return xr.Dataset(
+        {
+            "surface_air_temperature": (
+                ["valid_time", "location"],
+                data,
+            )
+        },
+        coords={
+            "valid_time": times,
+            "location": np.arange(n_loc),
+            "latitude": ("location", np.asarray(lats)),
+            "longitude": ("location", np.asarray(lons)),
+        },
+    )
+
+
+def _sparse_station_cube(times, lats, lons, values) -> xr.Dataset:
+    """GHCN-style sparse cube: unique lat x lon, one station per pair."""
+    n_t, n_s = len(times), len(lats)
+    coords = np.array(
+        [
+            np.repeat(np.arange(n_t), n_s),
+            np.tile(np.arange(n_s), n_t),
+            np.tile(np.arange(n_s), n_t),
+        ]
+    )
+    data = np.broadcast_to(np.asarray(values), (n_t * n_s,)).copy()
+    sparse_arr = sparse.COO(coords, data, shape=(n_t, n_s, n_s))
+    return xr.Dataset(
+        {
+            "surface_air_temperature": (
+                ["valid_time", "latitude", "longitude"],
+                sparse_arr,
+            )
+        },
+        coords={
+            "valid_time": times,
+            "latitude": np.asarray(lats),
+            "longitude": np.asarray(lons),
+        },
+    )
+
+
+class TestAgnosticSpatialAlign:
+    """Grid/point alignment must sample pairs, not a lat x lon mesh."""
+
+    def test_infer_grid_layout(self):
+        times = pd.date_range("2021-01-01", periods=3, freq="6h")
+        ds = _gridded_forecast(times, [10.0, 20.0], [100.0, 110.0])
+        assert utils.infer_spatial_layout(ds) == "grid"
+
+    def test_infer_location_dim_as_points(self):
+        times = pd.date_range("2021-01-01", periods=3, freq="6h")
+        ds = _point_dataset_location_dim(
+            times, [10.0, 11.0, 12.0], [100.0, 101.0, 102.0], 273.0
+        )
+        assert utils.infer_spatial_layout(ds) == "points"
+
+    def test_infer_sparse_cube_as_points(self):
+        times = pd.date_range("2021-01-01", periods=2, freq="6h")
+        ds = _sparse_station_cube(
+            times, [10.0, 20.0, 30.0], [100.0, 110.0, 120.0], 273.0
+        )
+        assert utils.infer_spatial_layout(ds) == "points"
+
+    def test_grid_to_location_points_is_o_stations_not_mesh(self):
+        """Sampling a field at stations must not allocate n_lat * n_lon."""
+        times = pd.date_range("2021-01-01", periods=4, freq="6h")
+        leads = pd.to_timedelta([0, 6, 12, 18, 24], unit="h")
+        grid_lat = np.linspace(10, 20, 8)
+        grid_lon = np.linspace(100, 110, 8)
+        forecast = _gridded_forecast(
+            times, grid_lat, grid_lon, leads=leads, value=280.0
+        )
+        n_stations = 40
+        st_lats = np.linspace(10.5, 19.5, n_stations)
+        st_lons = np.linspace(100.5, 109.5, n_stations)
+        target = _point_dataset_location_dim(times, st_lats, st_lons, 273.0)
+        aligned_fc, aligned_tg = inputs.align_forecast_to_target(forecast, target)
+        assert "location" in aligned_fc.dims
+        assert aligned_fc.sizes["location"] == n_stations
+        fc_spatial = aligned_fc.surface_air_temperature.isel(lead_time=0, valid_time=0)
+        assert fc_spatial.size == n_stations
+        assert "latitude" not in aligned_fc.dims
+        assert "longitude" not in aligned_fc.dims
+        np.testing.assert_allclose(
+            aligned_fc.latitude.values, aligned_tg.latitude.values
+        )
+        np.testing.assert_allclose(
+            aligned_fc.longitude.values, aligned_tg.longitude.values
+        )
+
+    def test_grid_to_sparse_cube_does_not_fill_lat_lon_product(self):
+        """A sparse station cube must align at occupied pairs only."""
+        times = pd.date_range("2021-01-01", periods=3, freq="6h")
+        n_stations = 25
+        st_lats = np.linspace(10.0, 20.0, n_stations)
+        st_lons = np.linspace(100.0, 110.0, n_stations)
+        forecast = _gridded_forecast(
+            times,
+            np.linspace(9.0, 21.0, 10),
+            np.linspace(99.0, 111.0, 10),
+            value=280.0,
+        )
+        target = _sparse_station_cube(times, st_lats, st_lons, 273.0)
+        aligned_fc, aligned_tg = inputs.align_forecast_to_target(forecast, target)
+        fc_slice = aligned_fc.surface_air_temperature.isel(valid_time=0)
+        # Occupied stations, not the n_stations x n_stations mesh.
+        assert fc_slice.size == n_stations
+        assert aligned_tg.surface_air_temperature.isel(valid_time=0).size == n_stations
+
+    def test_point_forecast_samples_gridded_target(self):
+        """Point forecasts sample the target field at forecast stations."""
+        times = pd.date_range("2021-01-01", periods=3, freq="6h")
+        st_lats = np.array([10.0, 15.0, 20.0])
+        st_lons = np.array([100.0, 105.0, 110.0])
+        forecast = _point_dataset_location_dim(times, st_lats, st_lons, 280.0)
+        target = _gridded_forecast(
+            times,
+            np.linspace(10.0, 20.0, 5),
+            np.linspace(100.0, 110.0, 5),
+            value=270.0,
+        )
+        aligned_fc, aligned_tg = inputs.align_forecast_to_target(forecast, target)
+        assert "location" in aligned_tg.dims
+        assert aligned_tg.sizes["location"] == 3
+        assert "latitude" not in aligned_tg.dims
+        np.testing.assert_allclose(
+            aligned_fc.latitude.values, aligned_tg.latitude.values
+        )
+
+    def test_grid_to_grid_still_remaps_forecast_to_target(self):
+        times = pd.date_range("2021-01-01", periods=3, freq="6h")
+        target = _gridded_forecast(
+            times, np.linspace(10, 20, 5), np.linspace(100, 110, 6)
+        )
+        forecast = _gridded_forecast(
+            times, np.linspace(10, 20, 4), np.linspace(100, 110, 5)
+        )
+        aligned_fc, aligned_tg = inputs.align_forecast_to_target(forecast, target)
+        np.testing.assert_array_equal(
+            aligned_fc.latitude.values, aligned_tg.latitude.values
+        )
+        np.testing.assert_array_equal(
+            aligned_fc.longitude.values, aligned_tg.longitude.values
+        )
+        assert "latitude" in aligned_fc.dims
+        assert "longitude" in aligned_fc.dims
+
+    def test_grid_align_keeps_size_one_lead_time(self):
+        """A single lead must stay a dimension so metrics can preserve it."""
+        times = pd.date_range("2021-01-01", periods=3, freq="6h")
+        leads = pd.to_timedelta([6], unit="h")
+        forecast = _gridded_forecast(
+            times,
+            np.linspace(10, 20, 4),
+            np.linspace(100, 110, 5),
+            leads=leads,
+        )
+        target = _gridded_forecast(
+            times, np.linspace(10, 20, 5), np.linspace(100, 110, 6)
+        )
+        aligned_fc, _aligned_tg = inputs.align_forecast_to_target(forecast, target)
+        assert "lead_time" in aligned_fc.dims
+        assert aligned_fc.sizes["lead_time"] == 1
+
+    def test_point_frame_to_dataset_is_not_a_lat_lon_product(self):
+        times = pd.date_range("2021-01-01", periods=2, freq="6h")
+        rows = []
+        for t in times:
+            for lat, lon in [(10.0, 100.0), (11.0, 101.0), (12.0, 102.0)]:
+                rows.append(
+                    {
+                        "valid_time": t,
+                        "latitude": lat,
+                        "longitude": lon,
+                        "surface_air_temperature": 273.0,
+                    }
+                )
+        df = pd.DataFrame(rows)
+        ds = utils.point_frame_to_dataset(df)
+        assert "location" in ds.dims
+        assert "latitude" not in ds.dims
+        assert ds.sizes["location"] == 3
+        assert ds.surface_air_temperature.size == 2 * 3
+
+    def test_sample_field_mixed_longitude_convention(self):
+        """359° must sample the cell at -1°, not 1°, on a -180/180 grid."""
+        grid = xr.Dataset(
+            {"t2m": (("latitude", "longitude"), np.array([[10.0, 20.0, 30.0]]))},
+            coords={"latitude": [0.0], "longitude": [-1.0, 0.0, 1.0]},
+        )
+        lat = xr.DataArray([0.0], dims="location")
+        lon = xr.DataArray([359.0], dims="location")
+        sampled = utils.sample_field_at_points(grid, lat, lon)
+        np.testing.assert_allclose(sampled.t2m.values, [10.0])
+
+    def test_colocate_points_uses_cyclic_longitude(self):
+        """A station at 0.05° is closer to 359.9° than to 1.0°."""
+        times = pd.date_range("2021-01-01", periods=1, freq="6h")
+        forecast = _point_dataset_location_dim(
+            times, [0.0, 0.0], [359.9, 1.0], [2.0, 1.0]
+        )
+        target = _point_dataset_location_dim(times, [0.0], [0.05], [0.0])
+        mapped = utils._colocate_points(forecast, target)
+        np.testing.assert_allclose(mapped.surface_air_temperature.values, [[2.0]])
+
+    def test_sparse_cube_to_location_does_not_call_todense(self, monkeypatch):
+        """Occupied pairs must be gathered without materializing the cube."""
+        times = pd.date_range("2021-01-01", periods=2, freq="6h")
+        ds = _sparse_station_cube(
+            times, [10.0, 20.0, 30.0], [100.0, 110.0, 120.0], 273.0
+        )
+
+        def _boom(*_args, **_kwargs):
+            raise AssertionError("todense should not be called")
+
+        monkeypatch.setattr(sparse.COO, "todense", _boom)
+        out = utils.sparse_cube_to_location(ds)
+        assert out.sizes["location"] == 3
+        assert "latitude" not in out.dims
+        np.testing.assert_allclose(out.latitude.values, [10.0, 20.0, 30.0])
+
+    def test_sparse_occupancy_is_union_across_variables(self):
+        """Each variable's stored cells count as occupied locations."""
+        times = pd.date_range("2021-01-01", periods=1, freq="6h")
+        shape = (1, 2, 2)
+        a = sparse.COO(
+            np.array([[0], [0], [0]]),
+            np.array([1.0]),
+            shape=shape,
+            fill_value=np.nan,
+        )
+        b = sparse.COO(
+            np.array([[0], [1], [1]]),
+            np.array([2.0]),
+            shape=shape,
+            fill_value=np.nan,
+        )
+        ds = xr.Dataset(
+            {
+                "a": (("valid_time", "latitude", "longitude"), a),
+                "b": (("valid_time", "latitude", "longitude"), b),
+            },
+            coords={
+                "valid_time": times,
+                "latitude": [0.0, 1.0],
+                "longitude": [10.0, 20.0],
+            },
+        )
+        out = utils.sparse_cube_to_location(ds)
+        assert out.sizes["location"] == 2
+        pairs = set(zip(out.latitude.values.tolist(), out.longitude.values.tolist()))
+        assert pairs == {(0.0, 10.0), (1.0, 20.0)}
+
+    def test_point_frame_duplicate_rows_log_a_warning(self, caplog):
+        df = pd.DataFrame(
+            {
+                "valid_time": ["2021-01-01", "2021-01-01"],
+                "latitude": [10.0, 10.0],
+                "longitude": [20.0, 20.0],
+                "station_id": ["A", "B"],
+                "t": [1.0, 2.0],
+            }
+        )
+        with caplog.at_level(logging.WARNING, logger="extremeweatherbench.utils"):
+            ds = utils.point_frame_to_dataset(df)
+        assert ds.sizes["location"] == 1
+        assert "duplicate" in caplog.text.lower()
+
+
+@given(
+    lon=st.floats(min_value=0.0, max_value=359.0, allow_nan=False, allow_infinity=False)
+)
+@settings(max_examples=40, deadline=None)
+def test_sample_field_longitude_shift_by_360_is_invariant(lon):
+    """Nearest sample must not change if longitude is shifted by 360°."""
+    grid_lon = np.arange(0.0, 360.0, 1.0)
+    values = grid_lon[np.newaxis, :]
+    grid = xr.Dataset(
+        {"t2m": (("latitude", "longitude"), values)},
+        coords={"latitude": [0.0], "longitude": grid_lon},
+    )
+    lat = xr.DataArray([0.0], dims="location")
+    base = utils.sample_field_at_points(grid, lat, xr.DataArray([lon], dims="location"))
+    shifted = utils.sample_field_at_points(
+        grid, lat, xr.DataArray([lon - 360.0], dims="location")
+    )
+    np.testing.assert_allclose(base.t2m.values, shifted.t2m.values)
+
+
 class TestGHCN:
     """Test the GHCN target class."""
 
@@ -1157,7 +1624,7 @@ class TestGHCN:
             storage_options={},
         )
 
-        with pytest.raises(ValueError, match="Expected polars LazyFrame"):
+        with pytest.raises(TypeError, match="Expected polars LazyFrame"):
             ghcn.subset_data_to_case("invalid_data", mock.Mock())
 
     def test_ghcn_subset_data_to_case_sorted_valid_time(self, sample_ghcn_dataframe):
@@ -1213,8 +1680,9 @@ class TestGHCN:
 
         assert isinstance(result, xr.Dataset)
         assert "valid_time" in result.dims
-        assert "latitude" in result.dims
-        assert "longitude" in result.dims
+        assert "location" in result.dims
+        assert "latitude" in result.coords
+        assert "longitude" in result.coords
 
     def test_ghcn_custom_convert_to_dataset_invalid_input(self):
         """Test GHCN custom conversion with invalid input."""
@@ -1225,7 +1693,7 @@ class TestGHCN:
             storage_options={},
         )
 
-        with pytest.raises(ValueError, match="Data is not a polars LazyFrame"):
+        with pytest.raises(TypeError, match="Data is not a polars LazyFrame"):
             ghcn._custom_convert_to_dataset("invalid_data")
 
     def test_ghcn_custom_convert_to_dataset_no_duplicates(self, sample_ghcn_dataframe):
@@ -1246,13 +1714,16 @@ class TestGHCN:
 
         assert isinstance(result, xr.Dataset)
         assert "valid_time" in result.dims
-        assert "latitude" in result.dims
-        assert "longitude" in result.dims
+        assert "location" in result.dims
+        assert "latitude" in result.coords
+        assert "longitude" in result.coords
         assert "surface_air_temperature" in result.data_vars
 
         # Should have no NaN values if no duplicates were dropped
         original_count = len(clean_data)
-        result_count = result.surface_air_temperature.count().item()
+        result_count = utils.maybe_densify_dataarray(
+            result.surface_air_temperature.count()
+        ).item()
         assert result_count == original_count
 
     def test_ghcn_custom_convert_to_dataset_single_duplicate(
@@ -1282,7 +1753,9 @@ class TestGHCN:
 
         # Should have dropped one duplicate, so count should equal original
         original_count = len(clean_data)
-        result_count = result.surface_air_temperature.count().item()
+        result_count = utils.maybe_densify_dataarray(
+            result.surface_air_temperature.count()
+        ).item()
         assert result_count == original_count
 
     def test_ghcn_custom_convert_to_dataset_many_duplicates(
@@ -1319,7 +1792,9 @@ class TestGHCN:
 
         # Should have dropped all duplicates, so count should equal original
         original_count = len(clean_data)
-        result_count = result.surface_air_temperature.count().item()
+        result_count = utils.maybe_densify_dataarray(
+            result.surface_air_temperature.count()
+        ).item()
         assert result_count == original_count
 
     def test_ghcn_custom_convert_to_dataset_exception_handling(self):
@@ -1392,7 +1867,7 @@ class TestGHCN:
             # Operation should complete without error
             assert isinstance(aligned_forecast, xr.Dataset)
             assert isinstance(aligned_target, xr.Dataset)
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             # If it does fail, it should be a controlled failure, not a crash
             assert "empty" in str(e).lower() or "no data" in str(e).lower()
 
@@ -1443,6 +1918,29 @@ class TestLSR:
         mock_read_parquet.assert_called_once_with("test.parquet", storage_options={})
         assert result.equals(sample_lsr_dataframe)
 
+    @mock.patch("pandas.read_parquet")
+    def test_lsr_open_data_from_source_with_time_filters(
+        self, mock_read_parquet, sample_lsr_dataframe
+    ):
+        """Case metadata should be pushed into the parquet read as filters."""
+        mock_read_parquet.return_value = sample_lsr_dataframe
+        mock_case = mock.Mock()
+        mock_case.start_date = pd.Timestamp("2021-06-20")
+        mock_case.end_date = pd.Timestamp("2021-06-21")
+        lsr = inputs.LSR(
+            source="test.parquet",
+            variables=["report"],
+            variable_mapping={},
+            storage_options={},
+        )
+        lsr._open_data_from_source(case_metadata=mock_case)
+        kwargs = mock_read_parquet.call_args.kwargs
+        assert kwargs["storage_options"] == {}
+        assert kwargs["filters"] == [
+            ("valid_time", ">=", pd.Timestamp("2021-06-20")),
+            ("valid_time", "<=", pd.Timestamp("2021-06-21")),
+        ]
+
     def test_lsr_subset_data_to_case(self, sample_lsr_dataframe):
         """Test LSR subset_data_to_case."""
         # Create mock case operator
@@ -1481,7 +1979,7 @@ class TestLSR:
             storage_options={},
         )
 
-        with pytest.raises(ValueError, match="Expected pandas DataFrame"):
+        with pytest.raises(TypeError, match="Expected pandas DataFrame"):
             lsr.subset_data_to_case("invalid_data", mock.Mock())
 
     def test_lsr_custom_convert_to_dataset(self, sample_lsr_dataframe):
@@ -1513,7 +2011,7 @@ class TestLSR:
             storage_options={},
         )
 
-        with pytest.raises(ValueError, match="Data is not a pandas DataFrame"):
+        with pytest.raises(TypeError, match="Data is not a pandas DataFrame"):
             lsr._custom_convert_to_dataset("invalid_data")
 
     @mock.patch("extremeweatherbench.inputs.align_forecast_to_target")
@@ -1627,12 +2125,43 @@ class TestIBTrACS:
             storage_options={},
         )
 
-        with pytest.raises(ValueError, match="Data is not a polars LazyFrame"):
+        with pytest.raises(TypeError, match="Data is not a polars LazyFrame"):
             ibtracs._custom_convert_to_dataset("invalid_data")
 
 
 class TestStandaloneFunctions:
     """Test standalone functions in inputs module."""
+
+    def test_cira_time_to_lead_time(self):
+        """CIRA's time axis (first init's valid times) becomes lead_time."""
+        init_time = pd.date_range("2021-06-15T12", periods=2, freq="12h")
+        ds = xr.Dataset(
+            {"t2": (["init_time", "time"], np.zeros((2, 41)))},
+            coords={
+                "init_time": init_time,
+                "time": pd.date_range(init_time[0], periods=41, freq="6h"),
+            },
+        )
+        result = inputs._cira_time_to_lead_time(ds)
+        assert "time" not in result.dims
+        np.testing.assert_array_equal(
+            result["lead_time"].values,
+            pd.to_timedelta(np.arange(0, 241, 6), unit="h").values,
+        )
+        # Already converted (or not CIRA-shaped): unchanged
+        assert inputs._cira_time_to_lead_time(result) is result
+
+    @mock.patch("xarray.open_dataset")
+    def test_open_kerchunk_reference_sets_lead_time(self, mock_open_dataset):
+        """The opener converts CIRA's time axis before anything else runs."""
+        mock_open_dataset.return_value = xr.Dataset(
+            coords={
+                "init_time": pd.date_range("2021-06-15", periods=2),
+                "time": pd.date_range("2021-06-15", periods=3, freq="6h"),
+            }
+        )
+        result = inputs.open_kerchunk_reference("test.parq")
+        assert "lead_time" in result.dims and "time" not in result.dims
 
     @mock.patch("xarray.open_dataset")
     def test_open_kerchunk_reference_parquet(
@@ -1687,6 +2216,49 @@ class TestStandaloneFunctions:
         """Test opening kerchunk reference with unsupported file format."""
         with pytest.raises(TypeError, match="Unknown kerchunk file type"):
             inputs.open_kerchunk_reference("test.txt")
+
+    @mock.patch("xarray.open_dataset")
+    def test_open_kerchunk_reference_none_uses_anonymous_defaults(
+        self, mock_open_dataset, sample_forecast_dataset
+    ):
+        """Test storage_options=None resolves to the anonymous defaults."""
+        mock_open_dataset.return_value = sample_forecast_dataset
+
+        inputs.open_kerchunk_reference("test.parq", storage_options=None)
+
+        mock_open_dataset.assert_called_once_with(
+            "test.parq",
+            engine="kerchunk",
+            storage_options=inputs.DEFAULT_KERCHUNK_STORAGE_OPTIONS,
+            chunks="auto",
+        )
+
+    @mock.patch("xarray.open_dataset")
+    def test_open_kerchunk_reference_json_does_not_mutate_caller_dict(
+        self, mock_open_dataset, sample_forecast_dataset
+    ):
+        """Test the .json path doesn't mutate the caller-supplied dict."""
+        mock_open_dataset.return_value = sample_forecast_dataset
+
+        storage_options = {"remote_protocol": "s3", "remote_options": {"anon": True}}
+
+        inputs.open_kerchunk_reference("test.json", storage_options=storage_options)
+
+        assert "fo" not in storage_options
+
+    @mock.patch("xarray.open_dataset")
+    def test_open_kerchunk_reference_json_does_not_mutate_module_default(
+        self, mock_open_dataset, sample_forecast_dataset
+    ):
+        """Test two successive .json calls don't leak state into the default."""
+        mock_open_dataset.return_value = sample_forecast_dataset
+
+        original_default = copy.deepcopy(inputs.DEFAULT_KERCHUNK_STORAGE_OPTIONS)
+
+        inputs.open_kerchunk_reference("first.json", storage_options=None)
+        inputs.open_kerchunk_reference("second.json", storage_options=None)
+
+        assert inputs.DEFAULT_KERCHUNK_STORAGE_OPTIONS == original_default
 
     def test_zarr_target_subsetter(self, sample_era5_dataset):
         """Test zarr_target_subsetter function."""
@@ -1796,6 +2368,15 @@ class TestConstants:
         assert mapping["ISO_TIME"] == "valid_time"
         assert mapping["LAT"] == "latitude"
         assert mapping["LON"] == "longitude"
+
+    def test_ibtracs_preprocess_before_variable_mapping(self):
+        """IBTrACS is the exception that preprocesses source columns."""
+        ibtracs = inputs.IBTrACS(source="test.csv")
+        ghcn = inputs.GHCN(source="test.parquet")
+        lsr = inputs.LSR(source="test.parquet")
+        assert ibtracs.preprocess_before_variable_mapping is True
+        assert ghcn.preprocess_before_variable_mapping is False
+        assert lsr.preprocess_before_variable_mapping is False
 
 
 @pytest.mark.integration

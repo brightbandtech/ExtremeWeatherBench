@@ -25,18 +25,18 @@ operators.
 ```python
 import extremeweatherbench as ewb
 
-forecast = ewb.ZarrForecast(
+forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
 # Gridded ERA5 target
-era5_target = ewb.ERA5(variables=["surface_air_temperature"])
+era5_target = ewb.inputs.ERA5(variables=["surface_air_temperature"])
 
 # Point observation GHCN target
-ghcn_target = ewb.GHCN()
+ghcn_target = ewb.inputs.GHCN()
 
 shared_metrics = [
     ewb.metrics.MeanAbsoluteError(
@@ -50,13 +50,13 @@ shared_metrics = [
 ]
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=shared_metrics,
         target=era5_target,
         forecast=forecast,
     ),
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=shared_metrics,
         target=ghcn_target,
@@ -64,8 +64,10 @@ eval_objects = [
     ),
 ]
 
-cases = ewb.load_cases()
-runner = ewb.evaluation(case_metadata=cases, evaluation_objects=eval_objects)
+cases = ewb.cases.load_cases()
+runner = ewb.evaluate.ExtremeWeatherBench(
+    case_metadata=cases, evaluation_objects=eval_objects
+)
 outputs = runner.run_evaluation()
 ```
 
@@ -74,15 +76,16 @@ rows from each target (`"ERA5"` vs `"GHCN"`), making it straightforward
 to compare them:
 
 ```python
-era5_results  = outputs[outputs["target_source"] == "ERA5"]
-ghcn_results  = outputs[outputs["target_source"] == "GHCN"]
+era5_results = outputs[outputs["target_source"] == "ERA5"]
+ghcn_results = outputs[outputs["target_source"] == "GHCN"]
 ```
 
 > **Detailed Explanation**: Each `EvaluationObject` expands into one
-> `CaseOperator` per case. With two `EvaluationObjects` and 337 cases
-> you get 674 operators; they share the forecast source, so IO is not
-> doubled. However, GHCN and ERA5 alignment happens independently for
-> each target — GHCN uses nearest-neighbour interpolation to match
+> `CaseOperator` per case. Two `EvaluationObjects` share the forecast
+> source, so IO is not doubled. Case counts live in
+> [Case Studies](../events/case_studies.md). GHCN and ERA5 alignment
+> happens independently for each target — GHCN uses nearest-neighbour
+> interpolation to match
 > station locations, while ERA5 uses spatial regridding to the forecast
 > grid. The `target_source` column is set from the `name` attribute on
 > the target object.
@@ -96,15 +99,15 @@ is evaluated against GHCN:
 ```python
 import extremeweatherbench as ewb
 
-forecast = ewb.ZarrForecast(
+forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MaximumMeanAbsoluteError(
@@ -112,10 +115,10 @@ eval_objects = [
                 target_variable="surface_air_temperature",
             ),
         ],
-        target=ewb.ERA5(variables=["surface_air_temperature"]),
+        target=ewb.inputs.ERA5(variables=["surface_air_temperature"]),
         forecast=forecast,
     ),
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="freeze",
         metric_list=[
             ewb.metrics.MinimumMeanAbsoluteError(
@@ -123,13 +126,15 @@ eval_objects = [
                 target_variable="surface_air_temperature",
             ),
         ],
-        target=ewb.GHCN(),
+        target=ewb.inputs.GHCN(),
         forecast=forecast,
     ),
 ]
 
-cases = ewb.load_cases()
-runner = ewb.evaluation(case_metadata=cases, evaluation_objects=eval_objects)
+cases = ewb.cases.load_cases()
+runner = ewb.evaluate.ExtremeWeatherBench(
+    case_metadata=cases, evaluation_objects=eval_objects
+)
 outputs = runner.run_evaluation()
 ```
 
@@ -146,7 +151,7 @@ at station locations). Supply different `metric_list` values to each
 
 ```python
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.RootMeanSquaredError(
@@ -154,10 +159,10 @@ eval_objects = [
                 target_variable="surface_air_temperature",
             ),
         ],
-        target=ewb.ERA5(variables=["surface_air_temperature"]),
+        target=ewb.inputs.ERA5(variables=["surface_air_temperature"]),
         forecast=forecast,
     ),
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=[
             ewb.metrics.MeanAbsoluteError(
@@ -169,7 +174,7 @@ eval_objects = [
                 target_variable="surface_air_temperature",
             ),
         ],
-        target=ewb.GHCN(),
+        target=ewb.inputs.GHCN(),
         forecast=forecast,
     ),
 ]
@@ -201,17 +206,15 @@ demo_case = IndividualCase(
 )
 cases = [demo_case]
 
-forecast = ewb.ZarrForecast(
+forecast = ewb.inputs.ZarrForecast(
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     name="HRES",
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
 )
 
-era5_target = ewb.ERA5(
-    variables=["surface_air_temperature"]
-)
-ghcn_target = ewb.GHCN()
+era5_target = ewb.inputs.ERA5(variables=["surface_air_temperature"])
+ghcn_target = ewb.inputs.GHCN()
 
 shared_metrics = [
     ewb.metrics.MeanAbsoluteError(
@@ -225,13 +228,13 @@ shared_metrics = [
 ]
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=shared_metrics,
         target=era5_target,
         forecast=forecast,
     ),
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="heat_wave",
         metric_list=shared_metrics,
         target=ghcn_target,
@@ -239,7 +242,7 @@ eval_objects = [
     ),
 ]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=cases,
     evaluation_objects=eval_objects,
 )
@@ -247,8 +250,6 @@ outputs = runner.run_evaluation()
 
 mae = outputs[outputs["metric"] == "MeanAbsoluteError"]
 for source in ["ERA5", "GHCN"]:
-    mean_mae = mae[
-        mae["target_source"] == source
-    ]["value"].mean()
+    mean_mae = mae[mae["target_source"] == source]["value"].mean()
     print(f"{source:6s} mean MAE: {mean_mae:.4f} K")
 ```

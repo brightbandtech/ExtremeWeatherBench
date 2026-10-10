@@ -4,6 +4,7 @@ build/
 dist/
 __pycache__/
 .pytest_cache
+.hypothesis/
 *.py[oc]
 wheels/
 .python-version

@@ -1,6 +1,6 @@
 [project]
 name = "extremeweatherbench"
-version = "1.0.2.post1"
+version = "1.1.0"
 description = "Benchmarking weather and weather AI models using extreme events"
 keywords = [
     "weather",
@@ -16,52 +16,55 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Atmospheric Science",
 ]
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.12,<3.15"
 dependencies = [
     "dacite>=1.8.1",
     "gcsfs>=2024.12.0",
     "geopandas>=1.0.1",
     "joblib>=1.4.2",
     "numpy>=2.2.0",
-    "pandas>=2.2.3",
+    "pandas>=2.2.3,<3",
+    "pooch>=1.8.2",
     "pyarrow>=19.0.1",
     "pyyaml>=6.0.2",
     "regionmask>=0.13.0",
     "s3fs>=2024.12.0",
     "scores>=2.4.0",
+    "shapely>=2.0",
     "tqdm>=4.67.1",
     "xarray[io]>=2025.7.1",
     "zarr>=3.0.9,<4",
-    "kerchunk[dev]",
+    "kerchunk>=0.2.10",
+    "fastparquet>=2024.11.0",
     "flox>=0.10.0",
     "click>=8.1.8",
     "polars>=1.32.1",
-    "eccodes==2.42.0",
-    "frozenlist==1.5.0",
-    "pyogrio==0.10.0",
     "scikit-image>=0.25.2",
-    "cartopy==0.24.1",
-    "numba>=0.63.1",
+    "numba>=0.66.0",
     "sparse>=0.17.0",
-    "icechunk>=1.1.14",
+    "icechunk>=2.1.2",
     "dask[complete]>=2025.1.0",
     "distributed>=2025.1.0",
+    "lazy-loader>=0.4",
 ]
 
 [project.optional-dependencies]
 data-prep = [
+    # No cp314 wheels are published; installing on 3.14 would build from
+    # source and require system GEOS and PROJ.
+    "cartopy>=0.24.1; python_version < '3.14'",
     "fsspec>=2024.12.0",
     "matplotlib>=3.10.0",
     "obstore>=0.8.2",
     "scipy>=1.13",
     "seaborn>=0.13.2",
     "ujson>=5.10.0",
-    "virtualizarr==2.1.2",
+    "virtualizarr>=2.7.3",
     "dask[complete]>=2025.1.0",
     "distributed>=2025.1.0",
 ]
@@ -80,12 +83,13 @@ dev = [
     "pytest>=8.3.4",
     "pytest-cov>=6.0.0",
     "pytest-mock>=3.14.0",
-    "ruff>=0.9.4",
+    "ruff>=0.16.2",
     "types-pytz>=2025.2.0.20250809",
     "types-pyyaml>=6.0.12.20241230",
     "types-tqdm>=4.67.0.20250809",
     "python-semantic-release>=10.3.0",
     "twine>=5.1.1",
+    "hypothesis>=6.165.3",
 ]
 docs = [
     "zensical>=0.0.38",
@@ -116,12 +120,16 @@ ewb = "extremeweatherbench.evaluate_cli:cli_runner"
 
 [tool.uv.sources]
 extremeweatherbench = { workspace = true }
-kerchunk = { git = "https://github.com/fsspec/kerchunk" }
 
 [tool.ruff]
 line-length = 88
 indent-width = 4
-lint.ignore = []
+# Naive UTC datetimes match CF / xarray climate conventions.
+lint.ignore = ["DTZ001", "DTZ007"]
+
+[tool.ruff.lint.per-file-ignores]
+# Batch scripts catch Exception to keep processing on bad files.
+"data_prep/**" = ["BLE001", "S110"]
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.

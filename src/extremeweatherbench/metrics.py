@@ -1,7 +1,8 @@
 import abc
 import logging
 import operator
-from typing import Any, Callable, Literal, Optional, Sequence, Type, Union
+from collections.abc import Callable, Sequence
+from typing import Any, Literal
 
 import numpy as np
 import scores
@@ -26,27 +27,28 @@ class ComputeDocstringMetaclass(abc.ABCMeta):
     """
 
     def __new__(cls, name, bases, namespace):
-        cls = super().__new__(cls, name, bases, namespace)
+        new_cls = super().__new__(cls, name, bases, namespace)
         # NOTE: the `compute_metric()` method will be defined in the ABC `BaseMetric`,
         # and we never expect the user re-implement it. So it won't be in the namespace
         # of the concrete metric classes - it will only be in the namespace of the ABC
         # `BaseMetric`, and will be available as an attribute of the concrete metric
         # classes.
-        if "_compute_metric" in namespace and hasattr(cls, "compute_metric"):
-            # Transfer the docstring from _compute_metric to compute_metric, if the
-            # former exists.
-            if cls._compute_metric.__doc__ is not None:
-                # Create a new method for _this_ class, so we can avoid overwriting what
-                # we set for the parent.
-                _original_compute_metric = cls.compute_metric
+        if (
+            "_compute_metric" in namespace
+            and hasattr(new_cls, "compute_metric")
+            and new_cls._compute_metric.__doc__ is not None
+        ):
+            # Create a new method for _this_ class, so we can avoid overwriting what
+            # we set for the parent.
+            _original_compute_metric = new_cls.compute_metric
 
-                def _compute_metric_with_docstring(self, *args, **kwargs):
-                    return _original_compute_metric(self, *args, **kwargs)
+            def _compute_metric_with_docstring(self, *args, **kwargs):
+                return _original_compute_metric(self, *args, **kwargs)
 
-                _compute_metric_with_docstring.__doc__ = cls._compute_metric.__doc__
-                cls.compute_metric = _compute_metric_with_docstring
+            _compute_metric_with_docstring.__doc__ = new_cls._compute_metric.__doc__
+            new_cls.compute_metric = _compute_metric_with_docstring
 
-        return cls
+        return new_cls
 
 
 class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
@@ -72,8 +74,8 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
         self,
         name: str,
         preserve_dims: str = "lead_time",
-        forecast_variable: Optional[str | derived.DerivedVariable] = None,
-        target_variable: Optional[str | derived.DerivedVariable] = None,
+        forecast_variable: str | derived.DerivedVariable | None = None,
+        target_variable: str | derived.DerivedVariable | None = None,
     ):
         """Initialize the base metric.
 
@@ -123,7 +125,6 @@ class BaseMetric(abc.ABC, metaclass=ComputeDocstringMetaclass):
         Returns:
             The computed metric result.
         """
-        pass
 
     def compute_metric(
         self,
@@ -214,7 +215,7 @@ class CompositeMetric(BaseMetric):
             **kwargs: Keyword arguments passed to BaseMetric.__init__
         """
         super().__init__(*args, **kwargs)
-        self._metric_instances: list["BaseMetric"] = []
+        self._metric_instances: list[BaseMetric] = []
 
     def maybe_expand_composite(self) -> Sequence["BaseMetric"]:
         """Expand composite metrics into individual metrics.
@@ -300,11 +301,11 @@ class ThresholdMetric(CompositeMetric):
         self,
         name: str = "threshold_metrics",
         preserve_dims: str = "lead_time",
-        forecast_variable: Optional[str | derived.DerivedVariable] = None,
-        target_variable: Optional[str | derived.DerivedVariable] = None,
+        forecast_variable: str | derived.DerivedVariable | None = None,
+        target_variable: str | derived.DerivedVariable | None = None,
         forecast_threshold: float = 0.5,
         target_threshold: float = 0.5,
-        metrics: Optional[list[Type["ThresholdMetric"]]] = None,
+        metrics: list[type["ThresholdMetric"]] | None = None,
         **kwargs,
     ):
         """Initialize the threshold metric.
@@ -370,9 +371,7 @@ class ThresholdMetric(CompositeMetric):
         forecast_threshold: float,
         target_threshold: float,
         preserve_dims: str,
-        op_func: Union[
-            Callable, Literal[">", ">=", "<", "<=", "==", "!="]
-        ] = operator.ge,
+        op_func: Callable | Literal[">", ">=", "<", "<=", "==", "!="] = operator.ge,
     ) -> scores.categorical.BasicContingencyManager:
         """Create and transform a contingency manager.
 
@@ -791,13 +790,15 @@ class MeanSquaredError(BaseMetric):
     def __init__(
         self,
         name: str = "MeanSquaredError",
-        interval_where_one: Optional[
-            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
-        ] = None,
-        interval_where_positive: Optional[
-            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
-        ] = None,
-        weights: Optional[xr.DataArray] = None,
+        interval_where_one: tuple[
+            int | float | xr.DataArray, int | float | xr.DataArray
+        ]
+        | None = None,
+        interval_where_positive: tuple[
+            int | float | xr.DataArray, int | float | xr.DataArray
+        ]
+        | None = None,
+        weights: xr.DataArray | None = None,
         *args,
         **kwargs,
     ):
@@ -848,13 +849,15 @@ class MeanAbsoluteError(BaseMetric):
     def __init__(
         self,
         name: str = "MeanAbsoluteError",
-        interval_where_one: Optional[
-            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
-        ] = None,
-        interval_where_positive: Optional[
-            tuple[int | float | xr.DataArray, int | float | xr.DataArray]
-        ] = None,
-        weights: Optional[xr.DataArray] = None,
+        interval_where_one: tuple[
+            int | float | xr.DataArray, int | float | xr.DataArray
+        ]
+        | None = None,
+        interval_where_positive: tuple[
+            int | float | xr.DataArray, int | float | xr.DataArray
+        ]
+        | None = None,
+        weights: xr.DataArray | None = None,
         *args,
         **kwargs,
     ):
@@ -994,9 +997,8 @@ class EarlySignal(BaseMetric):
     def __init__(
         self,
         name: str = "EarlySignal",
-        comparison_operator: Union[
-            Callable, Literal[">", ">=", "<", "<=", "==", "!="]
-        ] = ">=",
+        comparison_operator: Callable
+        | Literal[">", ">=", "<", "<=", "==", "!="] = ">=",
         forecast_threshold: float = 0.5,
         overlap_target_threshold: float | None = None,
         spatial_aggregation: Literal["any", "all", "half"] = "any",
@@ -1136,15 +1138,15 @@ class EarlySignal(BaseMetric):
 class MaximumMeanAbsoluteError(MeanAbsoluteError):
     """Compute MAE between forecast and target maximum values.
 
-    Extends MeanAbsoluteError to filter forecast to a time window around the
-    target's maximum using tolerance_range_hours. Useful for evaluating peak
-    value timing and magnitude.
+    For each initialization, the forecast maximum is taken over that
+    run's lead times inside tolerance_range_hours of the target's
+    maximum. Useful for evaluating peak value timing and magnitude.
     """
 
     def __init__(
         self,
         tolerance_range_hours: int = 24,
-        reduce_spatial_dims: list[str] = ["latitude", "longitude"],
+        reduce_spatial_dims: list[str] | None = None,
         name: str = "MaximumMeanAbsoluteError",
         *args,
         **kwargs,
@@ -1163,6 +1165,8 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
             **kwargs: Additional keyword arguments passed to
                 MeanAbsoluteError.
         """
+        if reduce_spatial_dims is None:
+            reduce_spatial_dims = ["latitude", "longitude"]
         self.tolerance_range_hours = tolerance_range_hours
         self.reduce_spatial_dims = reduce_spatial_dims
         super().__init__(name, *args, **kwargs)
@@ -1175,6 +1179,12 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
     ) -> xr.DataArray:
         """Compute MaximumMeanAbsoluteError.
 
+        The forecast maximum is taken over each initialization's own lead times
+        inside the tolerance window, so every value compared to the target is a
+        genuine maximum over the forecast's diurnal cycle. Results are indexed
+        by the lead time of the target's maximum relative to each
+        initialization.
+
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
@@ -1182,11 +1192,14 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
         Returns:
             MeanAbsoluteError of the maximum values.
         """
-        # Enforced spatial reduction for MaximumMeanAbsoluteError
-        reduce_spatial_dims = ["latitude", "longitude"]
+        reduce_spatial_dims = self.reduce_spatial_dims
         target_spatial_mean = utils.reduce_dataarray(
             target, method="mean", reduce_dims=reduce_spatial_dims, skipna=True
         )
+        if target_spatial_mean.valid_time.size == 0 or bool(
+            target_spatial_mean.isnull().all()
+        ):
+            return utils._create_nan_dataarray(self.preserve_dims)
         maximum_timestep = target_spatial_mean.idxmax("valid_time")
         maximum_value = target_spatial_mean.sel(valid_time=maximum_timestep)
 
@@ -1197,19 +1210,12 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
         forecast_spatial_mean = utils.reduce_dataarray(
             forecast, method="mean", reduce_dims=reduce_spatial_dims, skipna=True
         )
-        filtered_max_forecast = forecast_spatial_mean.where(
-            (
-                forecast_spatial_mean.valid_time
-                >= maximum_timestep.data
-                - np.timedelta64(self.tolerance_range_hours // 2, "h")
-            )
-            & (
-                forecast_spatial_mean.valid_time
-                <= maximum_timestep.data
-                + np.timedelta64(self.tolerance_range_hours // 2, "h")
-            ),
-            drop=True,
-        ).max("valid_time")
+        filtered_max_forecast = utils.reduce_forecast_over_window_per_init(
+            forecast_spatial_mean,
+            center_time=maximum_timestep,
+            tolerance_range_hours=self.tolerance_range_hours,
+            method="max",
+        )
         return super()._compute_metric(
             forecast=filtered_max_forecast,
             target=maximum_value,
@@ -1220,15 +1226,15 @@ class MaximumMeanAbsoluteError(MeanAbsoluteError):
 class MinimumMeanAbsoluteError(MeanAbsoluteError):
     """Compute MAE between forecast and target minimum values.
 
-    Extends MeanAbsoluteError to filter forecast to a time window around the
-    target's minimum using tolerance_range_hours. Useful for evaluating
-    minimum value timing and magnitude.
+    For each initialization, the forecast minimum is taken over that
+    run's lead times inside tolerance_range_hours of the target's
+    minimum. Useful for evaluating minimum value timing and magnitude.
     """
 
     def __init__(
         self,
         tolerance_range_hours: int = 24,
-        reduce_spatial_dims: list[str] = ["latitude", "longitude"],
+        reduce_spatial_dims: list[str] | None = None,
         name: str = "MinimumMeanAbsoluteError",
         *args,
         **kwargs,
@@ -1247,6 +1253,8 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
             **kwargs: Additional keyword arguments passed to
                 MeanAbsoluteError.
         """
+        if reduce_spatial_dims is None:
+            reduce_spatial_dims = ["latitude", "longitude"]
         self.tolerance_range_hours = tolerance_range_hours
         self.reduce_spatial_dims = reduce_spatial_dims
         super().__init__(name, *args, **kwargs)
@@ -1259,6 +1267,10 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
     ) -> Any:
         """Compute MinimumMeanAbsoluteError.
 
+        As with MaximumMeanAbsoluteError, the forecast minimum is taken over
+        each initialization's own lead times inside the tolerance window rather
+        than across initializations at fixed lead time.
+
         Args:
             forecast: The forecast DataArray.
             target: The target DataArray.
@@ -1269,6 +1281,10 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
         target_spatial_mean = utils.reduce_dataarray(
             target, method="mean", reduce_dims=self.reduce_spatial_dims, skipna=True
         )
+        if target_spatial_mean.valid_time.size == 0 or bool(
+            target_spatial_mean.isnull().all()
+        ):
+            return utils._create_nan_dataarray(self.preserve_dims)
         minimum_timestep = target_spatial_mean.idxmin("valid_time")
         minimum_value = target_spatial_mean.sel(valid_time=minimum_timestep)
         forecast_spatial_mean = utils.reduce_dataarray(
@@ -1278,19 +1294,12 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
         minimum_timestep = utils.maybe_get_closest_timestamp_to_center_of_valid_times(
             minimum_timestep, target.valid_time
         )
-        filtered_min_forecast = forecast_spatial_mean.where(
-            (
-                forecast_spatial_mean.valid_time
-                >= minimum_timestep.data
-                - np.timedelta64(self.tolerance_range_hours // 2, "h")
-            )
-            & (
-                forecast_spatial_mean.valid_time
-                <= minimum_timestep.data
-                + np.timedelta64(self.tolerance_range_hours // 2, "h")
-            ),
-            drop=True,
-        ).min("valid_time")
+        filtered_min_forecast = utils.reduce_forecast_over_window_per_init(
+            forecast_spatial_mean,
+            center_time=minimum_timestep,
+            tolerance_range_hours=self.tolerance_range_hours,
+            method="min",
+        )
         return super()._compute_metric(
             forecast=filtered_min_forecast,
             target=minimum_value,
@@ -1299,11 +1308,11 @@ class MinimumMeanAbsoluteError(MeanAbsoluteError):
 
 
 class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
-    """Compute MAE of maximum aggregated minimum values for heatwaves.
+    """Compute MAE of the warmest daily minimum for heatwaves.
 
-    Extends MeanAbsoluteError for heatwave evaluation by aggregating daily
-    minimum values and computing MAE between the warmest nighttime (daily
-    minimum) temperature in target and forecast.
+    The target contributes the warmest complete daily minimum. Each
+    forecast initialization contributes its lowest value inside the
+    tolerance window, scored only if that run covers a full day.
     """
 
     def __init__(
@@ -1335,6 +1344,12 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
         **kwargs: Any,
     ) -> Any:
         """Compute MaximumLowestMeanAbsoluteError.
+
+        The target contributes the warmest of its daily minima. Each forecast
+        initialization contributes the lowest value it predicts inside the
+        tolerance window centered on that time, which spans one diurnal
+        minimum, so both sides answer the same question. An initialization is
+        only scored if it covers a full day inside the window.
 
         Args:
             forecast: The forecast DataArray.
@@ -1374,32 +1389,18 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
                 max_min_target_datetime, target.valid_time
             )
         )
-        subset_forecast = (
-            forecast.where(
-                (
-                    forecast.valid_time
-                    >= (
-                        max_min_target_datetime.data
-                        - np.timedelta64(self.tolerance_range_hours // 2, "h")
-                    )
-                )
-                & (
-                    forecast.valid_time
-                    <= (
-                        max_min_target_datetime.data
-                        + np.timedelta64(self.tolerance_range_hours // 2, "h")
-                    )
-                ),
-                drop=True,
-            )
-            .groupby("valid_time.dayofyear")
-            .map(
-                utils.min_if_all_timesteps_present_forecast,
-                time_resolution_hours=utils.determine_temporal_resolution(forecast),
-            )
-            .min("dayofyear")
+        # Carry the time the target's warmest minimum occurred into the output,
+        # matching the other peak metrics.
+        max_min_target_value = max_min_target_value.assign_coords(
+            valid_time=np.asarray(max_min_target_datetime.values).reshape(-1)[0]
         )
-
+        subset_forecast = utils.reduce_forecast_over_window_per_init(
+            forecast,
+            center_time=max_min_target_datetime,
+            tolerance_range_hours=self.tolerance_range_hours,
+            method="min",
+            required_timesteps=utils.expected_timesteps_per_day(forecast),
+        )
         return super()._compute_metric(
             forecast=subset_forecast,
             target=max_min_target_value,
@@ -1409,7 +1410,7 @@ class MaximumLowestMeanAbsoluteError(MeanAbsoluteError):
 
 def _calculate_event_duration(
     mask: xr.DataArray,
-    time_resolution_hours: int | float,
+    time_resolution_hours: float,
     preserve_dims: str = "init_time",
 ) -> xr.DataArray:
     """Count total consecutive-run duration in hours along valid_time.
@@ -1447,10 +1448,13 @@ def _calculate_event_duration(
     Returns:
         DataArray with valid_time reduced out, values in hours.
     """
+    if mask.valid_time.size == 0:
+        return utils._create_nan_dataarray(preserve_dims)
     expected_gap = np.timedelta64(int(time_resolution_hours), "h")
     mask = mask.fillna(False).astype(bool)
     vt = mask.valid_time.values
-    gaps = np.concatenate([[False], (vt[1:] - vt[:-1]) == expected_gap])
+    gaps = np.zeros(vt.size, dtype=bool)
+    gaps[1:] = (vt[1:] - vt[:-1]) == expected_gap
     is_expected_gap = xr.DataArray(gaps, dims=["valid_time"], coords={"valid_time": vt})
     # When init_time is only a coordinate (not a dim) and lead_time is a dim,
     # consecutive timesteps within one forecast run follow the diagonal of the
@@ -1460,7 +1464,7 @@ def _calculate_event_duration(
     # that the predecessor cell has the same init_time (vt - lead = const).
     # For daily targets aligned to a 6 h lead_time grid this is 24h/6h = 4.
     if "lead_time" in mask.dims and preserve_dims not in mask.dims:
-        lt_step = np.unique(np.diff(mask.lead_time.values))
+        lt_step = np.unique(np.diff(utils._lead_time_as_timedelta(mask.lead_time)))
         n_lead_steps = (
             max(1, int(expected_gap / lt_step[0]))
             if len(lt_step) == 1 and lt_step[0] > np.timedelta64(0)
@@ -1488,8 +1492,8 @@ class DurationMeanError(MeanError):
     def __init__(
         self,
         threshold_criteria: xr.DataArray | float,
-        reduce_spatial_dims: list[str] = ["latitude", "longitude"],
-        op_func: Union[Callable, Literal[">", ">=", "<", "<=", "==", "!="]] = ">=",
+        reduce_spatial_dims: list[str] | None = None,
+        op_func: Callable | Literal[">", ">=", "<", "<=", "==", "!="] = ">=",
         name: str = "DurationMeanError",
         preserve_dims: str = "init_time",
         product_time_resolution_hours: bool = False,
@@ -1511,6 +1515,8 @@ class DurationMeanError(MeanError):
             product_time_resolution_hours: Whether to multiply duration by
                 time resolution of forecast (in hours). Defaults to False.
         """
+        if reduce_spatial_dims is None:
+            reduce_spatial_dims = ["latitude", "longitude"]
         super().__init__(name=name, preserve_dims=preserve_dims)
         self.reduce_spatial_dims = reduce_spatial_dims
         self.threshold_criteria = threshold_criteria
@@ -1558,6 +1564,11 @@ class DurationMeanError(MeanError):
         if isinstance(threshold_criteria, xr.DataArray):
             # Climatology case, convert from dayofyear/hour to valid_time.
             # Note that unintended behavior may occur if the case spans multiple years.
+            days = np.intersect1d(
+                forecast.valid_time.dt.dayofyear, threshold_criteria.dayofyear
+            )
+            if days.size:
+                threshold_criteria = threshold_criteria.sel(dayofyear=days)
             threshold_criteria = utils.convert_day_yearofday_to_time(
                 threshold_criteria, forecast.valid_time.dt.year.values[0]
             )
@@ -1647,12 +1658,12 @@ class LandfallMetric(CompositeMetric):
         preserve_dims: str = "init_time",
         approach: Literal["first", "next"] = "first",
         exclude_post_landfall: bool = False,
-        forecast_variable: Optional[str | derived.DerivedVariable] = None,
-        target_variable: Optional[str | derived.DerivedVariable] = None,
-        metrics: Optional[list[Type["LandfallMetric"]]] = None,
+        forecast_variable: str | derived.DerivedVariable | None = None,
+        target_variable: str | derived.DerivedVariable | None = None,
+        metrics: list[type["LandfallMetric"]] | None = None,
         min_target_separation_hours: float = 0.0,
-        max_time_mismatch_hours: Optional[float] = None,
-        landfall_time_filter: Optional[tuple[str, float]] = ("window", 24.0),
+        max_time_mismatch_hours: float | None = None,
+        landfall_time_filter: tuple[str, float] | None = ("window", 24.0),
         *args,
         **kwargs,
     ):
@@ -1685,11 +1696,11 @@ class LandfallMetric(CompositeMetric):
                 ``None`` disables filtering.
         """
         super().__init__(
+            *args,
             name=name,
             preserve_dims=preserve_dims,
             forecast_variable=forecast_variable,
             target_variable=target_variable,
-            *args,
             **kwargs,
         )
         self.approach = approach

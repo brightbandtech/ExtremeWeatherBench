@@ -52,7 +52,7 @@ def process_single_virtual_dataset(
     path: str,
     parser: virtualizarr.parsers.HDFParser,
     registry: virtualizarr.registry.ObjectStoreRegistry,
-    loadable_variables: list[str] = ["time", "latitude", "longitude", "level"],
+    loadable_variables: list[str] | None = None,
     decode_times: bool = True,
 ) -> xr.Dataset:
     """Process a single HDF/netCDF virtual dataset from a path.
@@ -65,6 +65,8 @@ def process_single_virtual_dataset(
     Returns:
         A Virtualizarr dataset
     """
+    if loadable_variables is None:
+        loadable_variables = ["time", "latitude", "longitude", "level"]
     vds = virtualizarr.open_virtual_dataset(
         url=path,
         parser=parser,
@@ -160,7 +162,7 @@ def generate_cira_icechunk_store():
         t = [n for ns in t for n in ns]
         stream = obs.list(store, model + "/", chunk_size=1)
 
-        with joblib.parallel_config(**{"backend": "loky", "n_jobs": -1}):
+        with joblib.parallel_config(backend="loky", n_jobs=-1):
             model_dict[model] = utils.ParallelTqdm(total=len(t))(
                 # None is the cache_dir, we can't cache in parallel mode
                 joblib.delayed(process_single_virtual_dataset)(
@@ -177,17 +179,17 @@ def generate_cira_icechunk_store():
             for item in model_dict[n]
             if item["time"][0] < pd.to_datetime("2025-05-27T00:00:00.000000000")
         ]
-        for n in model_dict.keys()
+        for n in model_dict
     }
 
     concat_model_dict = {}
 
-    with joblib.parallel_config(**{"backend": "loky", "n_jobs": -1}):
+    with joblib.parallel_config(backend="loky", n_jobs=-1):
         results = utils.ParallelTqdm(total=len(single_chunk_model_dict))(
             joblib.delayed(process_cira_model)(
                 model_key, single_chunk_model_dict[model_key]
             )
-            for model_key in single_chunk_model_dict.keys()
+            for model_key in single_chunk_model_dict
         )
 
     # Filter out any None results and create a dictionary of model keys and concatenated

@@ -8,22 +8,22 @@ logger.setLevel(logging.INFO)
 
 
 # Load the case collection from the YAML file
-case_yaml = ewb.load_cases()
+case_yaml = ewb.cases.load_cases()
 
 # Select single case (TC Ida)
 case_list = [n for n in case_yaml if n.case_id_number == 220]
 
 # Define IBTrACS target, no arguments needed as defaults are sufficient
-ibtracs_target = ewb.targets.IBTrACS()
+ibtracs_target = ewb.inputs.IBTrACS()
 
 # # Define HRES forecast
-hres_forecast = ewb.forecasts.ZarrForecast(
+hres_forecast = ewb.inputs.ZarrForecast(
     name="hres_forecast",
     source="gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr",
     # Define tropical cyclone track derived variable to include in the forecast
     variables=[ewb.derived.TropicalCycloneTrackVariables()],
     # Define metadata variable mapping for HRES forecast
-    variable_mapping=ewb.HRES_metadata_variable_mapping,
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
     storage_options={"remote_options": {"anon": True}},
     # Preprocess the HRES forecast to include geopotential thickness calculation
     preprocess=ewb.defaults.preprocess_hres_tc_forecast_dataset,
@@ -63,21 +63,21 @@ composite_landfall_metrics = [
 # the relevant cases inside the events YAML file
 tc_evaluation_object = [
     # HRES forecast
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="tropical_cyclone",
         metric_list=composite_landfall_metrics,
         target=ibtracs_target,
         forecast=hres_forecast,
     ),
     # Pangu forecast
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="tropical_cyclone",
         metric_list=composite_landfall_metrics,
         target=ibtracs_target,
         forecast=pangu_forecast,
     ),
     # FCNv2 forecast
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="tropical_cyclone",
         metric_list=composite_landfall_metrics,
         target=ibtracs_target,
@@ -87,7 +87,7 @@ tc_evaluation_object = [
 
 if __name__ == "__main__":
     # Initialize ExtremeWeatherBench
-    tc_ewb = ewb.evaluation(
+    tc_ewb = ewb.evaluate.ExtremeWeatherBench(
         case_metadata=case_list,
         evaluation_objects=tc_evaluation_object,
     )

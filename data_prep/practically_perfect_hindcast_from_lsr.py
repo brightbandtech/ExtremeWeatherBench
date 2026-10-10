@@ -11,8 +11,7 @@ import xarray as xr
 from scipy.ndimage import gaussian_filter
 from tqdm.auto import tqdm
 
-import extremeweatherbench.inputs as inputs
-import extremeweatherbench.utils as utils
+from extremeweatherbench import inputs, utils
 
 
 def sparse_practically_perfect_hindcast(
@@ -200,7 +199,7 @@ def plot_pph_contours(dt: datetime, da: xr.DataArray):
 
     # Add title
     plt.title(
-        f"Practically Perfect Hindcast - {pd.to_datetime(dt).strftime('%Y-%m-%d %H:%M UTC')}, N={n_points}"  # noqa: E501
+        f"Practically Perfect Hindcast - {pd.to_datetime(dt).strftime('%Y-%m-%d %H:%M UTC')}, N={n_points}"
     )
 
     plt.tight_layout()

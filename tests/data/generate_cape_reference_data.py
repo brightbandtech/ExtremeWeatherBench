@@ -68,7 +68,7 @@ def compute_metpy_reference(
             # non-negative inhibition magnitude matching our implementation's
             # sign convention.
             cin_ref[i] = -cin.magnitude
-        except Exception:
+        except (ValueError, RuntimeError, IndexError):
             cape_ref[i] = np.nan
             cin_ref[i] = np.nan
 

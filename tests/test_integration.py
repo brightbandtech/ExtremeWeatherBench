@@ -9,7 +9,6 @@ target variables using the zip() pairing logic, covering various scenarios:
 """
 
 import datetime
-from typing import List
 from unittest import mock
 
 import numpy as np
@@ -125,19 +124,20 @@ def base_target_dataset():
     )
 
 
-def create_mock_input(variables: List[str], dataset: xr.Dataset, input_type: str):
+def create_mock_input(variables: list[str], dataset: xr.Dataset, input_type: str):
     """Helper to create mock forecast or target inputs."""
     mock_input = mock.Mock()
     mock_input.name = f"Mock{input_type.title()}"
     mock_input.variables = variables
 
     # Mock all pipeline methods to return the dataset
-    mock_input.open_and_maybe_preprocess_data_from_source.return_value = dataset
+    mock_input._open_data_from_source.return_value = dataset
     mock_input.maybe_map_variable_names.return_value = dataset
     mock_input.maybe_subset_variables.return_value = dataset
     mock_input.subset_data_to_case.return_value = dataset
     mock_input.maybe_convert_to_dataset.return_value = dataset
     mock_input.add_source_to_dataset_attrs.return_value = dataset
+    mock_input.preprocess.return_value = dataset
 
     if input_type == "target":
         # This should return (aligned_forecast, aligned_target)
@@ -149,8 +149,8 @@ def create_mock_input(variables: List[str], dataset: xr.Dataset, input_type: str
 
 def create_case_operator(
     sample_case,
-    forecast_vars: List[str],
-    target_vars: List[str],
+    forecast_vars: list[str],
+    target_vars: list[str],
     forecast_dataset: xr.Dataset,
     target_dataset: xr.Dataset,
     mock_metric_list,

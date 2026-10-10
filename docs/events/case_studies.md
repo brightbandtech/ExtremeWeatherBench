@@ -1,6 +1,6 @@
 # Case Studies
 
-EWB includes 337 curated cases spanning five extreme weather categories, covering
+EWB includes 329 curated cases spanning five extreme weather categories, covering
 events worldwide from 2020 to 2024. Each category page describes how cases were
 selected, the bounding box methodology, and the source for each individual event.
 

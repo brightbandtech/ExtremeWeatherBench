@@ -1523,6 +1523,62 @@ class TestRegionSubsetter:
         case_ids = set(subset_results["case_id_number"])
         assert case_ids == {1, 2}
 
+    def test_subset_results_to_region_dataset(self, target_region, sample_cases):
+        """Test subsetting results Dataset by case_id_number."""
+        results_ds = xr.Dataset(
+            {
+                "rmse": (
+                    ("case_id_number", "metric"),
+                    [[0.1, 0.4], [0.2, 0.5], [0.3, 0.6]],
+                )
+            },
+            coords={"case_id_number": [1, 2, 3], "metric": ["mae", "rmse"]},
+        )
+
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
+
+        subset_results = regions.subset_results_to_region(
+            subsetter, results_ds, sample_cases
+        )
+
+        assert isinstance(subset_results, xr.Dataset)
+        assert list(subset_results["case_id_number"].values) == [1, 2]
+        assert subset_results.sizes["metric"] == 2
+
+    def test_subset_results_to_region_dataset_preserves_order(
+        self, target_region, sample_cases
+    ):
+        """Test that Dataset case_id_number ordering is preserved after subsetting."""
+        results_ds = xr.Dataset(
+            {"rmse": (("case_id_number",), [0.3, 0.1, 0.2])},
+            coords={"case_id_number": [3, 1, 2]},
+        )
+
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
+
+        subset_results = regions.subset_results_to_region(
+            subsetter, results_ds, sample_cases
+        )
+
+        assert list(subset_results["case_id_number"].values) == [1, 2]
+
+    def test_subset_results_to_region_dataset_missing_case_id(
+        self, target_region, sample_cases
+    ):
+        """Test Dataset missing an in-region case_id_number doesn't raise."""
+        results_ds = xr.Dataset(
+            {"rmse": (("case_id_number",), [0.1])},
+            coords={"case_id_number": [1]},
+        )
+
+        subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
+
+        subset_results = regions.subset_results_to_region(
+            subsetter, results_ds, sample_cases
+        )
+
+        assert list(subset_results["case_id_number"].values) == [1]
+
     def test_invalid_method_raises_error(self, target_region):
         """Test that invalid method raises ValueError."""
         subsetter = regions.RegionSubsetter(region=target_region, method="intersects")
@@ -1861,9 +1917,9 @@ class TestAdjustBoundsToDatasetConvention:
 
         (
             lon_min,
-            lat_min,
+            _lat_min,
             lon_max,
-            lat_max,
+            _lat_max,
         ) = regions._adjust_bounds_to_dataset_convention(region_bounds, dataset_360)
 
         # Should convert to 0-360
@@ -2001,6 +2057,30 @@ class TestLongitudeCoordinateMismatch:
 
         # Should handle antimeridian crossing correctly
         assert len(masked_dataset.longitude) > 0
+
+    def test_wrapping_region_no_longitude_overlap_returns_empty(self):
+        """Wrapping region with no overlapping longitudes yields an empty subset."""
+        lats = np.linspace(30, 60, 31)
+        lons = np.linspace(20, 60, 41)
+        data = np.random.random((len(lats), len(lons)))
+        dataset = xr.Dataset(
+            {"temperature": (["latitude", "longitude"], data)},
+            coords={"latitude": lats, "longitude": lons},
+        )
+
+        region = regions.BoundingBoxRegion.create_region(
+            latitude_min=35.0,
+            latitude_max=55.0,
+            longitude_min=175.0,
+            longitude_max=-175.0,
+        )
+
+        masked_dataset = region.mask(dataset)
+
+        assert isinstance(masked_dataset, xr.Dataset)
+        assert "temperature" in masked_dataset.data_vars
+        assert masked_dataset.sizes["longitude"] == 0
+        assert masked_dataset.sizes["latitude"] == 21
 
     def test_case_20_specific_scenario(self):
         """Test the specific Case 20 scenario that was failing."""

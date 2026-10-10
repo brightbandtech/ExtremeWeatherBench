@@ -1,9 +1,9 @@
 # Extreme Weather Bench (EWB)
 
 [![Documentation Status](https://readthedocs.org/projects/extremeweatherbench/badge/?version=latest)](https://extremeweatherbench.readthedocs.io/en/latest/?badge=latest)
-[![DOI](https://zenodo.org/badge/843011678.svg)](https://doi.org/10.5281/zenodo.19560347)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19560347.svg)](https://doi.org/10.5281/zenodo.19560347)
 
-[Read our blog post here](https://www.brightband.com/blog/extreme-weather-bench) | [Documentation](https://extremeweatherbench.readthedocs.io/)
+[Read our blog post here](https://www.brightband.com/blog/extreme-weather-bench) | [Documentation](https://extremeweatherbench.readthedocs.io/) | [Changelog](CHANGELOG.md)
 
 As AI weather models are growing in popularity, we need a standardized set of community driven tests that evaluate the models across a wide variety of high-impact hazards. Extreme Weather Bench (EWB) builds on the successful work of WeatherBench and introduces a set of high-impact weather events, spanning across multiple spatial and temporal scales and different parts of the weather spectrum. We provide data to use for testing, standard metrics for evaluation by forecasters worldwide for each of the phenomena, as well as impact-based metrics. EWB is a community system and will be adding additional phenomena, test cases and metrics in collaboration with the worldwide weather and forecast verification community.
 
@@ -72,7 +72,7 @@ import extremeweatherbench as ewb
 # Load in a forecast; here, we load in GFS initialized FCNv2 from the CIRA MLWP archive with a default variable built-in for convenience
 fcnv2_heatwave_forecast = ewb.defaults.cira_fcnv2_heatwave_forecast
 
-# Load in ERA5 with another default convenience variable 
+# Load in ERA5 with another default convenience variable
 era5_heatwave_target = ewb.defaults.era5_heatwave_target
 
 # EvaluationObjects are used to evaluate a single forecast source against a single target source with a defined event type. Event types are declared with each case. One or more metrics can be evaluated with each EvaluationObject.
@@ -89,21 +89,21 @@ heatwave_evaluation_list = [
     ),
 ]
 # Load in the EWB default list of event cases
-case_metadata = ewb.cases.load_ewb_events_yaml_into_case_list()
+case_metadata = ewb.cases.load_cases()
 
 # Create the evaluation class, with cases and evaluation objects declared
-ewb_instance = ewb.evaluation(
+ewb_instance = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=case_metadata,
     evaluation_objects=heatwave_evaluation_list,
 )
 
 # Execute a parallel run and return the evaluation results as a pandas DataFrame
 heatwave_outputs = ewb_instance.run_evaluation(
-    parallel_config={'n_jobs':16} # Uses 16 jobs with the loky backend as default
+    parallel_config={"n_jobs": 16}  # Uses 16 jobs with the loky backend as default
 )
 
 # Save the results
-heatwave_outputs.to_csv('heatwave_evaluation_results.csv')
+heatwave_outputs.to_csv("heatwave_evaluation_results.csv")
 ```
 
 ## Using command line initialization:

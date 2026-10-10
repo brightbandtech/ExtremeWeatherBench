@@ -1,15 +1,14 @@
 import abc
+import copy
 import dataclasses
 import logging
 import warnings
+from collections.abc import Callable, Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     Literal,
     Optional,
-    Sequence,
-    TypeAlias,
     Union,
     cast,
 )
@@ -20,13 +19,10 @@ import pandas as pd
 import polars as pl
 import xarray as xr
 
-import extremeweatherbench.cases as cases
-import extremeweatherbench.derived as derived
-import extremeweatherbench.sources as sources
-import extremeweatherbench.utils as utils
+from extremeweatherbench import cases, derived, sources, utils
 
 if TYPE_CHECKING:
-    import extremeweatherbench.metrics as metrics
+    from extremeweatherbench import metrics
 
 warnings.filterwarnings(
     "ignore",
@@ -45,7 +41,7 @@ ARCO_ERA5_FULL_URI = (
 DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh_all_2020_2024.parq"
 
 #: Storage/access options for local storm report (LSR) tabular data.
-LSR_URI = "gs://extremeweatherbench/datasets/combined_canada_australia_us_lsr_01012020_09272025.parq"  # noqa: E501
+LSR_URI = "gs://extremeweatherbench/datasets/combined_canada_australia_us_lsr_01012020_09272025.parq"
 
 #: Storage/access options for practically perfect hindcast data.
 PPH_URI = (
@@ -58,6 +54,14 @@ IBTRACS_URI = (
     "https://www.ncei.noaa.gov/data/international-best-track-archive-for-"
     "climate-stewardship-ibtracs/v04r01/access/csv/ibtracs.ALL.list.v04r01.csv"
 )
+
+#: Anonymous read options for the public CIRA/NODD S3 buckets that host the
+#: kerchunk-referenced forecast archives, which reject credentialed requests
+#: from users without an account.
+DEFAULT_KERCHUNK_STORAGE_OPTIONS: dict = {
+    "remote_protocol": "s3",
+    "remote_options": {"anon": True},
+}
 
 
 # ERA5 metadata variable mapping
@@ -149,7 +153,7 @@ IBTrACS_metadata_variable_mapping = {
     "MLC_PRES": "mlc_air_pressure_at_mean_sea_level",
 }
 
-IncomingDataInput: TypeAlias = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
+type IncomingDataInput = xr.Dataset | xr.DataArray | pl.LazyFrame | pd.DataFrame
 
 CIRA_CREDENTIALS = icechunk.containers_credentials(
     {"s3://noaa-oar-mlwp-data/": icechunk.s3_credentials(anonymous=True)}
@@ -187,6 +191,9 @@ class InputBase(abc.ABC):
         variable_mapping: A dictionary of variable names to map to the data.
         storage_options: Storage/access options for the data.
         preprocess: A function to preprocess the data.
+        preprocess_before_variable_mapping: If True, run preprocess on the
+            source variable names before mapping to EWB names. Reserved for
+            inputs such as IBTrACS that must merge and coerce source columns.
 
     Public methods:
         open_and_maybe_preprocess_data_from_source: Open and preprocess data
@@ -205,8 +212,9 @@ class InputBase(abc.ABC):
         default_factory=list
     )
     variable_mapping: dict = dataclasses.field(default_factory=dict)
-    storage_options: Optional[dict] = None
+    storage_options: dict | None = None
     preprocess: Callable = _default_preprocess
+    preprocess_before_variable_mapping: bool = False
 
     def open_and_maybe_preprocess_data_from_source(
         self,
@@ -319,7 +327,7 @@ class InputBase(abc.ABC):
         elif isinstance(data, pd.DataFrame):
             old_name_obj = list(data.columns)
         else:
-            raise ValueError(f"Data type {type(data)} not supported")
+            raise TypeError(f"Data type {type(data)} not supported")
 
         if not variable_mapping:
             return data
@@ -351,7 +359,7 @@ class ForecastBase(InputBase):
         subset_data_to_case: Subset forecast data to case (overrides parent)
     """
 
-    chunks: Optional[Union[dict, str]] = "auto"
+    chunks: dict | str | None = "auto"
 
     def subset_data_to_case(
         self,
@@ -361,7 +369,7 @@ class ForecastBase(InputBase):
     ) -> IncomingDataInput:
         drop = kwargs.get("drop", False)
         if not isinstance(data, xr.Dataset):
-            raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+            raise TypeError(f"Expected xarray Dataset, got {type(data)}")
         # Drop duplicate init_time values
         if len(np.unique(data.init_time)) != len(data.init_time):
             _, index = np.unique(data.init_time, return_index=True)
@@ -388,13 +396,8 @@ class ForecastBase(InputBase):
             (len(subset_time_data.init_time), len(subset_time_data.lead_time)),
             dtype=bool,
         )
-
-        # Map the valid indices back to the subset data coordinates
-        for i, j in zip(subset_time_indices[0], subset_time_indices[1]):
-            # Find the position of this init_time in the subset data
-            init_pos = np.where(unique_init_indices == i)[0]
-            if len(init_pos) > 0:
-                valid_combinations_mask[init_pos[0], j] = True
+        init_pos = np.searchsorted(unique_init_indices, subset_time_indices[0])
+        valid_combinations_mask[init_pos, subset_time_indices[1]] = True
 
         # Add the mask as a coordinate so downstream code can use it
         subset_time_data = subset_time_data.assign_coords(
@@ -450,10 +453,12 @@ class KerchunkForecast(ForecastBase):
 
     Extends ForecastBase for forecast data accessed via kerchunk references,
     enabling efficient access to cloud-optimized datasets.
+
+    Leaving storage_options as None selects anonymous access options suited
+    to the public CIRA/NODD S3 buckets these references typically point to.
     """
 
-    chunks: Optional[Union[dict, str]] = "auto"
-    storage_options: dict = dataclasses.field(default_factory=dict)
+    chunks: dict | str | None = "auto"
 
     def _open_data_from_source(self) -> IncomingDataInput:
         return open_kerchunk_reference(
@@ -470,7 +475,7 @@ class ZarrForecast(ForecastBase):
     Extends ForecastBase for forecast data stored in zarr format.
     """
 
-    chunks: Optional[Union[dict, str]] = "auto"
+    chunks: dict | str | None = "auto"
 
     def _open_data_from_source(self) -> IncomingDataInput:
         return xr.open_zarr(
@@ -498,7 +503,7 @@ class XarrayForecast(ForecastBase):
 
     #: The xarray dataset containing the forecast data. This is required for the class to be instantiated
     #: because we inherit from ForecastBase, which has its own set of required attributes.
-    ds: Optional[xr.Dataset] = None  # type: ignore[assignment]
+    ds: xr.Dataset | None = None  # type: ignore[assignment]
     source: str = "memory"
     name: str = "in-memory dataset"
 
@@ -575,7 +580,7 @@ class ERA5(TargetBase):
     """
 
     name: str = "ERA5"
-    chunks: Optional[Union[dict, str]] = None
+    chunks: dict | str | None = None
     source: str = ARCO_ERA5_FULL_URI
     variable_mapping: dict = dataclasses.field(
         default_factory=lambda: ERA5_metadata_variable_mapping.copy()
@@ -597,7 +602,7 @@ class ERA5(TargetBase):
     ) -> IncomingDataInput:
         drop = kwargs.get("drop", False)
         if not isinstance(data, xr.Dataset):
-            raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+            raise TypeError(f"Expected xarray Dataset, got {type(data)}")
         return zarr_target_subsetter(data, case_metadata, drop=drop)
 
     def maybe_align_forecast_to_target(
@@ -649,7 +654,7 @@ class GHCN(TargetBase):
         **kwargs,
     ) -> IncomingDataInput:
         if not isinstance(data, pl.LazyFrame):
-            raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
+            raise TypeError(f"Expected polars LazyFrame, got {type(data)}")
 
         # Create filter expressions for LazyFrame
         time_min = case_metadata.start_date - pd.Timedelta(days=2)
@@ -673,14 +678,9 @@ class GHCN(TargetBase):
                 data = data.with_columns(pl.col("surface_air_temperature").add(273.15))
             data = data.collect(engine="streaming").to_pandas()
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
-
-            data = data.set_index(["valid_time", "latitude", "longitude"])
-            # GHCN data can have duplicate values right now, dropping here if it occurs
             try:
-                data = xr.Dataset.from_dataframe(
-                    data[~data.index.duplicated(keep="first")], sparse=True
-                )
-            except Exception as e:
+                data = utils.point_frame_to_dataset(data)
+            except (ValueError, TypeError, KeyError, IndexError) as e:
                 logger.warning(
                     "Error converting GHCN data to xarray: %s, returning empty Dataset",
                     e,
@@ -688,7 +688,7 @@ class GHCN(TargetBase):
                 return xr.Dataset()
             return data
         else:
-            raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
+            raise TypeError(f"Data is not a polars LazyFrame: {type(data)}")
 
     def maybe_align_forecast_to_target(
         self,
@@ -713,11 +713,23 @@ class LSR(TargetBase):
         default_factory=lambda: ["report_type"]
     )
 
-    def _open_data_from_source(self) -> IncomingDataInput:
+    def _open_data_from_source(
+        self, case_metadata: Optional["cases.IndividualCase"] = None
+    ) -> IncomingDataInput:
         # force LSR to use anon token to prevent google reauth issues for users
-        target_data = pd.read_parquet(self.source, storage_options=self.storage_options)
-
-        return target_data
+        kwargs: dict[str, Any] = {"storage_options": self.storage_options}
+        if case_metadata is not None:
+            kwargs["filters"] = [
+                ("valid_time", ">=", pd.Timestamp(case_metadata.start_date)),
+                ("valid_time", "<=", pd.Timestamp(case_metadata.end_date)),
+            ]
+        try:
+            return pd.read_parquet(self.source, **kwargs)
+        except Exception as exc:
+            if "filters" not in kwargs:
+                raise
+            logger.debug("LSR parquet filters failed (%s); reading full file", exc)
+            return pd.read_parquet(self.source, storage_options=self.storage_options)
 
     def subset_data_to_case(
         self,
@@ -726,7 +738,7 @@ class LSR(TargetBase):
         **kwargs,
     ) -> IncomingDataInput:
         if not isinstance(data, pd.DataFrame):
-            raise ValueError(f"Expected pandas DataFrame, got {type(data)}")
+            raise TypeError(f"Expected pandas DataFrame, got {type(data)}")
 
         data = data.copy()
 
@@ -751,7 +763,7 @@ class LSR(TargetBase):
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if not isinstance(data, pd.DataFrame):
-            raise ValueError(f"Data is not a pandas DataFrame: {type(data)}")
+            raise TypeError(f"Data is not a pandas DataFrame: {type(data)}")
 
         # Map report_type column to numeric values
         report_type_mapping = {"wind": 1, "hail": 2, "tor": 3}
@@ -784,13 +796,14 @@ class LSR(TargetBase):
 
         # Convert longitude back to 0 - 360
         data.loc[:, "longitude"] = utils.convert_longitude_to_360(data["longitude"])
-        data = data.set_index(["valid_time", "latitude", "longitude"])
-
-        data = xr.Dataset.from_dataframe(
-            data[~data.index.duplicated(keep="first")], sparse=True
-        )
-        data.attrs["report_type_mapping"] = report_type_mapping
-        return data
+        data = data[
+            ~data.duplicated(
+                subset=["valid_time", "latitude", "longitude"], keep="first"
+            )
+        ]
+        converted = utils.point_frame_to_dataset(data)
+        converted.attrs["report_type_mapping"] = report_type_mapping
+        return converted
 
     def maybe_align_forecast_to_target(
         self,
@@ -830,14 +843,14 @@ class PPH(TargetBase):
     ) -> IncomingDataInput:
         drop = kwargs.get("drop", False)
         if not isinstance(data, xr.Dataset):
-            raise ValueError(f"Expected xarray Dataset, got {type(data)}")
+            raise TypeError(f"Expected xarray Dataset, got {type(data)}")
         return zarr_target_subsetter(data, case_metadata, drop=drop)
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, xr.Dataset):
             return data
         else:
-            raise ValueError(f"Data is not an xarray Dataset: {type(data)}")
+            raise TypeError(f"Data is not an xarray Dataset: {type(data)}")
 
     def maybe_align_forecast_to_target(
         self,
@@ -850,8 +863,9 @@ class PPH(TargetBase):
 def _ibtracs_preprocess(data: IncomingDataInput) -> IncomingDataInput:
     """Preprocess IBTrACS data.
 
-    Preprocessing is done before any variable mapping is applied, thus using the
-    original variable names is required."""
+    IBTrACS sets preprocess_before_variable_mapping so this runs on source
+    column names (USA_WIND, WMO_PRES, and similar) before EWB mapping.
+    """
 
     schema = data.collect_schema()
     # Convert pressure and surface wind columns to float, replacing " " with null
@@ -946,6 +960,7 @@ class IBTrACS(TargetBase):
 
     name: str = "IBTrACS"
     preprocess: Callable = _ibtracs_preprocess
+    preprocess_before_variable_mapping: bool = True
     variable_mapping: dict = dataclasses.field(
         default_factory=lambda: IBTrACS_metadata_variable_mapping.copy()
     )
@@ -973,7 +988,7 @@ class IBTrACS(TargetBase):
         **kwargs,
     ) -> IncomingDataInput:
         if not isinstance(data, pl.LazyFrame):
-            raise ValueError(f"Expected polars LazyFrame, got {type(data)}")
+            raise TypeError(f"Expected polars LazyFrame, got {type(data)}")
 
         season = case_metadata.start_date.year
         if case_metadata.start_date.month > 11:
@@ -1046,13 +1061,13 @@ class IBTrACS(TargetBase):
 
             return data
         else:
-            raise ValueError(f"Data is not a polars LazyFrame: {type(data)}")
+            raise TypeError(f"Data is not a polars LazyFrame: {type(data)}")
 
 
 def open_kerchunk_reference(
     forecast_dir: str,
-    storage_options: dict = {"remote_protocol": "s3", "remote_options": {"anon": True}},
-    chunks: Union[dict, str] = "auto",
+    storage_options: dict | None = None,
+    chunks: dict | str = "auto",
 ) -> xr.Dataset:
     """Open a dataset from a kerchunked reference file in parquet or json format.
     This has been built primarily for the CIRA MLWP S3 bucket's data
@@ -1062,13 +1077,17 @@ def open_kerchunk_reference(
 
     Args:
         forecast_dir: The path to the kerchunked reference file.
-        storage_options: The storage options to use.
+        storage_options: The storage options to use. If None, defaults to
+            anonymous access options suited to the public CIRA/NODD buckets.
         chunks: The chunks to use; defaults to "auto".
 
     Returns:
-        The opened dataset.
+        The opened dataset, with CIRA's ``time`` axis converted to ``lead_time``
+        (see ``_cira_time_to_lead_time``).
     """
-    if forecast_dir.endswith(".parq") or forecast_dir.endswith(".parquet"):
+    if storage_options is None:
+        storage_options = copy.deepcopy(DEFAULT_KERCHUNK_STORAGE_OPTIONS)
+    if forecast_dir.endswith((".parq", ".parquet")):
         kerchunk_ds = xr.open_dataset(
             forecast_dir,
             engine="kerchunk",
@@ -1076,7 +1095,7 @@ def open_kerchunk_reference(
             chunks=chunks,
         )
     elif forecast_dir.endswith(".json"):
-        storage_options["fo"] = forecast_dir
+        storage_options = {**storage_options, "fo": forecast_dir}
         kerchunk_ds = xr.open_dataset(
             "reference://",
             engine="zarr",
@@ -1091,7 +1110,29 @@ def open_kerchunk_reference(
             "Unknown kerchunk file type found in forecast path, only json and "
             "parquet are supported."
         )
-    return kerchunk_ds
+    return _cira_time_to_lead_time(kerchunk_ds)
+
+
+def _cira_time_to_lead_time(ds: xr.Dataset) -> xr.Dataset:
+    """Turn a CIRA kerchunk ``time`` axis into ``lead_time``.
+
+    CIRA kerchunk references store every init's forecast steps along a ``time``
+    dimension holding the *first* init's valid times, so ``time - init_time[0]``
+    gives the lead times shared by all inits. Done when opening, because the
+    coverage check and case subset need ``lead_time`` before ``preprocess``
+    runs. Data that already has ``lead_time`` (or no ``time``/``init_time``)
+    is returned unchanged.
+
+    Args:
+        ds: The dataset opened from a kerchunk reference.
+
+    Returns:
+        The dataset with ``time`` replaced by a ``lead_time`` dimension.
+    """
+    if "time" not in ds.dims or "init_time" not in ds.coords or "lead_time" in ds:
+        return ds
+    lead_time = ds["time"].values - ds["init_time"].values[0]
+    return ds.assign_coords(time=lead_time).rename(time="lead_time")
 
 
 def list_groups_in_icechunk_datatree(
@@ -1117,7 +1158,7 @@ def open_icechunk_dataset_from_datatree(
     storage: icechunk.Storage,
     group: str,
     branch: str = "main",
-    chunks: Optional[Union[dict, str]] = "auto",
+    chunks: dict | str | None = "auto",
     **repository_kwargs,
 ) -> xr.Dataset:
     """Open an icechunk datatree from a storage.
@@ -1192,44 +1233,149 @@ def align_forecast_to_target(
     # TODO: provide passthrough for other methods
     method: str = "nearest",
 ) -> tuple[xr.Dataset, xr.Dataset]:
-    # Find spatial dimensions that exist in both datasets
+    """Put forecast and target on a shared sample geometry.
+
+    Two grids: remap the forecast onto the target grid. If either side
+    is points (station samples or a sparse lat × lon cube), sample the
+    field at those (lat, lon) pairs instead of expanding onto a
+    unique-lat × unique-lon mesh.
+
+    Args:
+        forecast_data: Forecast Dataset, gridded or point samples.
+        target_data: Target Dataset, gridded or point samples.
+        method: Spatial interpolation method. ``"nearest"`` or
+            ``"linear"``. Defaults to ``"nearest"``.
+
+    Returns:
+        Tuple of ``(aligned_forecast, aligned_target)`` with a shared
+        time range. Point alignments use a ``location`` dimension;
+        grid alignments keep latitude and longitude dims from the
+        target.
+
+    Examples:
+        >>> import pandas as pd
+        >>> import xarray as xr
+        >>> from extremeweatherbench import utils
+        >>> from extremeweatherbench.inputs import align_forecast_to_target
+        >>> times = pd.date_range("2021-01-01", periods=1, freq="6h")
+        >>> t2m = [[[0.0, 1.0]]]
+        >>> forecast = xr.Dataset(
+        ...     {"t2m": (("valid_time", "latitude", "longitude"), t2m)},
+        ...     coords={
+        ...         "valid_time": times,
+        ...         "latitude": [10.0],
+        ...         "longitude": [20.0, 30.0],
+        ...     },
+        ... )
+        >>> stations = utils.point_frame_to_dataset(
+        ...     pd.DataFrame(
+        ...         {
+        ...             "valid_time": [times[0]],
+        ...             "latitude": [10.0],
+        ...             "longitude": [20.0],
+        ...             "t2m": [0.0],
+        ...         }
+        ...     )
+        ... )
+        >>> fc, tg = align_forecast_to_target(forecast, stations)
+        >>> fc.sizes["location"] == tg.sizes["location"]
+        True
+    """
+    fc_layout = utils.infer_spatial_layout(forecast_data)
+    tg_layout = utils.infer_spatial_layout(target_data)
+
+    if fc_layout == "grid" and tg_layout == "grid":
+        return _align_grid_to_grid(forecast_data, target_data, method)
+
+    if tg_layout == "points":
+        target_pts = utils.as_point_dataset(target_data)
+        if fc_layout == "grid":
+            forecast_pts = utils.sample_field_at_points(
+                forecast_data,
+                target_pts["latitude"],
+                target_pts["longitude"],
+                method=method,
+            )
+        else:
+            forecast_pts = utils._colocate_points(
+                utils.as_point_dataset(forecast_data), target_pts
+            )
+        return _align_time_inner(forecast_pts, target_pts)
+
+    forecast_pts = utils.as_point_dataset(forecast_data)
+    target_pts = utils.sample_field_at_points(
+        target_data,
+        forecast_pts["latitude"],
+        forecast_pts["longitude"],
+        method=method,
+    )
+    return _align_time_inner(forecast_pts, target_pts)
+
+
+def _align_grid_to_grid(
+    forecast_data: xr.Dataset,
+    target_data: xr.Dataset,
+    method: str,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """Remap a gridded forecast onto a gridded target."""
     intersection_dims = [
         dim
         for dim in forecast_data.dims
         if dim in target_data.dims
         and dim not in ["time", "valid_time", "lead_time", "init_time"]
     ]
-
     spatial_dims = {str(dim): target_data[dim] for dim in intersection_dims}
-
-    # Align time dimensions if they exist in both datasets
     time_aligned_target, time_aligned_forecast = xr.align(
         target_data,
         forecast_data,
         join="inner",
         exclude=spatial_dims.keys(),
     )
-    # Squeeze the data to remove any single-value dimensions
-    target_data = target_data.squeeze()
-    forecast_data = forecast_data.squeeze()
-    # Regrid forecast to target grid using nearest neighbor interpolation
-    # extrapolate in the case of targets slightly outside the forecast domain
     if spatial_dims:
+        same_grid = all(
+            time_aligned_forecast[dim].equals(time_aligned_target[dim])
+            for dim in spatial_dims
+        )
+        if same_grid:
+            return time_aligned_forecast, time_aligned_target
         interp_method: Literal["nearest", "linear"] = (
             "nearest" if method == "nearest" else "linear"
         )
-
         interp_kwargs = cast(
             dict[str, Any],
             {"method": interp_method, "kwargs": {"fill_value": "extrapolate"}},
         )
         interp_kwargs.update(spatial_dims)
+        return time_aligned_forecast.interp(**interp_kwargs), time_aligned_target
+    return time_aligned_forecast, time_aligned_target
 
-        time_space_aligned_forecast = time_aligned_forecast.interp(**interp_kwargs)
-    else:
-        time_space_aligned_forecast = time_aligned_forecast
 
-    return time_space_aligned_forecast, time_aligned_target
+def _align_time_inner(
+    forecast_data: xr.Dataset,
+    target_data: xr.Dataset,
+) -> tuple[xr.Dataset, xr.Dataset]:
+    """Inner-join time dims, leaving location/lat/lon unaligned."""
+    exclude = {
+        name
+        for name in (
+            "latitude",
+            "longitude",
+            "lat",
+            "lon",
+            "location",
+            "station",
+            "sample",
+            "stacked",
+        )
+        if name in forecast_data.dims or name in target_data.dims
+    }
+    time_aligned_target, time_aligned_forecast = xr.align(
+        target_data,
+        forecast_data,
+        join="inner",
+        exclude=exclude,
+    )
+    return time_aligned_forecast, time_aligned_target
 
 
 def maybe_subset_variables(
@@ -1280,22 +1426,19 @@ def check_for_missing_data(
         source_module = sources.get_backend_module(type(data))
 
     # First check if the data has valid times in the given date range
-    if not source_module.check_for_valid_times(
-        data, case_metadata.start_date, case_metadata.end_date
-    ):
-        return False
-    # Then check if the data has spatial data for the given location
-    elif not source_module.check_for_spatial_data(data, case_metadata.location):
-        return False
-    else:
-        return True
+    return not (
+        not source_module.check_for_valid_times(
+            data, case_metadata.start_date, case_metadata.end_date
+        )
+        or not source_module.check_for_spatial_data(data, case_metadata.location)
+    )
 
 
 def get_cira_icechunk(
     model_name: str,
-    variables: list[Union[str, derived.DerivedVariable]] = [],
+    variables: list[str | derived.DerivedVariable] | None = None,
     preprocess: Callable = _default_preprocess,
-    name: Optional[str] = None,
+    name: str | None = None,
 ) -> XarrayForecast:
     """Get a CIRA icechunk forecast object for a given model name.
 
@@ -1312,6 +1455,8 @@ def get_cira_icechunk(
         An XarrayForecast object for the given model.
     """
     # Check if the model name is valid
+    if variables is None:
+        variables = []
     if model_name not in CIRA_MODEL_NAMES:
         raise ValueError(
             f"Model name {model_name} not found in CIRA_MODEL_NAMES. Model names must be one of: {CIRA_MODEL_NAMES}"

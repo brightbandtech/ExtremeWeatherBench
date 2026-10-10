@@ -5,20 +5,20 @@ Some code similarly structured to WeatherBenchX (Rasp et al.).
 
 import dataclasses
 import datetime
-import importlib
+import importlib.resources
 import itertools
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Any, Sequence, Union
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
 import dacite
 import yaml  # type: ignore[import]
 
-import extremeweatherbench.regions as regions
+from extremeweatherbench import regions
 
 if TYPE_CHECKING:
-    import extremeweatherbench.inputs as inputs
-    import extremeweatherbench.metrics as metrics
+    from extremeweatherbench import inputs, metrics
 
 logger = logging.getLogger(__name__)
 
@@ -92,12 +92,12 @@ def build_case_operators(
     return case_operators
 
 
-def load_individual_cases(
-    cases: Union[list[dict[str, Any]], list[IndividualCase]],
+def load_individual_cases_from_dict(
+    cases: list[dict[str, Any]] | list[IndividualCase],
 ) -> list[IndividualCase]:
-    """Load IndividualCase metadata from a dictionary.
+    """Convert case metadata dicts to IndividualCase objects.
 
-    Will pass through existing IndividualCase objects and convert dictionaries to IndividualCase objects.
+    IndividualCase objects in the input are passed through unchanged.
 
     Args:
         cases: A list of cases as either dicts or IndividualCase objects.
@@ -105,51 +105,38 @@ def load_individual_cases(
     Returns:
         A list of IndividualCase objects.
     """
-
-    # Iterate through the cases and convert dictionaries to IndividualCase objects if
-    # they are not already IndividualCase objects
-    case_list = [
+    config = dacite.Config(type_hooks={regions.Region: regions.map_to_create_region})
+    return [
         case
         if isinstance(case, IndividualCase)
-        else dacite.from_dict(
-            data_class=IndividualCase,
-            data=case,
-            config=dacite.Config(
-                type_hooks={regions.Region: regions.map_to_create_region},
-            ),
-        )
+        else dacite.from_dict(data_class=IndividualCase, data=case, config=config)
         for case in cases
     ]
 
-    return case_list
-
 
 def load_individual_cases_from_yaml(
-    yaml_file: Union[str, pathlib.Path],
+    yaml_file: str | pathlib.Path,
 ) -> list[IndividualCase]:
-    """Load IndividualCase metadata directly from a yaml file.
+    """Load IndividualCase metadata from your own yaml file.
 
-    This function is a wrapper around load_individual_cases that reads the yaml file
-    directly. It is useful for loading cases from a yaml file that is not part of the
-    ExtremeWeatherBench data package. Note that the yaml file must be in the same format
-    as described in the ExtremeWeatherBench documentation; errors will be raised within
-    the dacite.from_dict call if the yaml file otherwise.
+    The file must be a list of cases in the same format as the bundled
+    events.yaml; dacite raises if a case does not match IndividualCase.
 
-    Example of a yaml file:
+    Example yaml file:
 
     ```yaml
     - case_id_number: 1
-    title: Event 1
-    start_date: 2021-01-01 00:00:00
-    end_date: 2021-01-03 00:00:00
-    location:
+      title: Event 1
+      start_date: 2021-01-01 00:00:00
+      end_date: 2021-01-03 00:00:00
+      location:
         type: bounded_region
         parameters:
-            latitude_min: 10.0
-            latitude_max: 55.6
-            longitude_min: 265.0
-            longitude_max: 283.3
-    event_type: tropical_cyclone
+          latitude_min: 10.0
+          latitude_max: 55.6
+          longitude_min: 265.0
+          longitude_max: 283.3
+      event_type: tropical_cyclone
     ```
 
     Args:
@@ -158,36 +145,18 @@ def load_individual_cases_from_yaml(
     Returns:
         A list of IndividualCase objects.
     """
-    yaml_event_case = read_incoming_yaml(yaml_file)
-    return load_individual_cases(yaml_event_case)
+    with open(yaml_file, "rb") as f:
+        return load_individual_cases_from_dict(yaml.safe_load(f))
 
 
-def load_ewb_events_yaml_into_case_list() -> list[IndividualCase]:
-    """Loads the EWB events yaml file into a list of IndividualCase objects."""
-    import extremeweatherbench.data
+def load_ewb_cases() -> list[IndividualCase]:
+    """Load the cases bundled with EWB (data/events.yaml).
 
-    events_yaml_file = importlib.resources.files(extremeweatherbench.data).joinpath(
-        "events.yaml"
-    )
-    with importlib.resources.as_file(events_yaml_file) as file:
-        yaml_event_case = read_incoming_yaml(file)
-
-    return load_individual_cases(yaml_event_case)
-
-
-def read_incoming_yaml(input_pth: Union[str, pathlib.Path]):
-    """Read events yaml from data into a dictionary.
-
-    This function is a wrapper around yaml.safe_load that reads the yaml file directly.
-    It is useful for reading yaml files other than the EWB events.yaml file.
-
-    Args:
-        input_pth: A path to a yaml file containing the case metadata.
-
-    Returns:
-        A dictionary of case metadata.
+    ``load_cases`` is an alias for this function.
     """
-    input_pth = pathlib.Path(input_pth)
-    with open(input_pth, "rb") as f:
-        yaml_event_case = yaml.safe_load(f)
-    return yaml_event_case
+    events_yaml = importlib.resources.files("extremeweatherbench.data") / "events.yaml"
+    with importlib.resources.as_file(events_yaml) as path:
+        return load_individual_cases_from_yaml(path)
+
+
+load_cases = load_ewb_cases

@@ -4,7 +4,8 @@ import abc
 import logging
 import pathlib
 import warnings
-from typing import TYPE_CHECKING, Literal, Mapping, Type, Union
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Literal
 
 import geopandas as gpd
 import numpy as np
@@ -16,7 +17,7 @@ import xarray as xr
 from extremeweatherbench import utils
 
 if TYPE_CHECKING:
-    import extremeweatherbench.cases as cases
+    from extremeweatherbench import cases
 
 logger = logging.getLogger(__name__)
 
@@ -43,12 +44,10 @@ class Region(abc.ABC):
     def create_region(cls, *args, **kwargs) -> "Region":
         """Abstract factory method to create a region; subclasses must implement with
         their own, specialized arguments."""
-        pass
 
     @abc.abstractmethod
     def as_geopandas(self) -> gpd.GeoDataFrame:
         """Return representation of this Region as a GeoDataFrame."""
-        pass
 
     def get_adjusted_bounds(
         self, dataset: xr.Dataset
@@ -68,9 +67,16 @@ class Region(abc.ABC):
     def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
         """Mask a dataset to the region.
 
+        Selects the latitudes and longitudes inside the region's bounding box.
+        For regions that cross the antimeridian or prime meridian, the selected
+        longitudes are shifted by 360 where needed to form one increasing run
+        (e.g. -10..10 for a 350-10 region, 170..190 for a 170-(-170) region).
+        If no grid points fall inside the region, the result has a zero-length
+        latitude or longitude dimension.
+
         Args:
             dataset: The dataset to mask.
-            drop: Whether to drop coordinates outside the region bounds.
+            drop: Deprecated and ignored.
 
         Returns:
             The subset dataset.
@@ -82,13 +88,14 @@ class Region(abc.ABC):
                 stacklevel=2,
             )
 
-        # Get region bounds adjusted to dataset's longitude convention
         (
             region_longitude_min,
             region_latitude_min,
             region_longitude_max,
             region_latitude_max,
-        ) = self.get_adjusted_bounds(dataset)
+        ) = _adjust_bounds_to_dataset_convention(
+            _wrapping_bounds(self.as_geopandas()), dataset
+        )
 
         # Avoids slice() which is susceptible to differences in coord order
         latitude_da = dataset.latitude.where(
@@ -99,18 +106,8 @@ class Region(abc.ABC):
             drop=True,
         )
 
-        # Detect if region wraps around 0/360 or -180/180 boundary
-        # This happens either from:
-        # 1. True antimeridian crossing (MultiPolygon geometry)
-        # 2. Prime meridian crossing converted to 0-360 (lon_min > lon_max)
-        gdf = self.as_geopandas()
-        geometry = gdf.geometry.iloc[0]
-        crosses_boundary = isinstance(geometry, shapely.MultiPolygon) or (
-            region_longitude_min > region_longitude_max
-        )
-
-        if crosses_boundary:
-            # Use OR condition: include lons >= min OR lons <= max
+        wraps = region_longitude_min > region_longitude_max
+        if wraps:
             longitude_da = dataset.longitude.where(
                 np.logical_or(
                     dataset.longitude >= region_longitude_min,
@@ -126,11 +123,16 @@ class Region(abc.ABC):
                 ),
                 drop=True,
             )
-        dataset = dataset.sel(
-            latitude=latitude_da,
-            longitude=longitude_da,
-        )
-
+        dataset = dataset.sel(latitude=latitude_da, longitude=longitude_da)
+        if wraps:
+            # OR-selection leaves a gap across the seam; unwrap into one run.
+            longitude = (
+                region_longitude_min
+                + (dataset.longitude - region_longitude_min) % 360.0
+            )
+            if (longitude >= 360.0).any():
+                longitude = longitude - 360.0
+            dataset = dataset.assign_coords(longitude=longitude).sortby("longitude")
         return dataset
 
     def intersects(self, other: "Region") -> bool:
@@ -339,7 +341,7 @@ class ShapefileRegion(Region):
             return gpd.read_file(self.shapefile_path)
         except Exception as e:
             logger.error(f"Error reading shapefile: {e}")
-            raise ValueError(f"Error reading shapefile: {e}")
+            raise ValueError(f"Error reading shapefile: {e}") from e
 
     def mask(self, dataset: xr.Dataset, drop: bool = False) -> xr.Dataset:
         """Mask a dataset to the region.
@@ -380,7 +382,7 @@ class ShapefileRegion(Region):
 
 
 # Registry of region types that can be extended by users
-REGION_TYPES: dict[str, Type[Region]] = {
+REGION_TYPES: dict[str, type[Region]] = {
     "centered_region": CenteredRegion,
     "bounded_region": BoundingBoxRegion,
     "shapefile_region": ShapefileRegion,
@@ -416,6 +418,25 @@ def map_to_create_region(region_input: Region | dict) -> Region:
     if region_parameters is None:
         region_parameters = {}
     return region_class.create_region(**region_parameters)
+
+
+def _wrapping_bounds(
+    gdf: gpd.GeoDataFrame,
+) -> tuple[float, float, float, float]:
+    """Return (lon_min, lat_min, lon_max, lat_max), wrapping if needed.
+
+    Antimeridian regions are MultiPolygons whose total_bounds span the
+    globe. The wrap is recovered from the lobes that touch ±180.
+    """
+    lon_min, lat_min, lon_max, lat_max = gdf.total_bounds
+    if not isinstance(gdf.geometry.iloc[0], shapely.MultiPolygon):
+        return lon_min, lat_min, lon_max, lat_max
+    lobes = gdf.geometry.explode(index_parts=False).bounds
+    east = lobes[np.isclose(lobes.maxx, 180.0)]
+    west = lobes[np.isclose(lobes.minx, -180.0)]
+    if east.empty or west.empty:
+        return lon_min, lat_min, lon_max, lat_max
+    return east.minx.min(), lat_min, west.maxx.max(), lat_max
 
 
 def _create_geopandas_from_bounds(
@@ -514,7 +535,7 @@ class RegionSubsetter:
 
     def __init__(
         self,
-        region: Union[Region, Mapping[str, float]],
+        region: Region | Mapping[str, float],
         method: Literal["intersects", "percent", "all"] = "intersects",
         percent_threshold: float = 0.5,
     ):
@@ -588,7 +609,7 @@ class RegionSubsetter:
 # Convenience functions for direct usage
 def subset_cases_to_region(
     case_list: "list[cases.IndividualCase]",
-    region: Union[Region, Mapping[str, float]],
+    region: Region | Mapping[str, float],
     method: Literal["intersects", "percent", "all"] = "intersects",
     percent_threshold: float = 0.5,
 ) -> "list[cases.IndividualCase]":
@@ -614,31 +635,41 @@ def subset_cases_to_region(
 
 def subset_results_to_region(
     region: RegionSubsetter,
-    results_df: pd.DataFrame,
+    results: pd.DataFrame | xr.Dataset,
     case_list: "list[cases.IndividualCase]",
-) -> pd.DataFrame:
-    """Subset results DataFrame by region using case_id_number.
+) -> pd.DataFrame | xr.Dataset:
+    """Subset results by region using case_id_number.
 
     This is a convenience function that creates a RegionSubsetter and applies it to
-    the results DataFrame that is output from ExtremeWeatherBench.run().
+    the results output from ExtremeWeatherBench.run(), whether that is the
+    long-form DataFrame or the flat Dataset.
 
     Args:
         region: The region to subset to. Can be a Region object or a
             dictionary of bounds with keys "latitude_min", "latitude_max",
             "longitude_min", and "longitude_max".
-        results_df: DataFrame with results from ExtremeWeatherBench.run()
+        results: DataFrame or Dataset with results from
+            ExtremeWeatherBench.run()
         case_list: The original case list to determine which
             case_id_numbers correspond to cases in the region
 
     Returns:
-        Subset DataFrame containing only results for cases in the region
+        Subset results containing only data for cases in the region
     """
     # Get the case IDs that should be included
     subset_cases = region.subset_case_list(case_list)
     included_case_ids = {case.case_id_number for case in subset_cases}
 
+    if isinstance(results, xr.Dataset):
+        present_ids = [
+            case_id
+            for case_id in results["case_id_number"].values
+            if case_id in included_case_ids
+        ]
+        return results.sel(case_id_number=present_ids)
+
     # Filter the results DataFrame
-    return results_df[results_df["case_id_number"].isin(included_case_ids)]
+    return results[results["case_id_number"].isin(included_case_ids)]
 
 
 def _adjust_bounds_to_dataset_convention(

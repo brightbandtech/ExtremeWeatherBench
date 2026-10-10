@@ -2,14 +2,14 @@
 
 import logging
 from collections import namedtuple
+from collections.abc import Sequence
 from itertools import product
-from typing import Optional, Sequence, Union
 
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
-import scipy.spatial as spatial
 import xarray as xr
+from scipy import spatial
 from skimage import measure
 from skimage.feature import peak_local_max
 
@@ -79,7 +79,7 @@ def generate_tc_tracks_by_init_time(
     timestep_count_wind_minimum: int = 10,
     latitude_max_degrees: float = 50.0,
     surface_pressure_threshold: float = 101000.0,
-    orography: Optional[xr.DataArray] = None,
+    orography: xr.DataArray | None = None,
     max_gc_distance_slp_contour_degrees: float = 5.5,
     max_gc_distance_dz_contour_degrees: float = 6.5,
     orography_filter_threshold: float = 150.0,
@@ -542,8 +542,8 @@ def _process_single_init_time(
 
 
 def find_furthest_contour_from_point(
-    contour: Union[npt.NDArray, Sequence[tuple[float, float]]],
-    point: Union[npt.NDArray, tuple[float, float]],
+    contour: npt.NDArray | Sequence[tuple[float, float]],
+    point: npt.NDArray | tuple[float, float],
 ) -> tuple[npt.NDArray, npt.NDArray]:
     """Find the two points in a contour that are furthest apart.
 
@@ -638,7 +638,7 @@ def find_valid_candidates(
     max_gc_distance_slp_contour: float = 5.5,
     max_gc_distance_dz_contour: float = 6.5,
     latitude_max_degrees: float = 50,
-) -> Optional[Location]:
+) -> Location | None:
     """Find valid candidate coordinate for a TC.
 
     Args:
@@ -926,28 +926,25 @@ def _create_spatial_mask(
         Spatial mask as a boolean array
     """
 
-    # Create meshgrid of all lat/lon coordinates
     lat_grid, lon_grid = np.meshgrid(lat_coords, lon_coords, indexing="ij")
+    if nearby_tc_track_data.empty:
+        return np.zeros_like(lat_grid, dtype=bool)
 
-    # Initialize mask
+    tc_lats = nearby_tc_track_data["latitude"].to_numpy(dtype=float)
+    tc_lons = nearby_tc_track_data["longitude"].to_numpy(dtype=float)
     spatial_mask = np.zeros_like(lat_grid, dtype=bool)
-
-    # For each tropical cyclone track data point, compute distances to all grid points
-    # vectorized
-    for _, tc_track_data_row in nearby_tc_track_data.iterrows():
-        tc_track_data_lat = tc_track_data_row["latitude"]
-        tc_track_data_lon = tc_track_data_row["longitude"]
-
-        # Vectorized distance calculation
+    # Chunk track points so (n_tracks, nlat, nlon) stays bounded.
+    for start in range(0, len(tc_lats), 32):
+        stop = start + 32
         distances = calc.haversine_distance(
-            [lat_grid, lon_grid],
-            [tc_track_data_lat, tc_track_data_lon],
+            [lat_grid[np.newaxis], lon_grid[np.newaxis]],
+            [
+                tc_lats[start:stop, np.newaxis, np.newaxis],
+                tc_lons[start:stop, np.newaxis, np.newaxis],
+            ],
             units="degrees",
         )
-
-        # Update mask where distance is within threshold
-        spatial_mask |= distances <= max_distance_degrees
-
+        spatial_mask |= np.any(distances <= max_distance_degrees, axis=0)
     return spatial_mask
 
 
@@ -1168,8 +1165,8 @@ def _convert_detections_to_dataset(
 
     # Determine output dimensions
     if unique_combinations:
-        max_lead_time = max(key[0] for key in unique_combinations.keys())
-        max_valid_time = max(key[1] for key in unique_combinations.keys())
+        max_lead_time = max(key[0] for key in unique_combinations)
+        max_valid_time = max(key[1] for key in unique_combinations)
 
         # Get the actual lead_time values
         lead_times = lead_time_coord.values[: max_lead_time + 1]

@@ -2,11 +2,10 @@
 
 import datetime
 
-import pandas as pd
 import xarray as xr
 
-import extremeweatherbench.regions as regions
-import extremeweatherbench.utils as utils
+from extremeweatherbench import regions, utils
+from extremeweatherbench.sources import xarray_dataset
 
 
 def safely_pull_variables(
@@ -45,30 +44,11 @@ def check_for_valid_times(
     start_date: datetime.datetime,
     end_date: datetime.datetime,
 ) -> bool:
-    """Check if the DataArray has valid times in the given date range.
+    """Check if the DataArray has any times in the given date range.
 
-    Args:
-        data: The xarray DataArray to check for valid times.
-        start_date: The start date of the time range to check.
-        end_date: The end date of the time range to check.
-
-    Returns:
-        True if the DataArray has any times within the specified range,
-        False otherwise.
+    Same rules as ``xarray_dataset.check_for_valid_times``.
     """
-    # Convert the start and end dates to pandas Timestamp objects for xarray's
-    # loc indexing
-    start_ts = pd.Timestamp(start_date)
-    end_ts = pd.Timestamp(end_date)
-
-    # Try different time dimension names
-    time_dims = ["valid_time", "time", "init_time"]
-    for time_dim in time_dims:
-        if time_dim in data.coords:
-            return any(data[time_dim].loc[start_ts:end_ts])
-
-    # If no time dimension found, return False
-    return False
+    return xarray_dataset.check_for_valid_times(data, start_date, end_date)
 
 
 def check_for_spatial_data(data: xr.DataArray, location: "regions.Region") -> bool:

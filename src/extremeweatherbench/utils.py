@@ -6,21 +6,31 @@ import inspect
 import logging
 import operator
 import pathlib
-from typing import Any, Callable, Literal, Optional, Sequence, Union
+from collections.abc import Callable, Sequence
+from typing import Any, Literal
 
-import cartopy.io.shapereader as shpreader
+import geopandas as gpd
 import numpy as np
 import numpy.typing as npt
 import pandas as pd  # type: ignore[import-untyped]
+import pooch
 import regionmask
 import shapely
 import sparse
 import tqdm
 import xarray as xr
-import yaml  # type: ignore[import]
 from joblib import Parallel
 
+from extremeweatherbench import progress
+
 logger = logging.getLogger(__name__)
+
+# Natural Earth vector data has been hosted on S3 since 2021; see
+# https://github.com/nvkelso/natural-earth-vector/issues/445
+NATURAL_EARTH_URL = (
+    "https://naturalearth.s3.amazonaws.com/{resolution}_{category}/"
+    "ne_{resolution}_{name}.zip"
+)
 
 operators = {
     ">": operator.gt,
@@ -42,7 +52,7 @@ def _empty_init_time_array() -> xr.DataArray:
 
 
 def maybe_get_operator(
-    operator_method: Union[Literal[">", ">=", "<", "<=", "==", "!="], Callable],
+    operator_method: Literal[">", ">=", "<", "<=", "==", "!="] | Callable,
 ) -> Callable:
     """Get the operator function from the operator string. If the operator_method is a
     callable, return it.
@@ -93,13 +103,16 @@ def is_valid_landfall(landfall: xr.DataArray | None) -> bool:
         return False
     if "init_time" not in landfall.coords:
         return False
-    if np.isnan(landfall.values).all():
+    if landfall.size == 0:
         return False
-    return True
+    # notnull().any() reduces chunk by chunk. Reading .values first would pull
+    # every chunk into one array and build a full-size boolean beside it, all
+    # to answer a single yes-or-no question.
+    return bool(landfall.notnull().any())
 
 
 def _create_nan_dataarray(
-    preserved_dims: Union[str, list[str]] = "init_time",
+    preserved_dims: str | list[str] = "init_time",
 ) -> xr.DataArray:
     """Create a NaN DataArray with the given dimension(s).
 
@@ -125,15 +138,28 @@ def convert_longitude_to_360(longitude: float) -> float:
     return np.mod(longitude, 360)
 
 
+def _wrap_longitude_to_grid(sample_lon: np.ndarray, grid_lon: np.ndarray) -> np.ndarray:
+    """Shift sample longitudes by ±360° into the grid's numeric range.
+
+    Maps each sample into ``[mid - 180, mid + 180)`` where ``mid`` is the
+    midpoint of the grid longitudes. That puts 359° next to -1° on a
+    ``[-180, 180)`` axis and -1° next to 359° on a ``[0, 360)`` axis.
+    """
+    grid = np.asarray(grid_lon, dtype=float)
+    sample = np.asarray(sample_lon, dtype=float)
+    mid = 0.5 * (np.nanmin(grid) + np.nanmax(grid))
+    return np.mod(sample - mid + 180.0, 360.0) - 180.0 + mid
+
+
 def convert_longitude_to_180(
-    longitude: float | Union[xr.Dataset, xr.DataArray],
+    longitude: float | xr.Dataset | xr.DataArray,
     longitude_name: str = "longitude",
-) -> float | Union[xr.Dataset, xr.DataArray]:
+) -> float | xr.Dataset | xr.DataArray:
     """Convert a longitude from the range [0, 360) to [-180, 180).
 
     Datasets are coerced to [-180, 180) and sorted by longitude.
     """
-    if isinstance(longitude, xr.Dataset) or isinstance(longitude, xr.DataArray):
+    if isinstance(longitude, (xr.Dataset, xr.DataArray)):
         longitude.coords[longitude_name] = (
             longitude.coords[longitude_name] + 180
         ) % 360 - 180
@@ -141,6 +167,25 @@ def convert_longitude_to_180(
         return longitude
     else:
         return np.mod(longitude - 180, 360) - 180
+
+
+# Cached Natural Earth land masks keyed by lat/lon byte values.
+_REGIONMASK_LAND_CACHE: dict[tuple[bytes, bytes], xr.DataArray] = {}
+
+
+def regionmask_land_110(
+    latitude: xr.DataArray | npt.NDArray, longitude: xr.DataArray | npt.NDArray
+) -> xr.DataArray:
+    """Land mask from Natural Earth 110m. 0 is land. Cached per grid."""
+    lat_vals = np.asarray(latitude)
+    lon_vals = np.asarray(longitude)
+    key = (lat_vals.tobytes(), lon_vals.tobytes())
+    mask = _REGIONMASK_LAND_CACHE.get(key)
+    if mask is None:
+        land = regionmask.defined_regions.natural_earth_v5_0_0.land_110
+        mask = land.mask(longitude, latitude)
+        _REGIONMASK_LAND_CACHE[key] = mask
+    return mask
 
 
 def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
@@ -152,23 +197,10 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     Returns:
         The dataset masked to only land gridpoints.
     """
-    land = regionmask.defined_regions.natural_earth_v5_0_0.land_110
-    land_sea_mask = land.mask(dataset.longitude, dataset.latitude)
+    land_sea_mask = regionmask_land_110(dataset.latitude, dataset.longitude)
     land_mask = land_sea_mask == 0
     # Subset the dataset to only include land gridpoints
     return dataset.where(land_mask)
-
-
-def read_event_yaml(input_pth: str | pathlib.Path) -> dict:
-    """Read events yaml from data."""
-    logger.warning(
-        "This function is deprecated and will be removed in a future release. "
-        "Please use cases.read_incoming_yaml instead."
-    )
-    input_pth = pathlib.Path(input_pth)
-    with open(input_pth, "rb") as f:
-        yaml_event_case = yaml.safe_load(f)
-    return yaml_event_case
 
 
 def derive_indices_from_init_time_and_lead_time(
@@ -260,18 +292,23 @@ def min_if_all_timesteps_present(
 ) -> xr.DataArray:
     """Return the minimum value of a DataArray if all timesteps of a day are present.
 
+    Counts values that are actually present rather than the length of the time
+    coordinate, so a day padded out with NaNs is correctly rejected as
+    incomplete.
+
     Args:
         da: The input DataArray.
+        time_resolution_hours: The spacing of the data in hours.
 
     Returns:
         The minimum value of the DataArray if all timesteps are present,
-        otherwise the original DataArray.
+        otherwise NaN.
     """
     timesteps_per_day = 24 / time_resolution_hours
-    if da.values.size == timesteps_per_day:
-        return da.min()
-    else:
-        return xr.DataArray(np.nan)
+    # Comparing lazily rather than in a Python `if` keeps a dask-backed day
+    # out of memory: nothing here is computed until the caller asks for it.
+    timesteps_present = da.notnull().sum()
+    return da.min().where(timesteps_present == timesteps_per_day)
 
 
 def min_if_all_timesteps_present_forecast(
@@ -280,28 +317,104 @@ def min_if_all_timesteps_present_forecast(
     """Return the minimum value of a DataArray if all timesteps of a day are present
     given a dataset with lead_time and valid_time dimensions.
 
+    The completeness check is made per lead time against the number of values
+    actually present. Checking the length of the valid_time coordinate instead
+    would pass for every lead time, because that coordinate is the union over
+    all lead times and is denser than any single lead time's sampling.
+
     Args:
         da: The input DataArray.
+        time_resolution_hours: The spacing of the data in hours.
 
     Returns:
-        The minimum value of the DataArray if all timesteps are present,
-        otherwise the original DataArray.
+        The minimum along valid_time for lead times holding a full day of
+        values, and NaN for the rest.
     """
     timesteps_per_day = 24 / time_resolution_hours
-    if da.valid_time.size == timesteps_per_day:
-        return da.min("valid_time")
-    else:
-        # Return an array with the same lead_time dimension but filled with NaNs
-        return xr.DataArray(
-            np.full(da.lead_time.size, np.nan),
-            coords={"lead_time": da.lead_time},
-            dims=["lead_time"],
-        )
+    timesteps_present = da.notnull().sum("valid_time")
+    return da.min("valid_time").where(timesteps_present == timesteps_per_day)
+
+
+def expected_timesteps_per_day(forecast: xr.DataArray) -> int:
+    """Number of forecast steps that make up one day at the lead_time spacing.
+
+    This is the per-init sampling rate, which is the meaningful one when asking
+    whether a single forecast run covers a full day. It is unrelated to the
+    spacing of the valid_time axis, which is the union over all lead times.
+
+    Args:
+        forecast: A forecast DataArray with a lead_time coordinate.
+
+    Returns:
+        The number of lead times spanning 24 hours, at least 1.
+    """
+    lead_time = _lead_time_as_timedelta(forecast.lead_time)
+    steps = np.abs(np.diff(lead_time.values)) / np.timedelta64(1, "h")
+    steps = steps[steps > 0]
+    if steps.size == 0:
+        return 1
+    return max(round(24 / steps.min()), 1)
+
+
+def reduce_forecast_over_window_per_init(
+    forecast: xr.DataArray,
+    center_time: Any,
+    tolerance_range_hours: int,
+    method: str = "max",
+    required_timesteps: int = 1,
+) -> xr.DataArray:
+    """Reduce a forecast over a time window separately for each initialization.
+
+    Peak metrics ask what extreme value a forecast predicted near the time the
+    target's extreme occurred. That is a reduction along a single run's
+    trajectory, so it must be taken over lead_time at fixed init_time. Reducing
+    over valid_time at fixed lead_time instead samples a different run at every
+    step, and when the initialization interval is wider than the window it
+    degenerates to a single instantaneous value whose time of day is set by
+    ``lead_time mod 24 h``.
+
+    The result is indexed by the lead time of the target's extreme relative to
+    each initialization, ``center_time - init_time``, and keeps init_time as a
+    coordinate so the provenance of each value survives into the output.
+
+    Args:
+        forecast: Forecast DataArray with lead_time and valid_time dimensions,
+            already reduced over any spatial dimensions.
+        center_time: The target time the window is centered on.
+        tolerance_range_hours: Full width of the window in hours.
+        method: The reduction to apply, e.g. "max" or "min".
+        required_timesteps: Minimum number of values an initialization must
+            contribute inside the window to be scored. Initializations with
+            fewer are dropped rather than scored on partial coverage.
+
+    Returns:
+        A DataArray with a lead_time dimension and an init_time coordinate.
+    """
+    half_window = np.timedelta64(tolerance_range_hours // 2, "h")
+    center = np.ravel(np.asarray(center_time))[0]
+
+    forecast_by_init = convert_valid_time_to_init_time(forecast)
+    windowed = forecast_by_init.where(
+        (forecast_by_init.valid_time >= center - half_window)
+        & (forecast_by_init.valid_time <= center + half_window)
+    )
+    windowed = windowed.where(
+        windowed.notnull().sum("lead_time") >= required_timesteps, drop=True
+    )
+
+    reduced = getattr(windowed, method)("lead_time")
+    reduced = reduced.assign_coords(
+        lead_time=("init_time", (center - reduced.init_time).data)
+    )
+    # A run launched after the target's extreme did not forecast it, and a
+    # negative lead time would be meaningless in the output.
+    reduced = reduced.where(reduced.lead_time >= np.timedelta64(0, "h"), drop=True)
+    return reduced.swap_dims({"init_time": "lead_time"}).sortby("lead_time")
 
 
 def determine_temporal_resolution(
     data: xr.Dataset | xr.DataArray,
-) -> Optional[float]:
+) -> float | None:
     """Determine the temporal resolution of the data.
 
     Args:
@@ -310,9 +423,15 @@ def determine_temporal_resolution(
     Returns:
         The temporal resolution of the data as a float in hours.
     """
-    num_timesteps = (
-        np.unique(np.diff(data.valid_time)).astype("timedelta64[h]").astype(int)
-    )
+    # Read the times off the index where there is one. Going through
+    # data.valid_time builds a DataArray and diffs it through xarray's
+    # dispatch, which costs several times more than diffing the index.
+    if "valid_time" in data.indexes:
+        valid_time = data.indexes["valid_time"].to_numpy()
+    else:
+        valid_time = np.asarray(data["valid_time"].values)
+
+    num_timesteps = np.unique(np.diff(valid_time)).astype("timedelta64[h]").astype(int)
     if len(num_timesteps) > 1:
         logger.warning(
             "Multiple time resolutions found in dataset, data may be missing in "
@@ -328,8 +447,18 @@ def determine_temporal_resolution(
     return np.min(num_timesteps).astype(float)
 
 
+def _lead_time_as_timedelta(lead_time: xr.DataArray) -> xr.DataArray:
+    """Coerce an integer-hours lead_time to timedelta64."""
+    if np.issubdtype(lead_time.dtype, np.timedelta64):
+        return lead_time
+    return lead_time.copy(data=pd.to_timedelta(lead_time.values, unit="h"))
+
+
 def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
     """Convert the init_time coordinate to a valid_time coordinate.
+
+    Each lead is reindexed onto the union of valid times, then concatenated.
+    That matches concat(..., join="outer") without growing aligns.
 
     Args:
         ds: The dataset to convert with lead_time and init_time coordinates.
@@ -337,20 +466,71 @@ def convert_init_time_to_valid_time(ds: xr.Dataset) -> xr.Dataset:
     Returns:
         The dataset with a valid_time coordinate.
     """
-    valid_time = xr.DataArray(
-        ds.init_time, coords={"init_time": ds.init_time}
-    ) + xr.DataArray(ds.lead_time, coords={"lead_time": ds.lead_time})
-    ds = ds.assign_coords(valid_time=valid_time)
-    return xr.concat(
-        [
-            ds.sel(lead_time=lead).swap_dims({"init_time": "valid_time"})
-            for lead in ds.lead_time
-        ],
-        "lead_time",
+    lead_time = _lead_time_as_timedelta(ds.lead_time)
+    ds = ds.assign_coords(valid_time=ds.init_time + lead_time)
+    vt_union = np.unique(ds.valid_time.values.reshape(-1))
+    pieces = [
+        ds.isel(lead_time=i)
+        .swap_dims({"init_time": "valid_time"})
+        .reindex(valid_time=vt_union)
+        for i in range(ds.sizes["lead_time"])
+    ]
+    out = xr.concat(
+        pieces,
+        dim="lead_time",
         coords="different",
         compat="equals",
         join="outer",
     )
+    out = out.assign_coords(lead_time=("lead_time", ds.lead_time.values))
+    if "valid_time_mask" in out.coords:
+        mask = out.valid_time_mask
+        out = out.assign_coords(
+            valid_time_mask=xr.where(mask.isnull(), False, mask).astype(bool)
+        )
+    return out
+
+
+def values_as_bool(values) -> npt.NDArray[np.bool_]:
+    """Coerce an array to bool; NaN / non-finite fills become False."""
+    arr = np.asarray(values)
+    if np.issubdtype(arr.dtype, np.floating):
+        return np.isfinite(arr) & (arr != 0)
+    return arr.astype(bool)
+
+
+def stack_valid_time_pairs(
+    obj: xr.Dataset | xr.DataArray,
+) -> xr.Dataset | xr.DataArray:
+    """Keep only valid (lead_time, valid_time) pairs as a sample dim.
+
+    Uses the ``valid_time_mask`` coordinate so fill cells from
+    ``convert_init_time_to_valid_time`` never enter the dask graph.
+    """
+    if not {"lead_time", "valid_time"} <= set(obj.dims):
+        return obj
+    if "valid_time_mask" not in obj.coords:
+        return obj
+    stacked = obj.stack(sample=("lead_time", "valid_time"))
+    keep = values_as_bool(stacked["valid_time_mask"]).ravel()
+    return stacked.isel(sample=np.flatnonzero(keep))
+
+
+def unstack_valid_time_pairs(
+    obj: xr.Dataset | xr.DataArray,
+    like: xr.Dataset | xr.DataArray | None = None,
+) -> xr.Dataset | xr.DataArray:
+    """Restore lead_time × valid_time from a valid-pair sample dim.
+
+    When ``like`` is given, reindex onto its lead_time and valid_time so
+    fill cells come back as NaN on the original dense grid.
+    """
+    if "sample" not in obj.dims:
+        return obj
+    out = obj.unstack("sample")
+    if like is not None and {"lead_time", "valid_time"} <= set(like.dims):
+        out = out.reindex(lead_time=like.lead_time, valid_time=like.valid_time)
+    return out
 
 
 def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:
@@ -362,9 +542,10 @@ def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:
     Returns:
         The dataarray with an init_time dimension.
     """
+    lead_time = _lead_time_as_timedelta(da.lead_time)
     init_time = xr.DataArray(
         da.valid_time, coords={"valid_time": da.valid_time}
-    ) - xr.DataArray(da.lead_time, coords={"lead_time": da.lead_time})
+    ) - xr.DataArray(lead_time, coords={"lead_time": da.lead_time})
     da = da.assign_coords(init_time=init_time)
     return xr.concat(
         [
@@ -422,7 +603,7 @@ def stack_dataarray_from_dims(
     da: xr.DataArray,
     stack_dims: list[str],
     max_size: float = 1e9,
-    coords: Optional[npt.NDArray] = None,
+    coords: npt.NDArray | None = None,
 ) -> xr.DataArray:
     """Stack sparse data with n-dimensions.
 
@@ -482,7 +663,7 @@ def stack_dataarray_from_dims(
     return maybe_densify_dataarray(da, max_size=max_size)
 
 
-def check_for_vars(variable_list: list[str], source: Sequence) -> Optional[str]:
+def check_for_vars(variable_list: list[str], source: Sequence) -> str | None:
     """Check if the variable is in the source.
 
     Args:
@@ -519,7 +700,12 @@ class ParallelTqdm(Parallel):
         show_joblib_header: bool, default: False
             If True, show joblib header before the progressbar.
 
-
+        pre_close: Callable[[], None] | None, default: None
+            Invoked at the top of __call__'s finally block, before the
+            case bar closes. Callers with bars nested below the case
+            bar (e.g. parallel-mode worker slot bars) must close those
+            here, since closing the case bar first leaves them
+            redrawing into space the case bar has already vacated.
 
     Example:
     >>> from joblib import delayed
@@ -536,6 +722,7 @@ class ParallelTqdm(Parallel):
         desc: str | None = None,
         disable_progressbar: bool = False,
         show_joblib_header: bool = False,
+        pre_close: Callable[[], None] | None = None,
         **kwargs,
     ):
         if "verbose" in kwargs:
@@ -547,6 +734,7 @@ class ParallelTqdm(Parallel):
         self.total_tasks = total_tasks
         self.desc = desc
         self.disable_progressbar = disable_progressbar
+        self.pre_close = pre_close
         self.progress_bar: tqdm.tqdm | None = None
 
     def __call__(self, iterable):
@@ -560,21 +748,24 @@ class ParallelTqdm(Parallel):
             # call parent function
             return super().__call__(iterable)
         finally:
+            if self.pre_close is not None:
+                self.pre_close()
             # close tqdm progress bar
             if self.progress_bar is not None:
                 self.progress_bar.close()
+                progress.clear_bar()
 
     __call__.__doc__ = Parallel.__call__.__doc__
 
     def dispatch_one_batch(self, iterator):
         # start progress_bar, if not started yet.
         if self.progress_bar is None:
-            self.progress_bar = tqdm.tqdm(
-                desc=self.desc,
-                total=self.total_tasks,
-                disable=self.disable_progressbar,
-                unit="tasks",
+            self.progress_bar = progress.make_case_bar(
+                self.total_tasks, disable=self.disable_progressbar
             )
+            # Disallow phase updates: concurrent cases would otherwise
+            # fight over a single postfix.
+            progress.register_bar(self.progress_bar, allow_phase_updates=False)
         # call parent function
         return super().dispatch_one_batch(iterator)
 
@@ -631,8 +822,8 @@ def idx_to_coords(
 
 
 def convert_day_yearofday_to_time(
-    dataset: Union[xr.Dataset, xr.DataArray], year: int
-) -> Union[xr.Dataset, xr.DataArray]:
+    dataset: xr.Dataset | xr.DataArray, year: int
+) -> xr.Dataset | xr.DataArray:
     """Convert dayofyear and hour to new time coordinate.
 
     Args:
@@ -642,19 +833,435 @@ def convert_day_yearofday_to_time(
     Returns:
         The dataset or dataarray with a new time coordinate.
     """
-    # Create a new time coordinate by combining dayofyear and hour
-    time_dim = pd.date_range(
-        start=f"{year}-01-01",
-        periods=len(dataset["dayofyear"]) * len(dataset["hour"]),
-        freq="6h",
+    stacked = dataset.stack(valid_time=("dayofyear", "hour"))
+    times = pd.to_datetime(
+        year * 1000 + stacked.dayofyear.values.astype(int), format="%Y%j"
+    ) + pd.to_timedelta(stacked.hour.values.astype(int), unit="h")
+    return stacked.reset_index("valid_time", drop=True).assign_coords(
+        valid_time=("valid_time", times)
     )
-    dataset = dataset.stack(valid_time=("dayofyear", "hour")).drop_vars(
-        ["dayofyear", "hour"]
-    )
-    # Assign the new time coordinate to the dataset
-    dataset = dataset.assign_coords(valid_time=time_dim)
 
-    return dataset
+
+_TIME_DIM_NAMES = frozenset({"time", "valid_time", "lead_time", "init_time"})
+_LAT_NAMES = ("latitude", "lat")
+_LON_NAMES = ("longitude", "lon")
+_POINT_DIM_NAMES = ("location", "station", "sample", "stacked")
+
+
+def _lat_lon_names(
+    obj: xr.Dataset | xr.DataArray,
+) -> tuple[str | None, str | None]:
+    """Return latitude and longitude coordinate names if present."""
+    names = list(obj.dims) + list(obj.coords)
+    lat = next((n for n in _LAT_NAMES if n in names), None)
+    lon = next((n for n in _LON_NAMES if n in names), None)
+    return lat, lon
+
+
+def infer_spatial_layout(
+    obj: xr.Dataset | xr.DataArray,
+) -> Literal["grid", "points"]:
+    """Classify a Dataset or DataArray as a spatial grid or point samples.
+
+    Points are paired (lat, lon) samples: a shared non-time dimension such
+    as ``location``, or a sparse lat × lon cube of occupied stations.
+    Independent latitude and longitude dimensions with dense data are a
+    grid.
+
+    Args:
+        obj: Dataset or DataArray to classify.
+
+    Returns:
+        ``"points"`` if lat/lon are paired samples, otherwise ``"grid"``.
+        Objects with no lat/lon coordinates are treated as ``"grid"``.
+
+    Examples:
+        >>> import numpy as np
+        >>> import pandas as pd
+        >>> import xarray as xr
+        >>> from extremeweatherbench import utils
+        >>> times = pd.date_range("2021-01-01", periods=2, freq="6h")
+        >>> grid = xr.Dataset(
+        ...     {"t": (["valid_time", "latitude", "longitude"], np.zeros((2, 3, 4)))},
+        ...     coords={
+        ...         "valid_time": times,
+        ...         "latitude": [10.0, 11.0, 12.0],
+        ...         "longitude": [100.0, 101.0, 102.0, 103.0],
+        ...     },
+        ... )
+        >>> utils.infer_spatial_layout(grid)
+        'grid'
+        >>> pts = utils.point_frame_to_dataset(
+        ...     pd.DataFrame(
+        ...         {
+        ...             "valid_time": [times[0], times[0]],
+        ...             "latitude": [10.0, 12.0],
+        ...             "longitude": [100.0, 103.0],
+        ...             "t": [273.0, 275.0],
+        ...         }
+        ...     )
+        ... )
+        >>> utils.infer_spatial_layout(pts)
+        'points'
+    """
+    lat_name, lon_name = _lat_lon_names(obj)
+    if lat_name is None or lon_name is None:
+        return "grid"
+
+    arrays: list[xr.DataArray]
+    if isinstance(obj, xr.DataArray):
+        arrays = [obj]
+    else:
+        arrays = [obj[v] for v in obj.data_vars]
+
+    for da in arrays:
+        if (
+            isinstance(da.data, sparse.COO)
+            and lat_name in da.dims
+            and lon_name in da.dims
+        ):
+            return "points"
+
+    for dim in _POINT_DIM_NAMES:
+        if dim not in obj.dims:
+            continue
+        if dim in obj[lat_name].dims and dim in obj[lon_name].dims:
+            return "points"
+
+    lat_dims = set(obj[lat_name].dims) - _TIME_DIM_NAMES
+    lon_dims = set(obj[lon_name].dims) - _TIME_DIM_NAMES
+    if lat_dims and lat_dims == lon_dims and lat_name not in obj.dims:
+        return "points"
+
+    return "grid"
+
+
+def _point_dim_name(obj: xr.Dataset | xr.DataArray) -> str | None:
+    """Name of the sample dimension for point-like data, if any."""
+    for dim in _POINT_DIM_NAMES:
+        if dim in obj.dims:
+            return dim
+    lat_name, lon_name = _lat_lon_names(obj)
+    if lat_name is None:
+        return None
+    skip = _TIME_DIM_NAMES | {lat_name, lon_name}
+    spatial = set(obj[lat_name].dims) - skip
+    if len(spatial) == 1:
+        return str(next(iter(spatial)))
+    return None
+
+
+def point_frame_to_dataset(
+    df: pd.DataFrame,
+    *,
+    time_col: str = "valid_time",
+    lat_col: str = "latitude",
+    lon_col: str = "longitude",
+    location_dim: str = "location",
+) -> xr.Dataset:
+    """Convert station rows to (time, location) with lat/lon as coords.
+
+    Each unique (latitude, longitude) pair becomes one location. This does
+    not build a unique-lat × unique-lon Cartesian product, which would
+    fill empty grid crossings and can exhaust memory.
+
+    Args:
+        df: Point observations with time, latitude, longitude, and value
+            columns.
+        time_col: Name of the valid-time column.
+        lat_col: Name of the latitude column.
+        lon_col: Name of the longitude column.
+        location_dim: Name of the sample dimension to create.
+
+    Returns:
+        Dataset with dimensions ``(time_col, location_dim)``. Latitude
+        and longitude are non-dimension coordinates on ``location_dim``.
+        Duplicate (time, lat, lon) rows keep the first value.
+
+    Examples:
+        >>> import pandas as pd
+        >>> from extremeweatherbench import utils
+        >>> df = pd.DataFrame(
+        ...     {
+        ...         "valid_time": ["2021-02-01", "2021-02-01"],
+        ...         "latitude": [10.0, 30.0],
+        ...         "longitude": [20.0, 40.0],
+        ...         "surface_air_temperature": [273.1, 268.4],
+        ...     }
+        ... )
+        >>> ds = utils.point_frame_to_dataset(df)
+        >>> list(ds.dims)
+        ['valid_time', 'location']
+        >>> ds.sizes["location"]
+        2
+    """
+    frame = df.copy()
+    key_cols = [time_col, lat_col, lon_col]
+    n_before = len(frame)
+    frame = frame.drop_duplicates(subset=key_cols, keep="first")
+    n_dropped = n_before - len(frame)
+    if n_dropped:
+        logger.warning(
+            "Dropped %s duplicate (time, lat, lon) point rows; "
+            "colocated stations collapse to one location.",
+            n_dropped,
+        )
+    stations = frame[[lat_col, lon_col]].drop_duplicates().reset_index(drop=True)
+    stations[location_dim] = np.arange(len(stations))
+    frame = frame.merge(stations, on=[lat_col, lon_col], how="left")
+    skip = {time_col, lat_col, lon_col, location_dim}
+    value_cols = [c for c in frame.columns if c not in skip]
+    indexed = frame.set_index([time_col, location_dim])[value_cols]
+    ds = xr.Dataset.from_dataframe(indexed)
+    stations = stations.set_index(location_dim)
+    return ds.assign_coords(
+        latitude=(location_dim, stations[lat_col].to_numpy()),
+        longitude=(location_dim, stations[lon_col].to_numpy()),
+    )
+
+
+def sparse_cube_to_location(
+    ds: xr.Dataset, location_dim: str = "location"
+) -> xr.Dataset:
+    """Collapse a sparse lat × lon cube onto occupied station pairs.
+
+    Use this when point data was stored as a unique-lat × unique-lon
+    product with values only at real stations. The result has a sample
+    dimension instead of separate latitude and longitude dimensions.
+
+    Occupied locations are the union of stored (lat, lon) index pairs
+    across every data variable. A station present only in a later
+    variable is kept. Sparse COO arrays are indexed in place; the
+    full Cartesian cube is not densified.
+
+    Args:
+        ds: Dataset with latitude and longitude dimensions.
+        location_dim: Name of the sample dimension to create. Defaults
+            to ``"location"``.
+
+    Returns:
+        Dataset indexed by occupied (lat, lon) pairs along
+        ``location_dim``, with latitude and longitude as coordinates.
+        If lat/lon names are missing, ``ds`` is returned unchanged.
+    """
+    lat_name, lon_name = _lat_lon_names(ds)
+    if lat_name is None or lon_name is None:
+        return ds
+    pairs = _occupied_lat_lon_index_pairs(ds, lat_name, lon_name)
+    if pairs is None:
+        da = next(iter(ds.data_vars.values()))
+        stacked = ds.stack({location_dim: (lat_name, lon_name)})
+        keep = (
+            stacked[da.name]
+            .notnull()
+            .any(dim=[d for d in stacked[da.name].dims if d != location_dim])
+        )
+        return stacked.isel({location_dim: keep})
+
+    data_vars = {}
+    for name, da in ds.data_vars.items():
+        if isinstance(da.data, sparse.COO):
+            data_vars[name] = _coo_at_lat_lon_pairs(
+                da, lat_name, lon_name, pairs, location_dim
+            )
+        else:
+            data_vars[name] = da.isel(
+                {
+                    lat_name: xr.DataArray(pairs[:, 0], dims=location_dim),
+                    lon_name: xr.DataArray(pairs[:, 1], dims=location_dim),
+                }
+            )
+    other_coords = {
+        name: coord
+        for name, coord in ds.coords.items()
+        if name not in (lat_name, lon_name)
+        and set(coord.dims).isdisjoint({lat_name, lon_name})
+    }
+    out = xr.Dataset(data_vars, coords=other_coords)
+    return out.assign_coords(
+        {
+            location_dim: np.arange(len(pairs)),
+            lat_name: (location_dim, np.asarray(ds[lat_name])[pairs[:, 0]]),
+            lon_name: (location_dim, np.asarray(ds[lon_name])[pairs[:, 1]]),
+        }
+    )
+
+
+def _occupied_lat_lon_index_pairs(
+    ds: xr.Dataset, lat_name: str, lon_name: str
+) -> np.ndarray | None:
+    """Unique stored (lat, lon) index pairs, or None if nothing is sparse."""
+    chunks: list[np.ndarray] = []
+    saw_sparse = False
+    for da in ds.data_vars.values():
+        if lat_name not in da.dims or lon_name not in da.dims:
+            continue
+        if not isinstance(da.data, sparse.COO):
+            continue
+        saw_sparse = True
+        dims = list(da.dims)
+        lat_i = da.data.coords[dims.index(lat_name)]
+        lon_i = da.data.coords[dims.index(lon_name)]
+        chunks.append(np.column_stack([lat_i, lon_i]))
+    if not saw_sparse:
+        return None
+    if not chunks:
+        return np.zeros((0, 2), dtype=int)
+    return np.unique(np.vstack(chunks), axis=0)
+
+
+def _coo_at_lat_lon_pairs(
+    da: xr.DataArray,
+    lat_name: str,
+    lon_name: str,
+    pairs: np.ndarray,
+    location_dim: str,
+) -> xr.DataArray:
+    """Pull COO values at (lat, lon) index pairs without densifying."""
+    coo = da.data
+    dims = list(da.dims)
+    lat_ax = dims.index(lat_name)
+    lon_ax = dims.index(lon_name)
+    other_dims = [dim for dim in dims if dim not in (lat_name, lon_name)]
+    other_axes = [dims.index(dim) for dim in other_dims]
+    other_shape = tuple(da.sizes[dim] for dim in other_dims)
+    out = np.full(other_shape + (len(pairs),), np.nan, dtype=np.float64)
+    loc_of = {(int(row[0]), int(row[1])): i for i, row in enumerate(pairs)}
+    coords = coo.coords
+    values = coo.data
+    for k in range(values.shape[0]):
+        loc = loc_of.get((int(coords[lat_ax, k]), int(coords[lon_ax, k])))
+        if loc is None:
+            continue
+        idx = tuple(int(coords[ax, k]) for ax in other_axes) + (loc,)
+        out[idx] = values[k]
+    return xr.DataArray(out, dims=other_dims + [location_dim])
+
+
+def as_point_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """Return point data with a ``location`` dim and lat/lon coords.
+
+    Accepts already-point Datasets (``location``, ``station``,
+    ``sample``, or ``stacked``) or a sparse lat × lon cube of occupied
+    stations. Grid Datasets are returned unchanged.
+
+    Args:
+        ds: Point or gridded Dataset.
+
+    Returns:
+        Point Dataset with a ``location`` dimension and ``latitude`` /
+        ``longitude`` coordinates, or ``ds`` if it is a spatial grid.
+    """
+    if _point_dim_name(ds) is not None and infer_spatial_layout(ds) == "points":
+        lat_name, lon_name = _lat_lon_names(ds)
+        point_dim = _point_dim_name(ds)
+        if point_dim != "location" and point_dim is not None:
+            ds = ds.rename({point_dim: "location"})
+        if lat_name and lat_name != "latitude":
+            ds = ds.rename({lat_name: "latitude"})
+        if lon_name and lon_name != "longitude":
+            ds = ds.rename({lon_name: "longitude"})
+        return ds
+    if infer_spatial_layout(ds) == "points":
+        return sparse_cube_to_location(ds)
+    return ds
+
+
+def sample_field_at_points(
+    field: xr.Dataset,
+    latitude: xr.DataArray,
+    longitude: xr.DataArray,
+    method: str = "nearest",
+) -> xr.Dataset:
+    """Sample a gridded field at paired latitude/longitude coordinates.
+
+    Interpolating onto 1D lat and lon *dimension* coords builds a full
+    lat × lon mesh. This instead evaluates the field at each (lat, lon)
+    pair, so the output has a ``location`` dimension.
+
+    Args:
+        field: Gridded Dataset with latitude and longitude dimensions.
+        latitude: Sample latitudes. Should share a ``location`` dim with
+            ``longitude`` when already a DataArray.
+        longitude: Sample longitudes paired with ``latitude``.
+        method: Interpolation method passed to ``Dataset.interp``.
+            ``"nearest"`` or ``"linear"``. Defaults to ``"nearest"``.
+
+    Returns:
+        ``field`` interpolated at the given pairs, with a ``location``
+        dimension. If ``field`` has no lat/lon coordinates, it is
+        returned unchanged.
+
+    Examples:
+        >>> import numpy as np
+        >>> import xarray as xr
+        >>> from extremeweatherbench import utils
+        >>> t2m = np.arange(6.0).reshape(2, 3)
+        >>> forecast = xr.Dataset(
+        ...     {"t2m": (("latitude", "longitude"), t2m)},
+        ...     coords={
+        ...         "latitude": [10.0, 20.0],
+        ...         "longitude": [1.0, 2.0, 3.0],
+        ...     },
+        ... )
+        >>> lat = xr.DataArray([10.0, 20.0], dims="location")
+        >>> lon = xr.DataArray([1.0, 3.0], dims="location")
+        >>> sampled = utils.sample_field_at_points(forecast, lat, lon)
+        >>> list(sampled.dims)
+        ['location']
+    """
+    lat_name, lon_name = _lat_lon_names(field)
+    if lat_name is None or lon_name is None:
+        return field
+    interp_method: Literal["nearest", "linear"] = (
+        "nearest" if method == "nearest" else "linear"
+    )
+    lat_da = latitude
+    lon_da = longitude
+    if "location" not in lat_da.dims:
+        loc = np.arange(lat_da.size)
+        lat_da = xr.DataArray(
+            np.asarray(lat_da),
+            dims="location",
+            coords={"location": loc},
+        )
+        lon_da = xr.DataArray(
+            np.asarray(lon_da),
+            dims="location",
+            coords={"location": loc},
+        )
+    wrapped = _wrap_longitude_to_grid(np.asarray(lon_da), np.asarray(field[lon_name]))
+    lon_da = xr.DataArray(wrapped, dims=lon_da.dims, coords=lon_da.coords)
+    return field.interp(
+        {lat_name: lat_da, lon_name: lon_da},
+        method=interp_method,
+        kwargs={"fill_value": None},
+    )
+
+
+def _colocate_points(forecast_pts: xr.Dataset, target_pts: xr.Dataset) -> xr.Dataset:
+    """Map forecast stations onto target stations by nearest lat/lon."""
+    fc_dim = _point_dim_name(forecast_pts) or "location"
+    tg_dim = _point_dim_name(target_pts) or "location"
+    fc_lat = np.asarray(forecast_pts["latitude"])
+    fc_lon = np.asarray(forecast_pts["longitude"])
+    tg_lat = np.asarray(target_pts["latitude"])
+    tg_lon = np.asarray(target_pts["longitude"])
+    dlat = fc_lat[:, None] - tg_lat[None, :]
+    dlon = np.mod(fc_lon[:, None] - tg_lon[None, :] + 180.0, 360.0) - 180.0
+    dist = dlat**2 + dlon**2
+    idx = dist.argmin(axis=0)
+    mapped = forecast_pts.isel({fc_dim: idx})
+    mapped = mapped.assign_coords(
+        {
+            tg_dim: target_pts[tg_dim].values,
+            "latitude": target_pts["latitude"],
+            "longitude": target_pts["longitude"],
+        }
+    )
+    if fc_dim != tg_dim:
+        mapped = mapped.rename({fc_dim: tg_dim})
+    return mapped
 
 
 def interp_climatology_to_target(
@@ -671,6 +1278,14 @@ def interp_climatology_to_target(
         climatology is interpolated to the target coordinates. If the target is not
         sparse, the climatology is interpolated to the target coordinates.
     """
+    point_dim = _point_dim_name(target)
+    if point_dim is not None and "latitude" in target.coords:
+        return climatology.interp(
+            latitude=target["latitude"],
+            longitude=target["longitude"],
+            method="nearest",
+            kwargs={"fill_value": None},
+        )
     # If the target is sparse or has less than 3 dimensions, interpolate the
     # climatology using stacked dim
     if isinstance(target.data, sparse.COO) or target.ndim < 3:
@@ -699,7 +1314,10 @@ def maybe_densify_dataarray(da: xr.DataArray, max_size: float = 1e9) -> xr.DataA
         The densified xarray dataarray.
     """
     if isinstance(da.data, sparse.COO):
-        da.data = da.data.maybe_densify(max_size=max_size)
+        # Assigning to da.data would rewrite the Variable this DataArray shares
+        # with whatever it came from, so pulling a variable out of a dataset and
+        # densifying it turned the dataset dense too.
+        return da.copy(data=da.data.maybe_densify(max_size=max_size))
     return da
 
 
@@ -729,7 +1347,23 @@ def reduce_dataarray(
     Returns:
         The reduced xarray dataarray.
     """
-    if isinstance(da.data, sparse.COO):
+    reduce_dims = list(reduce_dims)
+    present = [d for d in reduce_dims if d in da.dims]
+    if not present:
+        alt = _point_dim_name(da)
+        if alt is not None:
+            reduce_dims = [alt]
+        elif isinstance(da.data, sparse.COO):
+            da = stack_dataarray_from_dims(da, reduce_dims)
+            reduce_dims = ["stacked"]
+    else:
+        reduce_dims = present
+
+    if (
+        isinstance(da.data, sparse.COO)
+        and reduce_dims != ["stacked"]
+        and all(d in da.dims for d in reduce_dims)
+    ):
         da = stack_dataarray_from_dims(da, reduce_dims)
         reduce_dims = ["stacked"]
 
@@ -755,6 +1389,35 @@ def reduce_dataarray(
         raise TypeError(f"method must be str or callable, got {type(method)}")
 
 
+def load_natural_earth_geometries(
+    name: str,
+    resolution: Literal["10m", "50m", "110m"] = "50m",
+    category: str = "physical",
+) -> list[shapely.geometry.base.BaseGeometry]:
+    """Download and read a Natural Earth vector layer.
+
+    The zipped shapefile is cached on disk by pooch, so repeat calls within and
+    across sessions do not re-download it.
+
+    Args:
+        name: Natural Earth layer name, e.g. 'land', 'lakes', or 'ocean'.
+        resolution: Natural Earth resolution ('10m', '50m', or '110m').
+            Defaults to '50m'.
+        category: Natural Earth category. Defaults to 'physical'.
+
+    Returns:
+        The layer's geometries in EPSG:4326.
+    """
+    path = pooch.retrieve(
+        url=NATURAL_EARTH_URL.format(
+            resolution=resolution, category=category, name=name
+        ),
+        known_hash=None,
+        path=pooch.os_cache("extremeweatherbench"),
+    )
+    return list(gpd.read_file(f"zip://{path}").geometry)
+
+
 def load_land_geometry(
     resolution: Literal["10m", "50m", "110m"] = "50m",
 ) -> shapely.geometry.Polygon:
@@ -768,18 +1431,12 @@ def load_land_geometry(
         The land geometry as a shapely Polygon with lakes and
         ocean-connected water bodies (bays, estuaries, seas) excluded.
     """
-    land = shpreader.natural_earth(
-        category="physical", name="land", resolution=resolution
-    )
-    land_geoms = list(shpreader.Reader(land).geometries())
+    land_geoms = load_natural_earth_geometries("land", resolution=resolution)
     land_union = shapely.ops.unary_union(land_geoms)
 
     # Exclude lakes to avoid false landfall detections
     try:
-        lakes = shpreader.natural_earth(
-            category="physical", name="lakes", resolution=resolution
-        )
-        lake_geoms = list(shpreader.Reader(lakes).geometries())
+        lake_geoms = load_natural_earth_geometries("lakes", resolution=resolution)
         if lake_geoms:
             lakes_union = shapely.ops.unary_union(lake_geoms)
             land_union = land_union.difference(lakes_union)
@@ -808,10 +1465,7 @@ def load_ocean_geometry(
     Returns:
         The ocean geometry as a unified shapely Polygon.
     """
-    ocean = shpreader.natural_earth(
-        category="physical", name="ocean", resolution=resolution
-    )
-    ocean_geoms = list(shpreader.Reader(ocean).geometries())
+    ocean_geoms = load_natural_earth_geometries("ocean", resolution=resolution)
     return shapely.ops.unary_union(ocean_geoms)
 
 
@@ -842,7 +1496,7 @@ def _cache_maybe_densify_helper(
 def maybe_cache_and_compute(
     data: xr.Dataset | xr.DataArray,
     name: str,
-    cache_dir: Optional[Union[str, pathlib.Path]] = None,
+    cache_dir: str | pathlib.Path | None = None,
 ) -> xr.Dataset | xr.DataArray:
     """Compute and cache datasets if cache_dir is provided.
 
@@ -873,6 +1527,7 @@ def maybe_cache_and_compute(
     # If the cache file does not exist, maybe densify the data and cache it. Sparse data
     # must be densified to be stored in zarrs
     if not (cache_path / f"{name}.zarr").exists():
+        progress.set_phase(f"caching {name}")
         _cache_maybe_densify_helper(data).to_zarr(
             cache_path / f"{name}.zarr", zarr_format=2, mode="w"
         )

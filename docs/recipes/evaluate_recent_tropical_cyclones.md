@@ -43,7 +43,7 @@ forecast = inputs.get_cira_icechunk(
 )
 
 # Target: IBTrACS best-track data (fetched from NCEI)
-ibtracs_target = ewb.IBTrACS()
+ibtracs_target = ewb.inputs.IBTrACS()
 
 tc_metrics = [
     # Landfall position error (km); "first" uses the first landfall only
@@ -67,7 +67,7 @@ tc_metrics = [
 ]
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="tropical_cyclone",
         metric_list=tc_metrics,
         target=ibtracs_target,
@@ -76,10 +76,10 @@ eval_objects = [
 ]
 
 # Load all cases and filter to tropical cyclones only
-all_cases = ewb.load_cases()
+all_cases = ewb.cases.load_cases()
 tc_cases = [c for c in all_cases if c.event_type == "tropical_cyclone"]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=tc_cases,
     evaluation_objects=eval_objects,
 )
@@ -115,7 +115,7 @@ add continuous metrics alongside the landfall metrics:
 tc_track = derived.TropicalCycloneTrackVariables()
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="tropical_cyclone",
         metric_list=[
             metrics.MeanAbsoluteError(
@@ -196,7 +196,7 @@ forecast = inputs.get_cira_icechunk(
     variables=[derived.TropicalCycloneTrackVariables()],
 )
 
-ibtracs_target = ewb.IBTrACS()
+ibtracs_target = ewb.inputs.IBTrACS()
 
 tc_metrics = [
     metrics.LandfallDisplacement(
@@ -217,7 +217,7 @@ tc_metrics = [
 ]
 
 eval_objects = [
-    ewb.EvaluationObject(
+    ewb.inputs.EvaluationObject(
         event_type="tropical_cyclone",
         metric_list=tc_metrics,
         target=ibtracs_target,
@@ -225,14 +225,10 @@ eval_objects = [
     ),
 ]
 
-runner = ewb.evaluation(
+runner = ewb.evaluate.ExtremeWeatherBench(
     case_metadata=cases,
     evaluation_objects=eval_objects,
 )
 outputs = runner.run_evaluation()
-print(
-    outputs[
-        ["metric", "value", "init_time", "case_id_number"]
-    ].head(20)
-)
+print(outputs[["metric", "value", "init_time", "case_id_number"]].head(20))
 ```

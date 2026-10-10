@@ -1,3 +1,4 @@
+import os
 import pathlib
 import tempfile
 
@@ -7,6 +8,7 @@ import pytest
 import sparse
 import xarray as xr
 from click import testing
+from hypothesis import HealthCheck, settings
 
 from extremeweatherbench import calc
 
@@ -44,11 +46,11 @@ def make_sample_gridded_obs_dataset():
     )
     # Set a specific value for a specific time and location to remove ambiguity
     dataset["2m_temperature"].loc[
-        dict(
-            time="2021-06-21 18:00",
-            latitude=slice(40, 45),
-            longitude=slice(100, 105),
-        )
+        {
+            "time": "2021-06-21 18:00",
+            "latitude": slice(40, 45),
+            "longitude": slice(100, 105),
+        }
     ] = 25
     return dataset
 
@@ -72,7 +74,9 @@ def make_sample_point_obs_df():
 
 def make_sample_forecast_dataset():
     init_time = pd.date_range("2021-06-20", periods=5)
-    lead_time = range(0, 241, 6)
+    lead_time = np.array([i for i in range(0, 241, 6)], dtype="timedelta64[h]").astype(
+        "timedelta64[ns]"
+    )
     data = np.random.RandomState(21897820).standard_normal(
         size=(len(init_time), 181, 360, len(lead_time)),
     )
@@ -102,21 +106,21 @@ def make_sample_forecast_dataset():
     )
     # Set a specific value for a specific time and location to remove ambiguity
     dataset["surface_air_temperature"].loc[
-        dict(
-            init_time="2021-06-21 00:00",
-            lead_time=42,
-            latitude=slice(40, 45),
-            longitude=slice(100, 105),
-        )
+        {
+            "init_time": "2021-06-21 00:00",
+            "lead_time": np.timedelta64(42, "h"),
+            "latitude": slice(40, 45),
+            "longitude": slice(100, 105),
+        }
     ] = 24
     # Set a specific value for a specific time and location to remove ambiguity
     dataset["surface_air_temperature"].loc[
-        dict(
-            init_time="2021-06-20 00:00",
-            lead_time=42,
-            latitude=slice(40, 45),
-            longitude=slice(100, 105),
-        )
+        {
+            "init_time": "2021-06-20 00:00",
+            "lead_time": np.timedelta64(42, "h"),
+            "latitude": slice(40, 45),
+            "longitude": slice(100, 105),
+        }
     ] = 23
     return dataset
 
@@ -139,7 +143,7 @@ def make_sample_results_dataarray_list():
 
 def dataset_to_dataarray(dataset):
     """Convert an xarray Dataset to a DataArray."""
-    mock_data_var = [data_var for data_var in dataset.data_vars][0]
+    mock_data_var = next(iter(dataset.data_vars))
     return dataset[mock_data_var]
 
 
@@ -461,4 +465,45 @@ def sample_sparse_target_dataset():
         {
             "target": make_sample_sparse_target_dataarray(),
         },
+    )
+
+
+settings.register_profile(
+    "ewb", max_examples=25, deadline=None, suppress_health_check=[HealthCheck.too_slow]
+)
+settings.register_profile(
+    "ewb-sweep",
+    max_examples=300,
+    deadline=None,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ewb"))
+
+
+def make_cape_pressure_levels() -> np.ndarray:
+    """Pressure levels, in hPa, for the synthetic CAPE profiles."""
+    return np.array(
+        [
+            1000.0,
+            975,
+            950,
+            925,
+            900,
+            850,
+            800,
+            750,
+            700,
+            650,
+            600,
+            550,
+            500,
+            450,
+            400,
+            350,
+            300,
+            250,
+            200,
+            150,
+            100,
+        ]
     )

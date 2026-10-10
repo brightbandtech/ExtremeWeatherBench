@@ -1,6 +1,7 @@
 import abc
 import logging
-from typing import TYPE_CHECKING, List, Optional, Sequence, Union
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, ClassVar
 
 import xarray as xr
 
@@ -10,7 +11,7 @@ from extremeweatherbench import calc
 from extremeweatherbench.events import tropical_cyclone
 
 if TYPE_CHECKING:
-    import extremeweatherbench.cases as cases
+    from extremeweatherbench import cases
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +39,12 @@ class DerivedVariable(abc.ABC):
         derive_variable: Define the computation to derive the variable
     """
 
-    variables: List[str]
+    variables: ClassVar[list[str]]
 
     def __init__(
         self,
-        output_variables: Optional[List[str]] = None,
-        name: Optional[str] = None,
+        output_variables: list[str] | None = None,
+        name: str | None = None,
     ):
         """Initialize the derived variable.
 
@@ -69,7 +70,6 @@ class DerivedVariable(abc.ABC):
         Returns:
             A DataArray with the derived variable.
         """
-        pass
 
     def compute(self, data: xr.Dataset, *args, **kwargs) -> xr.DataArray:
         """Build the derived variable from the input variables.
@@ -111,7 +111,7 @@ class TropicalCycloneTrackVariables(DerivedVariable):
     """
 
     # required variables for TC track identification
-    variables = [
+    variables: ClassVar[list[str]] = [
         "air_pressure_at_mean_sea_level",
         "geopotential_thickness",
         "surface_eastward_wind",
@@ -122,11 +122,8 @@ class TropicalCycloneTrackVariables(DerivedVariable):
 
     def __init__(
         self,
-        output_variables: Optional[List[str]] = [
-            "surface_wind_speed",
-            "air_pressure_at_mean_sea_level",
-        ],
-        name: Optional[str] = None,
+        output_variables: list[str] | None = None,
+        name: str | None = None,
         slp_contour_magnitude: float = 200.0,
         dz_contour_magnitude: float = -6.0,
         min_distance_between_peaks_degrees: float = 1.0,
@@ -136,7 +133,7 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         timestep_count_wind_minimum: int = 10,
         latitude_max_degrees: float = 50.0,
         surface_pressure_threshold: float = 101000.0,
-        orography: Optional[xr.DataArray] = None,
+        orography: xr.DataArray | None = None,
         max_gc_distance_slp_contour_degrees: float = 5.5,
         max_gc_distance_dz_contour_degrees: float = 6.5,
         orography_filter_threshold: float = 150.0,
@@ -185,6 +182,8 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 neighbourhood wind sampling, per TempestExtremes 2.1.
                 Converted to grid points at runtime. Defaults to 2.0.
         """
+        if output_variables is None:
+            output_variables = ["surface_wind_speed", "air_pressure_at_mean_sea_level"]
         super().__init__(output_variables=output_variables, name=name)
         self.slp_contour_magnitude = slp_contour_magnitude
         self.dz_contour_magnitude = dz_contour_magnitude
@@ -304,7 +303,7 @@ class CravenBrooksSignificantSevere(DerivedVariable):
     significant severe convection potential.
     """
 
-    variables = [
+    variables: ClassVar[list[str]] = [
         "air_temperature",
         "eastward_wind",
         "northward_wind",
@@ -317,8 +316,8 @@ class CravenBrooksSignificantSevere(DerivedVariable):
 
     def __init__(
         self,
-        output_variables: Optional[List[str]] = None,
-        name: Optional[str] = "craven_brooks_significant_severe",
+        output_variables: list[str] | None = None,
+        name: str | None = "craven_brooks_significant_severe",
         layer_depth: float = 100,
     ):
         """Initialize the Craven-Brooks significant severe variable.
@@ -386,6 +385,7 @@ class CravenBrooksSignificantSevere(DerivedVariable):
         )
 
         cbss = cape * shear
+
         logger.warning(
             "CBSS evaluation requires max over valid_time dimension to "
             "coincide with PPH/LSR being daily aggregates of reports"
@@ -394,12 +394,18 @@ class CravenBrooksSignificantSevere(DerivedVariable):
             dim="valid_time",
         )
         cbss = cbss.expand_dims(valid_time=[case_metadata.start_date])
-        coords = {dim: cbss.coords[dim] for dim in cbss.sizes.keys() if dim != "level"}
+        coords = {dim: cbss.coords[dim] for dim in cbss.sizes if dim != "level"}
+        # Set attrs on the output so CAPE's attrs never carry over, regardless of
+        # xarray's keep_attrs default for arithmetic and reductions.
         return xr.DataArray(
             cbss,
             coords=coords,
             dims=coords.keys(),
             name=self.name,
+            attrs={
+                "long_name": "Craven-Brooks significant severe parameter",
+                "units": "m^3/s^3",
+            },
         )
 
 
@@ -411,14 +417,14 @@ class AtmosphericRiverVariables(DerivedVariable):
     Newell et al. 1992 and elsewhere (e.g. Mo 2024).
 
     Output variables: integrated_vapor_transport, atmospheric_river_mask,
-    atmospheric_river_land_intersection. Users must declare at least one
-    output variable when calling the derived variable.
+    atmospheric_river_land_intersection. Defaults to all three; pass
+    output_variables to keep a subset.
 
     The Laplacian of IVT uses a Gaussian blurring kernel with sigma of 3
     grid points to smooth 0.25 degree grid scale features.
     """
 
-    variables = [
+    variables: ClassVar[list[str]] = [
         "eastward_wind",
         "northward_wind",
         "specific_humidity",
@@ -428,11 +434,7 @@ class AtmosphericRiverVariables(DerivedVariable):
         self,
         name: str = "atmospheric_river",
         top_pressure_level: int = 300,
-        output_variables: Optional[List[str]] = [
-            "atmospheric_river_mask",
-            "integrated_vapor_transport",
-            "atmospheric_river_land_intersection",
-        ],
+        output_variables: list[str] | None = None,
     ):
         """Initialize the AtmosphericRiverVariables variable.
 
@@ -444,45 +446,27 @@ class AtmosphericRiverVariables(DerivedVariable):
             name: The name of the derived variable. Defaults to class-level
                 name attribute if present, otherwise the class name.
         """
+        if output_variables is None:
+            output_variables = [
+                "atmospheric_river_mask",
+                "integrated_vapor_transport",
+                "atmospheric_river_land_intersection",
+            ]
         super().__init__(output_variables=output_variables, name=name)
         self.top_pressure_level = top_pressure_level
 
     def derive_variable(self, data: xr.Dataset, *args, **kwargs) -> xr.Dataset:
         """Derive the atmospheric river mask and land intersection."""
 
-        # Subset the data to the top pressure level
         data = data.sel(level=data.level[data.level >= self.top_pressure_level])
-
-        # Generate IVT
-        ivt_data = ar.integrated_vapor_transport(
-            specific_humidity=data["specific_humidity"],
-            eastward_wind=data["eastward_wind"],
-            northward_wind=data["northward_wind"],
-        )
-
-        # Compute IVT Laplacian
-        ivt_laplacian = ar.integrated_vapor_transport_laplacian(ivt=ivt_data, sigma=3)
-
-        # Compute AR mask with default parameters
-        ar_mask_result = ar.atmospheric_river_mask(
-            ivt=ivt_data, ivt_laplacian=ivt_laplacian
-        )
-
-        # Compute land intersection
-        land_intersection = calc.find_land_intersection(ar_mask_result)
-
-        return xr.Dataset(
-            {
-                "atmospheric_river_mask": ar_mask_result,
-                "atmospheric_river_land_intersection": land_intersection,
-                "integrated_vapor_transport": ivt_data,
-            }
+        return ar.build_atmospheric_river_mask_and_land_intersection(
+            data, output_variables=self.output_variables
         )
 
 
 def maybe_derive_variables(
     data: xr.Dataset,
-    variables: Sequence[Union[str, DerivedVariable]],
+    variables: Sequence[str | DerivedVariable],
     **kwargs,
 ) -> xr.Dataset:
     """Derive variable from the data if it exists in a list of variables.
@@ -583,7 +567,7 @@ def maybe_derive_variables(
 
 
 def maybe_include_variables_from_derived_input(
-    incoming_variables: Sequence[Union[str, DerivedVariable]],
+    incoming_variables: Sequence[str | DerivedVariable],
 ) -> list[str]:
     """Identify and return variables that a derived variable needs to compute.
 
@@ -606,7 +590,7 @@ def maybe_include_variables_from_derived_input(
 
 
 def _maybe_convert_variable_to_string(
-    variable: Union[str, DerivedVariable],
+    variable: str | DerivedVariable,
 ) -> str:
     """Convert a variable to its string representation.
 
