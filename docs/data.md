@@ -86,19 +86,21 @@ AWS Open Data.
 import extremeweatherbench as ewb
 
 cira_kerchunk_forecast = ewb.inputs.KerchunkForecast(
-    source="s3://noaa-oar-mlwp-data/FourCastNetv2/kerchunk.parq",
-    name="FourCastNetv2",
+    source="gs://extremeweatherbench/FOUR_v200_GFS.parq",
+    name="FourCastNetv2_GFS",
     variables=["surface_air_temperature"],
     variable_mapping=ewb.inputs.CIRA_metadata_variable_mapping,
-    storage_options={
-        "remote_protocol": "s3",
-        "remote_options": {"anon": True},
-    },
 )
 ```
 
 Both parquet and JSON kerchunk formats are supported. The underlying engine is
-`xarray-kerchunk`. For CIRA models stored in [icechunk](https://icechunk.io/) format, use
+`xarray-kerchunk`. EWB hosts references for each CIRA model at
+`gs://extremeweatherbench/<MODEL>.parq` (e.g. `FOUR_v200_IFS`, `PANG_v100_GFS`);
+the default `storage_options` read them and the CIRA S3 data anonymously. NOAA's
+own references (`s3://noaa-oar-mlwp-data/parquet/<MODEL>_combined_all.parq`) also
+need `"target_options": {"anon": True}`. CIRA references store forecast steps
+along a `time` axis; `KerchunkForecast` converts it to `lead_time` when it opens
+the data. For CIRA models stored in [icechunk](https://icechunk.io/) format, use
 `ewb.inputs.get_cira_icechunk()` as a convenience wrapper instead.
 
 ### XarrayForecast
@@ -254,6 +256,13 @@ or be renamed to them with `variable_mapping`. Data with none of them, or with
 a differently named time coordinate, is treated as having no data: each case
 is skipped with the log message `Data input <name> has no data for case time
 range ...`.
+
+Gridded `preprocess` functions run after the case subset (so they only touch
+the case's data), which means they can't create or rename the coordinates EWB
+uses to find a case: the time coordinates above, `latitude`/`longitude`, or the
+0–360 longitude convention. Fix those with `variable_mapping`, or in the
+dataset you pass to `XarrayForecast`. Use `preprocess` for variables, such as
+unit conversions or derived fields.
 
 ## Variable mapping
 

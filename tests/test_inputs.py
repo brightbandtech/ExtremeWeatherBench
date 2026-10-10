@@ -2132,6 +2132,37 @@ class TestIBTrACS:
 class TestStandaloneFunctions:
     """Test standalone functions in inputs module."""
 
+    def test_cira_time_to_lead_time(self):
+        """CIRA's time axis (first init's valid times) becomes lead_time."""
+        init_time = pd.date_range("2021-06-15T12", periods=2, freq="12h")
+        ds = xr.Dataset(
+            {"t2": (["init_time", "time"], np.zeros((2, 41)))},
+            coords={
+                "init_time": init_time,
+                "time": pd.date_range(init_time[0], periods=41, freq="6h"),
+            },
+        )
+        result = inputs._cira_time_to_lead_time(ds)
+        assert "time" not in result.dims
+        np.testing.assert_array_equal(
+            result["lead_time"].values,
+            pd.to_timedelta(np.arange(0, 241, 6), unit="h").values,
+        )
+        # Already converted (or not CIRA-shaped): unchanged
+        assert inputs._cira_time_to_lead_time(result) is result
+
+    @mock.patch("xarray.open_dataset")
+    def test_open_kerchunk_reference_sets_lead_time(self, mock_open_dataset):
+        """The opener converts CIRA's time axis before anything else runs."""
+        mock_open_dataset.return_value = xr.Dataset(
+            coords={
+                "init_time": pd.date_range("2021-06-15", periods=2),
+                "time": pd.date_range("2021-06-15", periods=3, freq="6h"),
+            }
+        )
+        result = inputs.open_kerchunk_reference("test.parq")
+        assert "lead_time" in result.dims and "time" not in result.dims
+
     @mock.patch("xarray.open_dataset")
     def test_open_kerchunk_reference_parquet(
         self, mock_open_dataset, sample_forecast_dataset

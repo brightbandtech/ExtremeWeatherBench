@@ -2182,6 +2182,40 @@ class TestPipelineFunctions:
         assert "z" not in result.data_vars
         assert "geopotential" in result.data_vars
 
+    def test_run_pipeline_cira_kerchunk_forecast(self, sample_individual_case):
+        """A CIRA kerchunk reference (time axis, no lead_time) runs end to end.
+
+        Regression test for #428: lead_time must exist before the coverage check
+        and case subset, which run before preprocess for gridded data. The inits
+        start before the case, so only their later lead times overlap it.
+        """
+        init_time = pd.date_range("2021-06-15", periods=3)
+        ds = xr.Dataset(
+            {
+                "t2": (
+                    ["init_time", "time", "latitude", "longitude"],
+                    np.full((3, 41, 3, 3), 300.0),
+                )
+            },
+            coords={
+                "init_time": init_time,
+                "time": pd.date_range(init_time[0], periods=41, freq="6h"),
+                "latitude": [43.0, 45.0, 47.0],
+                "longitude": [238.0, 240.0, 242.0],
+            },
+        )
+        forecast = inputs.KerchunkForecast(
+            source="cira.parq",
+            name="cira-kerchunk",
+            variables=["surface_air_temperature"],
+            variable_mapping=inputs.CIRA_metadata_variable_mapping,
+            preprocess=defaults.preprocess_cira_kerchunk_forecast_dataset,
+        )
+        with mock.patch("xarray.open_dataset", return_value=ds):
+            result = evaluate.run_pipeline(sample_individual_case, forecast)
+        assert result.sizes["valid_time"] > 0
+        assert result["surface_air_temperature"].notnull().any()
+
     @mock.patch("extremeweatherbench.derived.maybe_derive_variables")
     @mock.patch("extremeweatherbench.evaluate.inputs.maybe_subset_variables")
     def test_run_pipeline_forecast(

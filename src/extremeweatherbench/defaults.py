@@ -1,7 +1,6 @@
 import logging
 import operator
 
-import numpy as np
 import xarray as xr
 
 from extremeweatherbench import calc, derived, inputs, utils
@@ -155,68 +154,33 @@ def preprocess_cira_icechunk_severe_forecast_dataset(ds: xr.Dataset) -> xr.Datas
     return _maybe_add_specific_humidity(ds)
 
 
-def _set_cira_kerchunk_lead_time(ds: xr.Dataset) -> xr.Dataset:
-    """Rename time to lead_time and set the CIRA 0-240h / 6h grid."""
-    ds = ds.rename({"time": "lead_time"})
-    ds["lead_time"] = np.array(
-        [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-    ).astype("timedelta64[ns]")
+def preprocess_cira_kerchunk_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """Return CIRA kerchunk data unchanged.
+
+    ``KerchunkForecast`` converts CIRA's ``time`` axis to ``lead_time`` when it
+    opens the data (``inputs.open_kerchunk_reference``), so nothing is left to
+    do here; kept so existing configurations keep working.
+
+    Args:
+        ds: The forecast dataset.
+
+    Returns:
+        The forecast dataset, unchanged.
+    """
     return ds
 
 
-def preprocess_cira_kerchunk_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """A preprocess function for CIRA kerchunk data that renames the time coordinate to
-    lead_time, creates a valid_time coordinate, and sets the lead time range and
-    resolution not present in the original dataset.
-
-    Args:
-        ds: The forecast dataset.
-
-    Returns:
-        The preprocessed forecast dataset.
-    """
-    return _set_cira_kerchunk_lead_time(ds)
-
-
-def preprocess_cira_kerchunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """A preprocess function for CIRA kerchunk data that includes geopotential thickness
-    calculation required for tropical cyclone tracks.
-
-    This function renames the time coordinate to lead_time,
-    creates a valid_time coordinate, and sets the lead time range and resolution not
-    present in the original dataset.
-
-    Args:
-        ds: The forecast dataset to rename.
-
-    Returns:
-        The renamed forecast dataset.
-    """
-    return _add_tc_geopotential_thickness(_set_cira_kerchunk_lead_time(ds))
-
-
-def preprocess_cira_kerchunk_ar_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """Preprocess CIRA kerchunk data for atmospheric rivers.
-
-    Args:
-        ds: The forecast dataset.
-
-    Returns:
-        The renamed forecast dataset with specific humidity if not already calculated.
-    """
-    return _maybe_add_specific_humidity(_set_cira_kerchunk_lead_time(ds))
-
-
-def preprocess_cira_kerchunk_severe_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """Preprocess CIRA kerchunk data for severe convection.
-
-    Args:
-        ds: The forecast dataset.
-
-    Returns:
-        The renamed forecast dataset with specific humidity if not already calculated.
-    """
-    return _maybe_add_specific_humidity(_set_cira_kerchunk_lead_time(ds))
+# Once opened, CIRA kerchunk data matches the icechunk store, so the
+# event-specific preprocess functions are shared.
+preprocess_cira_kerchunk_tc_forecast_dataset = (
+    preprocess_cira_icechunk_tc_forecast_dataset
+)
+preprocess_cira_kerchunk_ar_forecast_dataset = (
+    preprocess_cira_icechunk_ar_forecast_dataset
+)
+preprocess_cira_kerchunk_severe_forecast_dataset = (
+    preprocess_cira_icechunk_severe_forecast_dataset
+)
 
 
 # Preprocessing function for HRES data that includes geopotential thickness calculation

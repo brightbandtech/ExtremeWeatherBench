@@ -10,28 +10,14 @@ from extremeweatherbench import defaults, inputs, metrics
 class TestDefaults:
     """Test the defaults module."""
 
-    def test_preprocess_cira_kerchunk_forecast_dataset(self):
-        """Test the preprocess_cira_kerchunk_forecast_dataset function."""
-
-        # Create a mock dataset with 'time' coordinate matching expected output size
-        # The function creates lead_time with 41 values (0 to 240 by 6)
-        time_data = np.array([i for i in range(0, 241, 6)], dtype="timedelta64[h]")
-        temp_data = np.random.random(len(time_data))
-        mock_ds = xr.Dataset(
-            {"temperature": (["time"], temp_data)}, coords={"time": time_data}
+    def test_cira_kerchunk_preprocess_matches_icechunk(self):
+        """Kerchunk preprocess leaves coordinates to the opener."""
+        ds = xr.Dataset({"t2": ("lead_time", np.zeros(2))})
+        assert defaults.preprocess_cira_kerchunk_forecast_dataset(ds) is ds
+        assert (
+            defaults.preprocess_cira_kerchunk_tc_forecast_dataset
+            is defaults.preprocess_cira_icechunk_tc_forecast_dataset
         )
-
-        result = defaults.preprocess_cira_kerchunk_forecast_dataset(mock_ds)
-
-        # Check that 'time' was renamed to 'lead_time'
-        assert "lead_time" in result.coords
-        assert "time" not in result.coords
-
-        # Check that lead_time has the expected values (0 to 240 by 6)
-        expected_lead_times = np.array(
-            [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-        ).astype("timedelta64[ns]")
-        np.testing.assert_array_equal(result["lead_time"].values, expected_lead_times)
 
     def test_get_brightband_evaluation_objects_returns_list(self):
         """Test that get_brightband_evaluation_objects returns a list."""

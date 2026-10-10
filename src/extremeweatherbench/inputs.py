@@ -1082,7 +1082,8 @@ def open_kerchunk_reference(
         chunks: The chunks to use; defaults to "auto".
 
     Returns:
-        The opened dataset.
+        The opened dataset, with CIRA's ``time`` axis converted to ``lead_time``
+        (see ``_cira_time_to_lead_time``).
     """
     if storage_options is None:
         storage_options = copy.deepcopy(DEFAULT_KERCHUNK_STORAGE_OPTIONS)
@@ -1109,7 +1110,29 @@ def open_kerchunk_reference(
             "Unknown kerchunk file type found in forecast path, only json and "
             "parquet are supported."
         )
-    return kerchunk_ds
+    return _cira_time_to_lead_time(kerchunk_ds)
+
+
+def _cira_time_to_lead_time(ds: xr.Dataset) -> xr.Dataset:
+    """Turn a CIRA kerchunk ``time`` axis into ``lead_time``.
+
+    CIRA kerchunk references store every init's forecast steps along a ``time``
+    dimension holding the *first* init's valid times, so ``time - init_time[0]``
+    gives the lead times shared by all inits. Done when opening, because the
+    coverage check and case subset need ``lead_time`` before ``preprocess``
+    runs. Data that already has ``lead_time`` (or no ``time``/``init_time``)
+    is returned unchanged.
+
+    Args:
+        ds: The dataset opened from a kerchunk reference.
+
+    Returns:
+        The dataset with ``time`` replaced by a ``lead_time`` dimension.
+    """
+    if "time" not in ds.dims or "init_time" not in ds.coords or "lead_time" in ds:
+        return ds
+    lead_time = ds["time"].values - ds["init_time"].values[0]
+    return ds.assign_coords(time=lead_time).rename(time="lead_time")
 
 
 def list_groups_in_icechunk_datatree(
