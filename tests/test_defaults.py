@@ -10,28 +10,37 @@ from extremeweatherbench import defaults, inputs, metrics
 class TestDefaults:
     """Test the defaults module."""
 
-    def test_preprocess_cira_kerchunk_forecast_dataset(self):
-        """Test the preprocess_cira_kerchunk_forecast_dataset function."""
-
-        # Create a mock dataset with 'time' coordinate matching expected output size
-        # The function creates lead_time with 41 values (0 to 240 by 6)
-        time_data = np.array([i for i in range(0, 241, 6)], dtype="timedelta64[h]")
-        temp_data = np.random.random(len(time_data))
-        mock_ds = xr.Dataset(
-            {"temperature": (["time"], temp_data)}, coords={"time": time_data}
+    @pytest.mark.parametrize(
+        "old, new",
+        [
+            ("preprocess_cira_kerchunk_forecast_dataset", None),
+            (
+                "preprocess_cira_kerchunk_tc_forecast_dataset",
+                "preprocess_cira_icechunk_tc_forecast_dataset",
+            ),
+            (
+                "preprocess_cira_kerchunk_ar_forecast_dataset",
+                "preprocess_cira_icechunk_ar_forecast_dataset",
+            ),
+            (
+                "preprocess_cira_kerchunk_severe_forecast_dataset",
+                "preprocess_cira_icechunk_severe_forecast_dataset",
+            ),
+        ],
+    )
+    def test_deprecated_kerchunk_preprocess(self, old, new):
+        """1.0.x kerchunk preprocess functions warn and match their replacement."""
+        ds = xr.Dataset(
+            {
+                "geopotential": (("level",), [9.0e4, 5.0e4]),
+                "specific_humidity": (("level",), [0.01, 0.002]),
+            },
+            coords={"level": [300, 500]},
         )
-
-        result = defaults.preprocess_cira_kerchunk_forecast_dataset(mock_ds)
-
-        # Check that 'time' was renamed to 'lead_time'
-        assert "lead_time" in result.coords
-        assert "time" not in result.coords
-
-        # Check that lead_time has the expected values (0 to 240 by 6)
-        expected_lead_times = np.array(
-            [i for i in range(0, 241, 6)], dtype="timedelta64[h]"
-        ).astype("timedelta64[ns]")
-        np.testing.assert_array_equal(result["lead_time"].values, expected_lead_times)
+        with pytest.warns(FutureWarning, match=old):
+            result = getattr(defaults, old)(ds.copy())
+        expected = getattr(defaults, new)(ds.copy()) if new else ds
+        xr.testing.assert_identical(result, expected)
 
     def test_get_brightband_evaluation_objects_returns_list(self):
         """Test that get_brightband_evaluation_objects returns a list."""

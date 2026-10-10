@@ -126,8 +126,12 @@ dataset with the original variable names.
 
 ### Adding a custom preprocess function
 
-If you need to transform the dataset before evaluation (unit conversion,
-coordinate adjustments, etc.), pass a callable to `preprocess`:
+If you need to transform variables before evaluation (unit conversion,
+derived fields, etc.), pass a callable to `preprocess`. For gridded data it
+runs after EWB subsets the forecast to the case, so it can't rename or create
+the coordinates EWB uses to find the case (`init_time`, `lead_time`,
+`latitude`, `longitude`); fix those with `variable_mapping` or in `ds` (see
+[Time coordinates](../data.md#time-coordinates)):
 
 ```python
 def celsius_to_kelvin(ds: xr.Dataset) -> xr.Dataset:
@@ -153,22 +157,21 @@ JSON files. This is the access pattern used for CIRA MLWP data.
 import extremeweatherbench as ewb
 
 cira_kerchunk = ewb.inputs.KerchunkForecast(
-    source="s3://noaa-oar-mlwp-data/references/FOUR_v200_IFS.parq",
+    source="gs://extremeweatherbench/FOUR_v200_IFS.parq",
     name="FCNv2_IFS",
     variable_mapping=ewb.inputs.CIRA_metadata_variable_mapping,
-    storage_options={
-        "remote_protocol": "s3",
-        "remote_options": {"anon": True},
-    },
 )
 ```
 
 > **Detailed Explanation**: [Kerchunk](https://fsspec.github.io/kerchunk/) creates lightweight virtual
 > reference files that point to byte ranges in existing NetCDF or HDF5
 > archives. This avoids copying data while still allowing zarr-style
-> chunked access. The `storage_options` dict is split into a
-> `remote_protocol` key (the storage backend, e.g. `"s3"` or `"gcs"`)
-> and a `remote_options` dict passed to `fsspec` for credentials. It is recommended to use [VirtualiZarr](https://virtualizarr.readthedocs.io/en/latest/) with an [icechunk](https://icechunk.io/) store over kerchunk in most situations, though this comes at a risk of needing to manage concurrent HTML requests when running many parallel jobs.
+> chunked access. Leaving `storage_options` unset reads the EWB-hosted
+> CIRA references and their S3 data anonymously. Otherwise the dict is
+> split into a `remote_protocol` key (the storage backend, e.g. `"s3"` or
+> `"gcs"`) and a `remote_options` dict passed to `fsspec` for credentials.
+> CIRA references store forecast steps along a `time` axis, which
+> `KerchunkForecast` converts to `lead_time` when it opens the data. It is recommended to use [VirtualiZarr](https://virtualizarr.readthedocs.io/en/latest/) with an [icechunk](https://icechunk.io/) store over kerchunk in most situations, though this comes at a risk of needing to manage concurrent HTML requests when running many parallel jobs.
 
 ## Running an evaluation with your forecast
 
