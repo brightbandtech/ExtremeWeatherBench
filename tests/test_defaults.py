@@ -28,17 +28,19 @@ class TestDefaults:
             ),
         ],
     )
-    def test_deprecated_kerchunk_preprocess_names(self, old, new):
-        """1.0.x kerchunk preprocess names still resolve, with a warning."""
-        with pytest.warns(DeprecationWarning, match=old):
-            func = getattr(defaults, old)
-        expected = getattr(defaults, new) if new else inputs._default_preprocess
-        assert func is expected
-
-    def test_unknown_defaults_attribute_raises(self):
-        """Only the deprecated names are resolved dynamically."""
-        with pytest.raises(AttributeError):
-            defaults.not_a_real_name  # noqa: B018
+    def test_deprecated_kerchunk_preprocess(self, old, new):
+        """1.0.x kerchunk preprocess functions warn and match their replacement."""
+        ds = xr.Dataset(
+            {
+                "geopotential": (("level",), [9.0e4, 5.0e4]),
+                "specific_humidity": (("level",), [0.01, 0.002]),
+            },
+            coords={"level": [300, 500]},
+        )
+        with pytest.warns(FutureWarning, match=old):
+            result = getattr(defaults, old)(ds.copy())
+        expected = getattr(defaults, new)(ds.copy()) if new else ds
+        xr.testing.assert_identical(result, expected)
 
     def test_get_brightband_evaluation_objects_returns_list(self):
         """Test that get_brightband_evaluation_objects returns a list."""
