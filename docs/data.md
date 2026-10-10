@@ -45,7 +45,8 @@ All forecast classes extend `ForecastBase` and share four required arguments:
 
 Forecasts must expose four dimensions: `init_time`, `lead_time`, `latitude`, and
 `longitude`. The `lead_time` dimension must be `timedelta64` — EWB uses it together
-with `init_time` to derive `valid_time` at evaluation time.
+with `init_time` to derive `valid_time` at evaluation time (see
+[Time coordinates](#time-coordinates)).
 
 > **Detailed Explanation**: EWB works in init-time / lead-time space rather than
 > valid-time space so it can evaluate forecasts issued from multiple initialization
@@ -231,6 +232,28 @@ ibtracs_target = ewb.inputs.IBTrACS()
 No `storage_options` are required because the data is fetched over HTTPS directly
 from NCEI. The IBTrACS class evaluates variables `surface_wind_speed` and
 `air_pressure_at_mean_sea_level` by default.
+
+## Time coordinates
+
+Before evaluating a case, EWB checks that each input has data in the case's
+time window. It reads the window from the first of these that the data has;
+that source alone decides:
+
+1. `init_time` and `lead_time` (forecasts): the valid times are
+   `init_time + lead_time`, so a forecast initialized before a case still
+   counts if its lead times reach into it. A `valid_time` coordinate on a
+   forecast is ignored here; if it spans both `init_time` and `lead_time`
+   and differs from their sum, EWB warns, since that usually means
+   `lead_time` is in the wrong units (integers are read as hours).
+2. `valid_time` (targets), indexed or not.
+3. `time`, for data with neither of the above.
+
+For gridded (xarray) inputs the check runs after `variable_mapping` and before
+your `preprocess` function, so these coordinates must exist in the source data
+or be renamed to them with `variable_mapping`. Data with none of them, or with
+a differently named time coordinate, is treated as having no data: each case
+is skipped with the log message `Data input <name> has no data for case time
+range ...`.
 
 ## Variable mapping
 

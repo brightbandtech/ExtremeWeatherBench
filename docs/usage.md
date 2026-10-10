@@ -81,7 +81,7 @@ To run an evaluation, there are three components required: a forecast, a target,
 
 ExtremeWeatherBench requires forecasts to have `init_time`, `lead_time`, `latitude`, and `longitude` dimensions at minimum. If not already in that naming convention, initializing a `ForecastBase` object with a `variable_mapping` to map to those names is required. Other dimensions such as pressure level (`level`) can be included.
 
-Targets require at least a `valid_time` with at least one spatial dimension. Examples include `location`, `station`, or (`latitude`, `longitude`). Forecasts are aligned to targets during the steps immediately prior to evaluating a metric.
+Targets require at least a `valid_time` (or `time`) coordinate with at least one spatial dimension; inputs without the expected time coordinates are skipped as having no data (see [Time coordinates](data.md#time-coordinates)). Examples include `location`, `station`, or (`latitude`, `longitude`). Forecasts are aligned to targets during the steps immediately prior to evaluating a metric.
 
 ```python
 import extremeweatherbench as ewb
