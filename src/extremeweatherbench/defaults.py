@@ -99,8 +99,10 @@ def _add_tc_geopotential_thickness(ds: xr.Dataset) -> xr.Dataset:
 
 
 def preprocess_cira_icechunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """A preprocess function for CIRA icechunk data that includes geopotential thickness
-    calculation required for tropical cyclone tracks.
+    """Add the geopotential thickness needed for tropical cyclone tracks.
+
+    Works for CIRA icechunk and kerchunk data (``get_cira_icechunk`` or
+    ``KerchunkForecast``), which have the same layout once opened.
 
     Args:
         ds: The forecast dataset.
@@ -131,19 +133,10 @@ def _maybe_add_specific_humidity(ds: xr.Dataset) -> xr.Dataset:
 
 
 def preprocess_cira_icechunk_ar_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """Preprocess CIRA icechunk data for atmospheric rivers.
+    """Preprocess CIRA data for atmospheric rivers.
 
-    Args:
-        ds: The forecast dataset to rename.
-
-    Returns:
-        The renamed forecast dataset.
-    """
-    return _maybe_add_specific_humidity(ds)
-
-
-def preprocess_cira_icechunk_severe_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """Preprocess CIRA icechunk data for severe convection.
+    Works for CIRA icechunk and kerchunk data (``get_cira_icechunk`` or
+    ``KerchunkForecast``), which have the same layout once opened.
 
     Args:
         ds: The forecast dataset.
@@ -154,33 +147,19 @@ def preprocess_cira_icechunk_severe_forecast_dataset(ds: xr.Dataset) -> xr.Datas
     return _maybe_add_specific_humidity(ds)
 
 
-def preprocess_cira_kerchunk_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
-    """Return CIRA kerchunk data unchanged.
+def preprocess_cira_icechunk_severe_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
+    """Preprocess CIRA data for severe convection.
 
-    ``KerchunkForecast`` converts CIRA's ``time`` axis to ``lead_time`` when it
-    opens the data (``inputs.open_kerchunk_reference``), so nothing is left to
-    do here; kept so existing configurations keep working.
+    Works for CIRA icechunk and kerchunk data (``get_cira_icechunk`` or
+    ``KerchunkForecast``), which have the same layout once opened.
 
     Args:
         ds: The forecast dataset.
 
     Returns:
-        The forecast dataset, unchanged.
+        The forecast dataset with specific humidity if not already calculated.
     """
-    return ds
-
-
-# Once opened, CIRA kerchunk data matches the icechunk store, so the
-# event-specific preprocess functions are shared.
-preprocess_cira_kerchunk_tc_forecast_dataset = (
-    preprocess_cira_icechunk_tc_forecast_dataset
-)
-preprocess_cira_kerchunk_ar_forecast_dataset = (
-    preprocess_cira_icechunk_ar_forecast_dataset
-)
-preprocess_cira_kerchunk_severe_forecast_dataset = (
-    preprocess_cira_icechunk_severe_forecast_dataset
-)
+    return _maybe_add_specific_humidity(ds)
 
 
 # Preprocessing function for HRES data that includes geopotential thickness calculation

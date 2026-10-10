@@ -100,7 +100,9 @@ the default `storage_options` read them and the CIRA S3 data anonymously. NOAA's
 own references (`s3://noaa-oar-mlwp-data/parquet/<MODEL>_combined_all.parq`) also
 need `"target_options": {"anon": True}`. CIRA references store forecast steps
 along a `time` axis; `KerchunkForecast` converts it to `lead_time` when it opens
-the data. For CIRA models stored in [icechunk](https://icechunk.io/) format, use
+the data, so no `preprocess` is needed. For event-specific fields, use the same
+functions as the icechunk store (e.g.
+`ewb.defaults.preprocess_cira_icechunk_tc_forecast_dataset`). For CIRA models stored in [icechunk](https://icechunk.io/) format, use
 `ewb.inputs.get_cira_icechunk()` as a convenience wrapper instead.
 
 ### XarrayForecast

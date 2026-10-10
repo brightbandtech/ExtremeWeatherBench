@@ -2209,7 +2209,6 @@ class TestPipelineFunctions:
             name="cira-kerchunk",
             variables=["surface_air_temperature"],
             variable_mapping=inputs.CIRA_metadata_variable_mapping,
-            preprocess=defaults.preprocess_cira_kerchunk_forecast_dataset,
         )
         with mock.patch("xarray.open_dataset", return_value=ds):
             result = evaluate.run_pipeline(sample_individual_case, forecast)

@@ -10,15 +10,6 @@ from extremeweatherbench import defaults, inputs, metrics
 class TestDefaults:
     """Test the defaults module."""
 
-    def test_cira_kerchunk_preprocess_matches_icechunk(self):
-        """Kerchunk preprocess leaves coordinates to the opener."""
-        ds = xr.Dataset({"t2": ("lead_time", np.zeros(2))})
-        assert defaults.preprocess_cira_kerchunk_forecast_dataset(ds) is ds
-        assert (
-            defaults.preprocess_cira_kerchunk_tc_forecast_dataset
-            is defaults.preprocess_cira_icechunk_tc_forecast_dataset
-        )
-
     def test_get_brightband_evaluation_objects_returns_list(self):
         """Test that get_brightband_evaluation_objects returns a list."""
         result = defaults.get_brightband_evaluation_objects()
