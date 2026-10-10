@@ -1,5 +1,7 @@
 import logging
 import operator
+import warnings
+from collections.abc import Callable
 
 import xarray as xr
 
@@ -160,6 +162,47 @@ def preprocess_cira_icechunk_severe_forecast_dataset(ds: xr.Dataset) -> xr.Datas
         The forecast dataset with specific humidity if not already calculated.
     """
     return _maybe_add_specific_humidity(ds)
+
+
+# Deprecated in 1.1.0: CIRA kerchunk data matches the icechunk store once opened
+# (KerchunkForecast sets lead_time), so these names resolve to their replacements.
+_DEPRECATED_KERCHUNK_PREPROCESS = {
+    "preprocess_cira_kerchunk_forecast_dataset": None,
+    "preprocess_cira_kerchunk_tc_forecast_dataset": (
+        "preprocess_cira_icechunk_tc_forecast_dataset"
+    ),
+    "preprocess_cira_kerchunk_ar_forecast_dataset": (
+        "preprocess_cira_icechunk_ar_forecast_dataset"
+    ),
+    "preprocess_cira_kerchunk_severe_forecast_dataset": (
+        "preprocess_cira_icechunk_severe_forecast_dataset"
+    ),
+}
+
+
+def __getattr__(name: str) -> Callable:
+    """Resolve the deprecated CIRA kerchunk preprocess names with a warning.
+
+    Args:
+        name: The attribute being looked up on this module.
+
+    Returns:
+        The replacement preprocess function (a passthrough for
+        ``preprocess_cira_kerchunk_forecast_dataset``).
+
+    Raises:
+        AttributeError: If the name is not a deprecated kerchunk preprocess.
+    """
+    if name not in _DEPRECATED_KERCHUNK_PREPROCESS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    replacement = _DEPRECATED_KERCHUNK_PREPROCESS[name]
+    advice = f"use {replacement} instead" if replacement else "no preprocess is needed"
+    warnings.warn(
+        f"{name} is deprecated and will be removed in a future version; {advice}.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return globals()[replacement] if replacement else inputs._default_preprocess
 
 
 # Preprocessing function for HRES data that includes geopotential thickness calculation

@@ -10,6 +10,36 @@ from extremeweatherbench import defaults, inputs, metrics
 class TestDefaults:
     """Test the defaults module."""
 
+    @pytest.mark.parametrize(
+        "old, new",
+        [
+            ("preprocess_cira_kerchunk_forecast_dataset", None),
+            (
+                "preprocess_cira_kerchunk_tc_forecast_dataset",
+                "preprocess_cira_icechunk_tc_forecast_dataset",
+            ),
+            (
+                "preprocess_cira_kerchunk_ar_forecast_dataset",
+                "preprocess_cira_icechunk_ar_forecast_dataset",
+            ),
+            (
+                "preprocess_cira_kerchunk_severe_forecast_dataset",
+                "preprocess_cira_icechunk_severe_forecast_dataset",
+            ),
+        ],
+    )
+    def test_deprecated_kerchunk_preprocess_names(self, old, new):
+        """1.0.x kerchunk preprocess names still resolve, with a warning."""
+        with pytest.warns(DeprecationWarning, match=old):
+            func = getattr(defaults, old)
+        expected = getattr(defaults, new) if new else inputs._default_preprocess
+        assert func is expected
+
+    def test_unknown_defaults_attribute_raises(self):
+        """Only the deprecated names are resolved dynamically."""
+        with pytest.raises(AttributeError):
+            defaults.not_a_real_name  # noqa: B018
+
     def test_get_brightband_evaluation_objects_returns_list(self):
         """Test that get_brightband_evaluation_objects returns a list."""
         result = defaults.get_brightband_evaluation_objects()
