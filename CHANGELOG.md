@@ -10,7 +10,7 @@ GitHub's auto-generated release notes can list PRs that were already
 squash-merged into `main`, because `develop` still contains those original
 commits. Prefer this changelog when writing GitHub release notes.
 
-## [1.1.0] - 2026-10-09
+## [1.1.0] - 2026-10-10
 
 ### Added
 
@@ -30,7 +30,19 @@ commits. Prefer this changelog when writing GitHub release notes.
 - A docs check in the test suite: every `ewb.*` reference in `README.md`
   and `docs/` must exist, Python snippets must parse, their
   `extremeweatherbench` imports must resolve, and calls must use real
-  keyword arguments.
+  keyword arguments
+  ([#423](https://github.com/brightbandtech/ExtremeWeatherBench/pull/423)).
+- A "Time coordinates" docs section describing which coordinates EWB uses
+  to decide whether an input covers a case
+  ([#426](https://github.com/brightbandtech/ExtremeWeatherBench/pull/426)).
+- A warning when a forecast's `valid_time` spans `init_time` and
+  `lead_time` but differs from their sum, which usually means `lead_time`
+  is in the wrong units (integers are read as hours)
+  ([#426](https://github.com/brightbandtech/ExtremeWeatherBench/pull/426)).
+- A warning when gridded data with a custom `preprocess` reaches the
+  coverage check without its time coordinates; previously every case was
+  skipped with only an INFO-level "no data" log
+  ([#429](https://github.com/brightbandtech/ExtremeWeatherBench/pull/429)).
 
 ### Changed
 
@@ -64,6 +76,21 @@ commits. Prefer this changelog when writing GitHub release notes.
   groups operators that share a case and forecast, and computes aligned
   data once so each metric does not rebuild the same dask graph
   ([#399](https://github.com/brightbandtech/ExtremeWeatherBench/pull/399)).
+- Gridded `preprocess` functions run after the coverage check and case
+  subset, so they only process the case's data. They can no longer create
+  or rename the coordinates EWB uses to find a case (time coordinates,
+  `latitude`/`longitude`, the 0–360 longitude convention); a 1.0.x
+  preprocess that did so must move that work to `variable_mapping` or the
+  dataset passed to `XarrayForecast`
+  ([#399](https://github.com/brightbandtech/ExtremeWeatherBench/pull/399),
+  [#429](https://github.com/brightbandtech/ExtremeWeatherBench/pull/429)).
+- The coverage check decides from one time source, in order:
+  `init_time` + `lead_time` (forecasts; a forecast's own `valid_time` is
+  ignored), then `valid_time`, then `time`
+  ([#426](https://github.com/brightbandtech/ExtremeWeatherBench/pull/426)).
+- `KerchunkForecast` converts CIRA's `time` axis to `lead_time` when it
+  opens a reference, so CIRA kerchunk data needs no preprocess
+  ([#429](https://github.com/brightbandtech/ExtremeWeatherBench/pull/429)).
 - `DurationMeanError` keeps only the case dayofyear slice of
   climatology before stacking to valid time
   ([#400](https://github.com/brightbandtech/ExtremeWeatherBench/pull/400)).
@@ -99,7 +126,17 @@ commits. Prefer this changelog when writing GitHub release notes.
   ([#413](https://github.com/brightbandtech/ExtremeWeatherBench/pull/413)).
 - Docs and README examples use the namespaced API (`ewb.inputs.*`,
   `ewb.evaluate.ExtremeWeatherBench`, `ewb.cases.load_cases`, ...)
-  instead of removed top-level names.
+  instead of removed top-level names
+  ([#423](https://github.com/brightbandtech/ExtremeWeatherBench/pull/423)).
+
+### Deprecated
+
+- `defaults.preprocess_cira_kerchunk_forecast_dataset` (no preprocess is
+  needed) and the `preprocess_cira_kerchunk_{tc,ar,severe}_forecast_dataset`
+  functions (use the matching `preprocess_cira_icechunk_*` function, which
+  handles both stores). They raise a `FutureWarning` and will be removed
+  in a future release
+  ([#429](https://github.com/brightbandtech/ExtremeWeatherBench/pull/429)).
 
 ### Removed
 
@@ -113,7 +150,8 @@ commits. Prefer this changelog when writing GitHub release notes.
   `cases.load_ewb_events_yaml_into_case_list` (use `cases.load_cases` or
   `cases.load_ewb_cases`), `cases.read_incoming_yaml`, and
   `utils.read_event_yaml` (use `cases.load_individual_cases_from_yaml`
-  to load cases from your own YAML file).
+  to load cases from your own YAML file)
+  ([#422](https://github.com/brightbandtech/ExtremeWeatherBench/pull/422)).
 
 ### Fixed
 
@@ -153,23 +191,31 @@ commits. Prefer this changelog when writing GitHub release notes.
   prime-meridian-crossing regions instead of the full longitude axis
   ([#416](https://github.com/brightbandtech/ExtremeWeatherBench/pull/416)).
 - `Region.mask` returns an empty subset instead of raising `ValueError`
-  when a wrapping region has no longitudes in the dataset.
+  when a wrapping region has no longitudes in the dataset
+  ([#424](https://github.com/brightbandtech/ExtremeWeatherBench/pull/424)).
 - Forecasts whose `valid_time` is a non-indexed coordinate (all CIRA
   icechunk models: FourCastNetv2, GraphCast, Pangu, ...) are no longer
   rejected as having no data for the case. With xarray 2026.7, slicing a
   non-indexed coordinate returns nothing instead of raising, so these
   forecasts were silently skipped and, for example, `applied_freeze.py`
   produced zero rows
-  ([#391](https://github.com/brightbandtech/ExtremeWeatherBench/issues/391)).
+  ([#391](https://github.com/brightbandtech/ExtremeWeatherBench/issues/391),
+  [#426](https://github.com/brightbandtech/ExtremeWeatherBench/pull/426)).
   The data check now uses each forecast's `init_time` + `lead_time`, so
   forecasts initialized before a case whose lead times reach into it are
   also kept.
+- Kerchunk examples in the docs point at references that exist
+  (`gs://extremeweatherbench/<MODEL>.parq`)
+  ([#429](https://github.com/brightbandtech/ExtremeWeatherBench/pull/429)).
 - `CravenBrooksSignificantSevere` output carries its own attributes
   instead of CAPE's
-  ([#363](https://github.com/brightbandtech/ExtremeWeatherBench/issues/363)).
-- `cases.load_cases()` no longer logs a bogus deprecation warning.
+  ([#363](https://github.com/brightbandtech/ExtremeWeatherBench/issues/363),
+  [#421](https://github.com/brightbandtech/ExtremeWeatherBench/pull/421)).
+- `cases.load_cases()` no longer logs a bogus deprecation warning
+  ([#422](https://github.com/brightbandtech/ExtremeWeatherBench/pull/422)).
 - The CAPE accuracy note points at `constants.py` for `EPSILON` and
-  `MOIST_ASCENT_SUBSTEPS`.
+  `MOIST_ASCENT_SUBSTEPS`
+  ([#423](https://github.com/brightbandtech/ExtremeWeatherBench/pull/423)).
 
 ## [1.0.2.post1] - 2026-04-30
 
