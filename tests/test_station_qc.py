@@ -185,7 +185,9 @@ class TestGHCNQualityControl:
         mock_case = mock.Mock()
         mock_case.start_date = pd.Timestamp("2020-11-05")
         mock_case.end_date = pd.Timestamp("2020-11-06")
-        mock_case.location.as_geopandas.return_value.total_bounds = [10, 40, 30, 55]
+        mock_case.location = regions.BoundingBoxRegion(
+            latitude_min=40, latitude_max=55, longitude_min=10, longitude_max=30
+        )
         return mock_case
 
     @pytest.fixture
