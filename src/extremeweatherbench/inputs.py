@@ -19,7 +19,7 @@ import pandas as pd
 import polars as pl
 import xarray as xr
 
-from extremeweatherbench import cases, derived, sources, utils
+from extremeweatherbench import cases, derived, sources, station_qc, utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
@@ -635,10 +635,17 @@ class GHCN(TargetBase):
 
     Extends TargetBase for tabular GHCN station observation data. Uses polars
     for lazy loading and efficient subsetting of large tabular datasets.
+
+    When ``quality_control`` is True (the default), each case subset is passed
+    through ``station_qc.apply_ghcnh_quality_control``, which drops known-bad
+    stations (currently the Greenland "MOVING ICE STATION" sites) and nulls
+    missing-value sentinels (e.g. -999), physically impossible values, and
+    isolated spikes before the data are converted and scored.
     """
 
     name: str = "GHCN"
     source: str = DEFAULT_GHCN_URI
+    quality_control: bool = True
 
     def _open_data_from_source(self) -> IncomingDataInput:
         target_data: pl.LazyFrame = pl.scan_parquet(
@@ -668,8 +675,12 @@ class GHCN(TargetBase):
             & (pl.col("latitude") <= case_location.total_bounds[3])
             & (pl.col("longitude") >= case_location.total_bounds[0])
             & (pl.col("longitude") <= case_location.total_bounds[2])
-        ).sort("valid_time")
-        return subset_target_data
+        )
+        if self.quality_control:
+            subset_target_data = station_qc.apply_ghcnh_quality_control(
+                subset_target_data
+            )
+        return subset_target_data.sort("valid_time")
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
