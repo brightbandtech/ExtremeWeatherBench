@@ -366,9 +366,9 @@ def _hypsometric_geopotential_kernel(t, q, p, p_msl, t_2m, out):
     of the layer's end-point virtual temperatures and
     ``Tv = T * (1 + q * (1 / EPSILON - 1))`` for specific humidity ``q``. The layer from sea level to
     the lowest level uses the 2 m temperature (and the lowest level's humidity)
-    at its bottom; if the lowest level lies above the surface pressure
-    (``p_msl`` lower than that level), its geopotential comes out negative, as
-    in extrapolated reanalysis fields.
+    at its bottom; if ``p_msl`` is lower than the lowest level's pressure,
+    that level lies below sea level and its geopotential comes out negative,
+    as in extrapolated reanalysis fields.
     """
     n = t.shape[0]
     coeff = 1.0 / EPSILON - 1.0  # ~0.608; Tv = T * (1 + coeff * q)
@@ -399,10 +399,18 @@ def geopotential_from_temperature_and_humidity(
     (exact for moist air without condensate); a Numba column kernel applied
     lazily with ``xr.apply_ufunc``, so dask inputs stay lazy.
 
-    Layer thicknesses (e.g. the 300-500 hPa thickness the TC tracker uses)
-    depend only on the layer's virtual temperature and are accurate to the
-    trapezoid in ln(p). Absolute values also carry the error of the sea-level
-    start over high terrain.
+    Layer thicknesses (e.g. the 300-500 hPa thickness the TC tracker uses,
+    and the level spacing CAPE integrates over) depend only on the layer's
+    virtual temperature and are accurate to the trapezoid in ln(p).
+
+    Note:
+        Integration starts from mean sea level (geopotential 0 at
+        ``air_pressure_at_mean_sea_level``), so over high terrain absolute
+        geopotential inherits the error of the sea-level reduction and the
+        2 m temperature used for the sub-surface layer. Against ERA5, 500 hPa
+        geopotential height derived this way has an RMSE of about 69 m (up to
+        about 208 m where orography exceeds 1500 m); layer thicknesses are
+        unaffected.
 
     Args:
         air_temperature: Temperature on pressure levels (K).
