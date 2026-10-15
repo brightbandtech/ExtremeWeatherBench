@@ -213,9 +213,12 @@ def _point_target_bounds(
     return lon_min, lat_min, lon_max, lat_max
 
 
-def _longitude_within[T: (pl.Expr, pd.Series)](
-    longitude: T, lon_min: float, lon_max: float
-) -> T:
+# TODO: consider a module-level type parameter (PEP 695 / TypeVar) for
+# helpers that return the same frame/expression type they receive, if more
+# than this one helper needs it; the library uses plain unions for now.
+def _longitude_within(
+    longitude: pl.Expr | pd.Series, lon_min: float, lon_max: float
+) -> pl.Expr | pd.Series:
     """Return a boolean mask of longitudes within [lon_min, lon_max].
 
     When lon_min > lon_max the range wraps the antimeridian, and longitudes
@@ -228,7 +231,8 @@ def _longitude_within[T: (pl.Expr, pd.Series)](
         lon_max: Eastern edge of the range, in [-180, 180].
 
     Returns:
-        A boolean mask of the same type as ``longitude``.
+        A boolean mask: a polars expression for a polars input, or a pandas
+        Series for a pandas input.
     """
     if lon_min > lon_max:
         return (longitude >= lon_min) | (longitude <= lon_max)
