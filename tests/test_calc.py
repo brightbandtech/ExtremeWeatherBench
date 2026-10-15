@@ -2646,6 +2646,24 @@ class TestGeopotentialFromTemperatureAndHumidity:
             phi.isel(latitude=0, longitude=0).values, expected, rtol=1e-10
         )
 
+    def test_constant_lapse_rate_matches_analytic(self):
+        """Dry column with T = T0 - lapse * z has a closed-form geopotential.
+
+        With ``a = Rd * lapse / g``, ``T(p) = T0 * (p / p0) ** a`` and
+        ``phi(p) = g * T0 / lapse * (1 - (p / p0) ** a)``. The kernel's
+        trapezoid in ln(p) is within about 5e-4 of this on these levels.
+        """
+        t0, lapse, p0 = 288.15, 0.0065, 101325.0
+        a = calc.Rd * lapse / calc.g0
+        p_ratio = self.LEVELS * 100.0 / p0
+        t, q, msl, t2 = self._column(mslp=p0, t2m=t0)
+        t = t.copy(data=np.broadcast_to(t0 * p_ratio**a, t.shape).copy())
+        phi = calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
+        expected = calc.g0 * t0 / lapse * (1.0 - p_ratio**a)
+        np.testing.assert_allclose(
+            phi.isel(latitude=0, longitude=0).values, expected, rtol=1e-3
+        )
+
     def test_moist_layers_are_thicker(self):
         """Virtual temperature exceeds temperature, so moist layers are thicker."""
         dry = calc.geopotential_from_temperature_and_humidity(*self._column())
