@@ -460,8 +460,9 @@ def geopotential_from_temperature_and_humidity(
         dask="parallelized",
         output_dtypes=[np.float64],
     )
-    geopotential = geopotential.transpose(*air_temperature.dims).reindex(
-        {level_dim: levels.values}
+    # Undo the sort positionally (no float label matching on level values).
+    geopotential = geopotential.transpose(*air_temperature.dims).isel(
+        {level_dim: np.argsort(order)}
     )
     # Integrate in float64 but return the input precision (e.g. float32).
     if np.issubdtype(air_temperature.dtype, np.floating):
