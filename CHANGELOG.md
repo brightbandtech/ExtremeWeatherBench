@@ -23,6 +23,35 @@ commits. Prefer this changelog when writing GitHub release notes.
   forecasts; a no-op when `geopotential` or `geopotential_height` is present
   ([#433](https://github.com/brightbandtech/ExtremeWeatherBench/pull/433)).
 
+### Fixed
+
+- The `GHCN` target now quality-controls station observations before scoring
+  (new `station_qc` module, on by default; pass `quality_control=False` to
+  turn it off). It nulls missing-value sentinels such as -999 (e.g. one
+  station reporting -999 C for all of 2020), physically impossible values
+  (e.g. 928 C air temperature), and isolated up-then-down spikes in
+  temperature and dew point. The spike check can also remove a real
+  short-lived extreme such as a heat burst; pressure is not spike-checked,
+  since tropical-cyclone eye passages and derecho wake lows look like
+  spikes (pressure still gets the sentinel and range checks). It also
+  drops the 39 Greenland ice-sheet stations named "MOVING ICE STATION",
+  several of which report temperatures far too warm for weeks at a time
+  (e.g. NEM averages +4.3 C over Jan-Mar 2023); this is a stopgap until a
+  climatology or neighbor-station check exists. GHCN scores for cases
+  touching affected stations change, and a case whose only stations are
+  excluded is no longer scored against GHCN
+  ([#431](https://github.com/brightbandtech/ExtremeWeatherBench/pull/431)).
+- `GHCN` and `LSR` now subset correctly for case regions that cross the
+  antimeridian. They filtered on the region's `total_bounds`, which for a
+  crossing region is -180..180, so the whole latitude band was kept (e.g. a
+  166.5E-190E box took stations from Alaska to Scandinavia). They now use
+  the same wrapped bounds as the gridded targets. A region spanning 359
+  degrees of longitude or more (e.g. the 0E-359.75E boxes of cases
+  1000-1003) is treated as global, so stations just west of 0 are kept.
+  `LSR` also no longer drops a region whose east edge is exactly 180,
+  which was converted to -180. GHCN and LSR scores for such cases change
+  ([#432](https://github.com/brightbandtech/ExtremeWeatherBench/pull/432)).
+
 ## [1.1.0] - 2026-10-10
 
 ### Added

@@ -19,7 +19,7 @@ import pandas as pd
 import polars as pl
 import xarray as xr
 
-from extremeweatherbench import cases, derived, sources, utils
+from extremeweatherbench import cases, derived, regions, sources, station_qc, utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
@@ -39,6 +39,12 @@ ARCO_ERA5_FULL_URI = (
 
 #: Storage/access options for default point target dataset.
 DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh_all_2020_2024.parq"
+
+#: GHCNh column identifying each station; used by the station spike check.
+GHCN_STATION_COLUMN = "station"
+
+#: GHCNh string metadata columns dropped before conversion to xarray.
+GHCN_METADATA_COLUMNS = (GHCN_STATION_COLUMN, "name")
 
 #: Storage/access options for local storm report (LSR) tabular data.
 LSR_URI = "gs://extremeweatherbench/datasets/combined_canada_australia_us_lsr_01012020_09272025.parq"
@@ -170,10 +176,67 @@ CIRA_MODEL_NAMES = [
     "GRAP_v100_IFS",
 ]
 
+#: Wrapped longitude span (degrees) at or above which a point-target case
+#: region is treated as global. A near-global box such as 0..359.75 wraps to
+#: (0, -0.25), which would otherwise drop stations between -0.25 and 0.
+NEAR_GLOBAL_LONGITUDE_SPAN = 359.0
+
 
 def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
     """Default forecast preprocess function that does nothing."""
     return input_data
+
+
+def _point_target_bounds(
+    case_metadata: "cases.IndividualCase",
+) -> tuple[float, float, float, float]:
+    """Return the longitude/latitude bounds of a case region for point targets.
+
+    A region crossing the antimeridian comes back with lon_min > lon_max (e.g.
+    166.5, ..., -170.0) instead of the -180..180 total_bounds of its
+    MultiPolygon, which would select the whole latitude band. A wrapped
+    region spanning at least NEAR_GLOBAL_LONGITUDE_SPAN degrees is returned
+    as global (-180..180) so the sliver just west of its edge is not lost.
+
+    Args:
+        case_metadata: The case whose location defines the bounds.
+
+    Returns:
+        A tuple of (lon_min, lat_min, lon_max, lat_max) with longitudes in
+        [-180, 180]; lon_min > lon_max when the region wraps the antimeridian.
+    """
+    lon_min, lat_min, lon_max, lat_max = regions._wrapping_bounds(
+        case_metadata.location.as_geopandas()
+    )
+    if lon_min > lon_max and lon_max + 360 - lon_min >= NEAR_GLOBAL_LONGITUDE_SPAN:
+        return -180.0, lat_min, 180.0, lat_max
+    return lon_min, lat_min, lon_max, lat_max
+
+
+# TODO: consider a module-level type parameter (PEP 695 / TypeVar) for
+# helpers that return the same frame/expression type they receive, if more
+# than this one helper needs it; the library uses plain unions for now.
+def _longitude_within(
+    longitude: pl.Expr | pd.Series, lon_min: float, lon_max: float
+) -> pl.Expr | pd.Series:
+    """Return a boolean mask of longitudes within [lon_min, lon_max].
+
+    When lon_min > lon_max the range wraps the antimeridian, and longitudes
+    at or east of lon_min or at or west of lon_max are selected.
+
+    Args:
+        longitude: Longitudes in [-180, 180], as a polars expression or a
+            pandas Series.
+        lon_min: Western edge of the range, in [-180, 180].
+        lon_max: Eastern edge of the range, in [-180, 180].
+
+    Returns:
+        A boolean mask: a polars expression for a polars input, or a pandas
+        Series for a pandas input.
+    """
+    if lon_min > lon_max:
+        return (longitude >= lon_min) | (longitude <= lon_max)
+    return (longitude >= lon_min) & (longitude <= lon_max)
 
 
 @dataclasses.dataclass
@@ -294,6 +357,20 @@ class InputBase(abc.ABC):
             f"Conversion from {type(data)} to xarray.Dataset not implemented. "
             f"Override _custom_convert_to_dataset in your InputBase subclass."
         )
+
+    def columns_kept_through_variable_subset(self) -> list[str]:
+        """Return extra columns to keep when subsetting tabular data to variables.
+
+        For tabular inputs, ``maybe_subset_variables`` runs before
+        ``subset_data_to_case`` and keeps only the coordinate columns and
+        ``variables``. Override this to keep other columns, such as a station
+        identifier, that ``subset_data_to_case`` needs. Columns that are not
+        in the data are ignored.
+
+        Returns:
+            Names of columns to keep if present. Empty by default.
+        """
+        return []
 
     def add_source_to_dataset_attrs(self, ds: xr.Dataset) -> xr.Dataset:
         """Add the name of the source to the dataset attributes."""
@@ -635,17 +712,35 @@ class GHCN(TargetBase):
 
     Extends TargetBase for tabular GHCN station observation data. Uses polars
     for lazy loading and efficient subsetting of large tabular datasets.
+
+    When ``quality_control`` is True (the default), the data are checked with
+    ``station_qc``: when the file is opened, known-bad stations (currently the
+    Greenland "MOVING ICE STATION" sites) are dropped and missing-value
+    sentinels (e.g. -999) and physically impossible values are nulled; after
+    the data are subset to a case, isolated temperature and dew point spikes
+    are nulled. The station
+    checks need the ``name`` column, which is still present when the file is
+    opened, and the spike check needs the ``station`` column, which is kept
+    through the variable subset. Both are dropped before conversion to xarray.
     """
 
     name: str = "GHCN"
     source: str = DEFAULT_GHCN_URI
+    quality_control: bool = True
 
     def _open_data_from_source(self) -> IncomingDataInput:
         target_data: pl.LazyFrame = pl.scan_parquet(
             self.source, storage_options=self.storage_options
         )
-
+        if self.quality_control:
+            # Row-wise checks only, so the case time/location filter applied
+            # later is still pushed down into the parquet scan.
+            target_data = station_qc.apply_ghcnh_row_checks(target_data)
         return target_data
+
+    def columns_kept_through_variable_subset(self) -> list[str]:
+        """Keep the station identifier for the spike check, if it runs."""
+        return [GHCN_STATION_COLUMN] if self.quality_control else []
 
     def subset_data_to_case(
         self,
@@ -659,24 +754,62 @@ class GHCN(TargetBase):
         # Create filter expressions for LazyFrame
         time_min = case_metadata.start_date - pd.Timedelta(days=2)
         time_max = case_metadata.end_date + pd.Timedelta(days=2)
-        case_location = case_metadata.location.as_geopandas()
+        lon_min, lat_min, lon_max, lat_max = _point_target_bounds(case_metadata)
         # Apply filters using proper polars expressions
         subset_target_data = data.filter(
             (pl.col("valid_time") >= time_min)
             & (pl.col("valid_time") <= time_max)
-            & (pl.col("latitude") >= case_location.total_bounds[1])
-            & (pl.col("latitude") <= case_location.total_bounds[3])
-            & (pl.col("longitude") >= case_location.total_bounds[0])
-            & (pl.col("longitude") <= case_location.total_bounds[2])
-        ).sort("valid_time")
-        return subset_target_data
+            & (pl.col("latitude") >= lat_min)
+            & (pl.col("latitude") <= lat_max)
+            & _longitude_within(pl.col("longitude"), lon_min, lon_max)
+        )
+        if self.quality_control:
+            # The spike check compares neighbors in each station's series, so
+            # it runs on the case subset rather than the whole file.
+            subset_target_data = station_qc.mask_spikes(
+                subset_target_data, station_column=GHCN_STATION_COLUMN
+            )
+        return subset_target_data.sort("valid_time")
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
+            # station metadata columns are strings; they must not become data
+            # variables of the point dataset
+            columns = data.collect_schema().names()
+            data = data.drop([c for c in GHCN_METADATA_COLUMNS if c in columns])
             # convert to Kelvin, GHCN data is in Celsius by default
-            if "surface_air_temperature" in data.collect_schema().names():
+            if "surface_air_temperature" in columns:
                 data = data.with_columns(pl.col("surface_air_temperature").add(273.15))
-            data = data.collect(engine="streaming").to_pandas()
+            frame = data.collect(engine="streaming")
+            # Drop rows with no values left (e.g. nulled by quality control),
+            # so point_frame_to_dataset, which keeps the first of duplicate
+            # (time, lat, lon) rows, keeps a valid row over an empty one.
+            value_columns = [
+                c
+                for c in frame.columns
+                if c not in ("valid_time", "latitude", "longitude")
+            ]
+            if value_columns:
+                n_rows = frame.height
+                frame = frame.filter(
+                    ~pl.all_horizontal(pl.col(value_columns).is_null())
+                )
+                if frame.height < n_rows:
+                    logger.debug(
+                        "Dropped %s GHCN rows with no non-null values",
+                        n_rows - frame.height,
+                    )
+            if frame.height == 0:
+                # Downstream, a zero-length target makes the case score
+                # nothing (compute_case_operator returns no results).
+                logger.warning(
+                    "No GHCN station observations for this case%s; it will not "
+                    "be scored against GHCN.",
+                    " after quality control (stations excluded or all values nulled)"
+                    if self.quality_control
+                    else "",
+                )
+            data = frame.to_pandas()
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
             try:
                 data = utils.point_frame_to_dataset(data)
@@ -748,14 +881,13 @@ class LSR(TargetBase):
         data["valid_time"] = pd.to_datetime(data["valid_time"])
 
         # filters to apply to the target data including datetimes and location bounds
-        bounds = case_metadata.location.as_geopandas().total_bounds
+        lon_min, lat_min, lon_max, lat_max = _point_target_bounds(case_metadata)
         filters = (
             (data["valid_time"] >= case_metadata.start_date)
             & (data["valid_time"] <= case_metadata.end_date)
-            & (data["latitude"] >= bounds[1])
-            & (data["latitude"] <= bounds[3])
-            & (data["longitude"] >= utils.convert_longitude_to_180(bounds[0]))
-            & (data["longitude"] <= utils.convert_longitude_to_180(bounds[2]))
+            & (data["latitude"] >= lat_min)
+            & (data["latitude"] <= lat_max)
+            & _longitude_within(data["longitude"], lon_min, lon_max)
         )
         subset_target_data = data.loc[filters]
 
@@ -1382,6 +1514,7 @@ def maybe_subset_variables(
     data: IncomingDataInput,
     variables: Sequence[Union[str, "derived.DerivedVariable"]],
     source_module: Optional["sources.base.Source"] = None,
+    keep_if_present: Sequence[str] = (),
 ) -> IncomingDataInput:
     """Subset the variables from the data, if required.
 
@@ -1393,6 +1526,8 @@ def maybe_subset_variables(
             or pd.DataFrame).
         variables: Sequence of variable names and/or derived variable classes.
         source_module: Optional pre-created source module. If None, creates one.
+        keep_if_present: Extra polars or pandas columns to keep if they exist,
+            e.g. from ``InputBase.columns_kept_through_variable_subset``.
 
     Returns:
         The data subset to only the specified variables.
@@ -1404,6 +1539,21 @@ def maybe_subset_variables(
     expected_and_maybe_derived_variables = (
         derived.maybe_include_variables_from_derived_input(variables)
     )
+    if keep_if_present:
+        if isinstance(data, pl.LazyFrame):
+            available = set(data.collect_schema().names())
+        elif isinstance(data, pd.DataFrame):
+            available = set(data.columns)
+        else:
+            available = set()
+        expected_and_maybe_derived_variables = list(
+            dict.fromkeys(
+                [
+                    *expected_and_maybe_derived_variables,
+                    *(c for c in keep_if_present if c in available),
+                ]
+            )
+        )
 
     # Use provided source module or get one
     if source_module is None:
