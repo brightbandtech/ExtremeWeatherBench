@@ -118,8 +118,16 @@ def exclude_stations(
         missing or there are no patterns, ``lf`` is returned unchanged.
     """
     name_patterns = list(name_patterns)
-    if not name_patterns or not _present(lf, [name_column]):
+    if not name_patterns:
         return lf
+    if not _present(lf, [name_column]):
+        logger.warning(
+            "Station exclusion skipped: no %r column to match %s against.",
+            name_column,
+            name_patterns,
+        )
+        return lf
+    logger.debug("Excluding stations whose %s matches %s", name_column, name_patterns)
     matches = pl.any_horizontal(
         pl.col(name_column).str.contains(p, literal=True).fill_null(False)
         for p in name_patterns
@@ -134,6 +142,9 @@ def mask_sentinel_values(
 ) -> pl.LazyFrame:
     """Null values equal to a missing-value sentinel.
 
+    With the default ``GHCNH_VALID_RANGES`` every sentinel is also out of
+    range, so this only changes the result for custom or missing ranges.
+
     Args:
         lf: Station observations.
         columns: Columns to check; columns not in ``lf`` are ignored.
@@ -143,9 +154,11 @@ def mask_sentinel_values(
         ``lf`` with sentinel values in ``columns`` replaced by null.
     """
     sentinels = list(sentinels)
+    present = _present(lf, columns)
+    logger.debug("Masking sentinel values %s in %s", sentinels, present)
     return lf.with_columns(
         pl.when(pl.col(c).is_in(sentinels)).then(None).otherwise(pl.col(c)).alias(c)
-        for c in _present(lf, columns)
+        for c in present
     )
 
 
@@ -163,12 +176,14 @@ def mask_out_of_range(
     Returns:
         ``lf`` with out-of-range values replaced by null.
     """
+    present = _present(lf, valid_ranges)
+    logger.debug("Masking out-of-range values in %s", present)
     return lf.with_columns(
         pl.when(pl.col(c).is_between(*valid_ranges[c]))
         .then(pl.col(c))
         .otherwise(None)
         .alias(c)
-        for c in _present(lf, valid_ranges)
+        for c in present
     )
 
 
@@ -201,8 +216,15 @@ def mask_spikes(
         returned unchanged.
     """
     columns = _present(lf, thresholds)
-    if not columns or len(_present(lf, [station_column, time_column])) < 2:
+    if not columns:
         return lf
+    missing = [c for c in (station_column, time_column) if not _present(lf, [c])]
+    if missing:
+        logger.warning(
+            "Spike check skipped for %s: missing column(s) %s.", columns, missing
+        )
+        return lf
+    logger.debug("Masking spikes in %s", columns)
     lf = lf.sort(station_column, time_column)
     max_gap = pl.duration(seconds=int(max_gap_hours * 3600))
     masked = []

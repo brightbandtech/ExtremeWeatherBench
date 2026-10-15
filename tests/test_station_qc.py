@@ -321,3 +321,25 @@ class TestExcludeStations:
         assert station_qc.exclude_stations(df.lazy(), []).collect().equals(df)
         no_name = df.drop("name")
         assert station_qc.exclude_stations(no_name.lazy()).collect().equals(no_name)
+
+
+class TestSkippedCheckWarnings:
+    def test_warns_when_name_column_missing(self, caplog):
+        df = _station_frame([1.0])
+        with caplog.at_level("WARNING", logger="extremeweatherbench.station_qc"):
+            station_qc.exclude_stations(df.lazy())
+        assert "Station exclusion skipped" in caplog.text
+
+    def test_warns_when_station_column_missing(self, caplog):
+        df = _station_frame([1.0]).drop("station")
+        with caplog.at_level("WARNING", logger="extremeweatherbench.station_qc"):
+            station_qc.mask_spikes(df.lazy())
+        assert "Spike check skipped" in caplog.text
+        assert "station" in caplog.text
+
+    def test_no_warning_without_checked_variables(self, caplog):
+        df = pl.DataFrame({"valid_time": [pd.Timestamp("2020-01-01")], "x": [1.0]})
+        with caplog.at_level("WARNING", logger="extremeweatherbench.station_qc"):
+            station_qc.mask_spikes(df.lazy())
+            station_qc.exclude_stations(df.lazy(), [])
+        assert caplog.text == ""
