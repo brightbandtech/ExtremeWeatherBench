@@ -19,7 +19,9 @@ commits. Prefer this changelog when writing GitHub release notes.
   `calc.geopotential_from_temperature_and_humidity` (hypsometric integration
   of temperature and specific humidity upward from mean sea level pressure,
   a Numba column kernel applied lazily). Lets tropical cyclone tracking and
-  CAPE run on such forecasts; a no-op when geopotential is present.
+  the Craven-Brooks significant severe parameter (CBSS) run on such
+  forecasts; a no-op when `geopotential` or `geopotential_height` is present
+  ([#433](https://github.com/brightbandtech/ExtremeWeatherBench/pull/433)).
 
 ## [1.1.0] - 2026-10-10
 

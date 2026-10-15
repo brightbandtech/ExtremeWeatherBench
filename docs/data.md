@@ -267,6 +267,16 @@ dataset you pass to `XarrayForecast`. Use `preprocess` for variables, such as
 unit conversions or derived fields. If gridded data with a custom `preprocess`
 reaches the check without its time coordinates, EWB warns with this advice.
 
+For forecasts that publish temperature and humidity on pressure levels but no
+geopotential (needed for tropical cyclone tracking and the Craven-Brooks
+significant severe parameter), use
+`ewb.defaults.preprocess_derive_geopotential`. It integrates the hypsometric
+equation upward from mean sea level pressure, using `air_temperature`,
+`specific_humidity` (or `relative_humidity`), `air_pressure_at_mean_sea_level`
+and `surface_air_temperature`, and does nothing when `geopotential` or
+`geopotential_height` is already present. Layer thicknesses are accurate;
+absolute values over high terrain carry the error of starting at sea level.
+
 ## Variable mapping
 
 `variable_mapping` is a dictionary that maps the names present in your data to the
