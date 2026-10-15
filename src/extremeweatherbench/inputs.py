@@ -742,6 +742,16 @@ class GHCN(TargetBase):
                         "Dropped %s GHCN rows with no non-null values",
                         n_rows - frame.height,
                     )
+            if frame.height == 0:
+                # Downstream, a zero-length target makes the case score
+                # nothing (compute_case_operator returns no results).
+                logger.warning(
+                    "No GHCN station observations for this case%s; it will not "
+                    "be scored against GHCN.",
+                    " after quality control (stations excluded or all values nulled)"
+                    if self.quality_control
+                    else "",
+                )
             data = frame.to_pandas()
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
             try:

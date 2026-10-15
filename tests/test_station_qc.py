@@ -365,3 +365,17 @@ class TestGHCNDuplicatesAfterQualityControl:
         ds = ghcn._custom_convert_to_dataset(checked)
         assert ds.sizes["location"] == 1
         assert float(ds["surface_air_temperature"].item()) == pytest.approx(285.15)
+
+
+class TestGHCNEmptyCase:
+    def test_warns_when_quality_control_empties_case(self, caplog):
+        ice = _station_frame(
+            [4.0, 5.0], station="GLU00000037", name=["NEM (MOVING ICE STATION)"] * 2
+        )
+        ghcn = inputs.GHCN(variables=["surface_air_temperature"])
+        checked = station_qc.apply_ghcnh_row_checks(ice.lazy())
+        with caplog.at_level("WARNING", logger="extremeweatherbench.inputs"):
+            ds = ghcn._custom_convert_to_dataset(checked)
+        assert "No GHCN station observations" in caplog.text
+        assert "after quality control" in caplog.text
+        assert 0 in ds.sizes.values()
