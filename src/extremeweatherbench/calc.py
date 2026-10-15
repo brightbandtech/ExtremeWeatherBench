@@ -363,19 +363,21 @@ def _hypsometric_geopotential_kernel(t, q, p, p_msl, t_2m, out):
     Levels must be ordered from highest pressure (lowest level) upward. Starts
     at mean sea level (geopotential 0 at ``p_msl``) and adds each layer's
     thickness ``Rd * Tv_mean * ln(p_bottom / p_top)``, with ``Tv_mean`` the mean
-    of the layer's end-point virtual temperatures. The layer from sea level to
+    of the layer's end-point virtual temperatures and
+    ``Tv = T * (1 + q * (1 / EPSILON - 1))`` for specific humidity ``q``. The layer from sea level to
     the lowest level uses the 2 m temperature (and the lowest level's humidity)
     at its bottom; if the lowest level lies above the surface pressure
     (``p_msl`` lower than that level), its geopotential comes out negative, as
     in extrapolated reanalysis fields.
     """
     n = t.shape[0]
-    tv_prev = t[0] * (1.0 + q[0] / EPSILON) / (1.0 + q[0])
-    tv_sfc = t_2m * (1.0 + q[0] / EPSILON) / (1.0 + q[0])
+    coeff = 1.0 / EPSILON - 1.0  # ~0.608; Tv = T * (1 + coeff * q)
+    tv_prev = t[0] * (1.0 + coeff * q[0])
+    tv_sfc = t_2m * (1.0 + coeff * q[0])
     phi = Rd * 0.5 * (tv_sfc + tv_prev) * np.log(p_msl / p[0])
     out[0] = phi
     for k in range(1, n):
-        tv = t[k] * (1.0 + q[k] / EPSILON) / (1.0 + q[k])
+        tv = t[k] * (1.0 + coeff * q[k])
         phi += Rd * 0.5 * (tv_prev + tv) * np.log(p[k - 1] / p[k])
         out[k] = phi
         tv_prev = tv
@@ -392,8 +394,10 @@ def geopotential_from_temperature_and_humidity(
 
     For forecasts that publish temperature and humidity on pressure levels but
     no geopotential (needed for tropical cyclone tracking and CAPE). Integrates
-    upward from mean sea level using virtual temperature; a Numba column kernel
-    applied lazily with ``xr.apply_ufunc``, so dask inputs stay lazy.
+    upward from mean sea level using virtual temperature
+    ``Tv = T * (1 + q * (1 / epsilon - 1))`` with specific humidity ``q``
+    (exact for moist air without condensate); a Numba column kernel applied
+    lazily with ``xr.apply_ufunc``, so dask inputs stay lazy.
 
     Layer thicknesses (e.g. the 300-500 hPa thickness the TC tracker uses)
     depend only on the layer's virtual temperature and are accurate to the

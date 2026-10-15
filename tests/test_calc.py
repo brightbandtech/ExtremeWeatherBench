@@ -2635,6 +2635,17 @@ class TestGeopotentialFromTemperatureAndHumidity:
         )
         xr.testing.assert_allclose(phi, reversed_levels.sel(level=self.LEVELS))
 
+    def test_isothermal_moist_matches_analytic(self):
+        """Constant T and q give constant Tv, so phi = Rd * Tv * ln(p_msl / p)."""
+        q = 0.015
+        t, q_da, msl, t2 = self._column(temperature=290.0, humidity=q)
+        phi = calc.geopotential_from_temperature_and_humidity(t, q_da, msl, t2)
+        tv = 290.0 * (1.0 + q * (1.0 / calc.epsilon - 1.0))
+        expected = calc.Rd * tv * np.log(101325.0 / (self.LEVELS * 100.0))
+        np.testing.assert_allclose(
+            phi.isel(latitude=0, longitude=0).values, expected, rtol=1e-10
+        )
+
     def test_moist_layers_are_thicker(self):
         """Virtual temperature exceeds temperature, so moist layers are thicker."""
         dry = calc.geopotential_from_temperature_and_humidity(*self._column())
