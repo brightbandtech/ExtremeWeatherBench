@@ -16,15 +16,16 @@ commits. Prefer this changelog when writing GitHub release notes.
 
 - The `GHCN` target now quality-controls station observations before scoring
   (new `station_qc` module, on by default; pass `quality_control=False` to
-  turn it off). It nulls missing-value sentinels such as -999 (about 11k
-  air temperatures and 570k pressures in the default GHCNh file, e.g. one
+  turn it off). It nulls missing-value sentinels such as -999 (e.g. one
   station reporting -999 C for all of 2020), physically impossible values
   (e.g. 928 C air temperature), and isolated up-then-down spikes. It also
   drops the 39 Greenland ice-sheet stations named "MOVING ICE STATION",
   several of which report temperatures far too warm for weeks at a time
   (e.g. NEM averages +4.3 C over Jan-Mar 2023); this is a stopgap until a
   climatology or neighbor-station check exists. GHCN scores for cases
-  touching affected stations change.
+  touching affected stations change, and a case whose only stations are
+  excluded is no longer scored against GHCN
+  ([#431](https://github.com/brightbandtech/ExtremeWeatherBench/pull/431)).
 
 ## [1.1.0] - 2026-10-10
 
