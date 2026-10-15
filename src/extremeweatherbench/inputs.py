@@ -40,6 +40,12 @@ ARCO_ERA5_FULL_URI = (
 #: Storage/access options for default point target dataset.
 DEFAULT_GHCN_URI = "gs://extremeweatherbench/datasets/ghcnh_all_2020_2024.parq"
 
+#: GHCNh column identifying each station; used by the station spike check.
+GHCN_STATION_COLUMN = "station"
+
+#: GHCNh string metadata columns dropped before conversion to xarray.
+GHCN_METADATA_COLUMNS = (GHCN_STATION_COLUMN, "name")
+
 #: Storage/access options for local storm report (LSR) tabular data.
 LSR_URI = "gs://extremeweatherbench/datasets/combined_canada_australia_us_lsr_01012020_09272025.parq"
 
@@ -294,6 +300,20 @@ class InputBase(abc.ABC):
             f"Conversion from {type(data)} to xarray.Dataset not implemented. "
             f"Override _custom_convert_to_dataset in your InputBase subclass."
         )
+
+    def columns_kept_through_variable_subset(self) -> list[str]:
+        """Return extra columns to keep when subsetting tabular data to variables.
+
+        For tabular inputs, ``maybe_subset_variables`` runs before
+        ``subset_data_to_case`` and keeps only the coordinate columns and
+        ``variables``. Override this to keep other columns, such as a station
+        identifier, that ``subset_data_to_case`` needs. Columns that are not
+        in the data are ignored.
+
+        Returns:
+            Names of columns to keep if present. Empty by default.
+        """
+        return []
 
     def add_source_to_dataset_attrs(self, ds: xr.Dataset) -> xr.Dataset:
         """Add the name of the source to the dataset attributes."""
@@ -636,11 +656,14 @@ class GHCN(TargetBase):
     Extends TargetBase for tabular GHCN station observation data. Uses polars
     for lazy loading and efficient subsetting of large tabular datasets.
 
-    When ``quality_control`` is True (the default), each case subset is passed
-    through ``station_qc.apply_ghcnh_quality_control``, which drops known-bad
-    stations (currently the Greenland "MOVING ICE STATION" sites) and nulls
-    missing-value sentinels (e.g. -999), physically impossible values, and
-    isolated spikes before the data are converted and scored.
+    When ``quality_control`` is True (the default), the data are checked with
+    ``station_qc``: when the file is opened, known-bad stations (currently the
+    Greenland "MOVING ICE STATION" sites) are dropped and missing-value
+    sentinels (e.g. -999) and physically impossible values are nulled; after
+    the data are subset to a case, isolated spikes are nulled. The station
+    checks need the ``name`` column, which is still present when the file is
+    opened, and the spike check needs the ``station`` column, which is kept
+    through the variable subset. Both are dropped before conversion to xarray.
     """
 
     name: str = "GHCN"
@@ -651,8 +674,15 @@ class GHCN(TargetBase):
         target_data: pl.LazyFrame = pl.scan_parquet(
             self.source, storage_options=self.storage_options
         )
-
+        if self.quality_control:
+            # Row-wise checks only, so the case time/location filter applied
+            # later is still pushed down into the parquet scan.
+            target_data = station_qc.apply_ghcnh_row_checks(target_data)
         return target_data
+
+    def columns_kept_through_variable_subset(self) -> list[str]:
+        """Keep the station identifier for the spike check, if it runs."""
+        return [GHCN_STATION_COLUMN] if self.quality_control else []
 
     def subset_data_to_case(
         self,
@@ -677,15 +707,21 @@ class GHCN(TargetBase):
             & (pl.col("longitude") <= case_location.total_bounds[2])
         )
         if self.quality_control:
-            subset_target_data = station_qc.apply_ghcnh_quality_control(
-                subset_target_data
+            # The spike check compares neighbors in each station's series, so
+            # it runs on the case subset rather than the whole file.
+            subset_target_data = station_qc.mask_spikes(
+                subset_target_data, station_column=GHCN_STATION_COLUMN
             )
         return subset_target_data.sort("valid_time")
 
     def _custom_convert_to_dataset(self, data: IncomingDataInput) -> xr.Dataset:
         if isinstance(data, pl.LazyFrame):
+            # station metadata columns are strings; they must not become data
+            # variables of the point dataset
+            columns = data.collect_schema().names()
+            data = data.drop([c for c in GHCN_METADATA_COLUMNS if c in columns])
             # convert to Kelvin, GHCN data is in Celsius by default
-            if "surface_air_temperature" in data.collect_schema().names():
+            if "surface_air_temperature" in columns:
                 data = data.with_columns(pl.col("surface_air_temperature").add(273.15))
             data = data.collect(engine="streaming").to_pandas()
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
@@ -1393,6 +1429,7 @@ def maybe_subset_variables(
     data: IncomingDataInput,
     variables: Sequence[Union[str, "derived.DerivedVariable"]],
     source_module: Optional["sources.base.Source"] = None,
+    keep_if_present: Sequence[str] = (),
 ) -> IncomingDataInput:
     """Subset the variables from the data, if required.
 
@@ -1404,6 +1441,8 @@ def maybe_subset_variables(
             or pd.DataFrame).
         variables: Sequence of variable names and/or derived variable classes.
         source_module: Optional pre-created source module. If None, creates one.
+        keep_if_present: Extra polars or pandas columns to keep if they exist,
+            e.g. from ``InputBase.columns_kept_through_variable_subset``.
 
     Returns:
         The data subset to only the specified variables.
@@ -1415,6 +1454,21 @@ def maybe_subset_variables(
     expected_and_maybe_derived_variables = (
         derived.maybe_include_variables_from_derived_input(variables)
     )
+    if keep_if_present:
+        if isinstance(data, pl.LazyFrame):
+            available = set(data.collect_schema().names())
+        elif isinstance(data, pd.DataFrame):
+            available = set(data.columns)
+        else:
+            available = set()
+        expected_and_maybe_derived_variables = list(
+            dict.fromkeys(
+                [
+                    *expected_and_maybe_derived_variables,
+                    *(c for c in keep_if_present if c in available),
+                ]
+            )
+        )
 
     # Use provided source module or get one
     if source_module is None:

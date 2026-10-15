@@ -28,7 +28,13 @@ Public functions:
     mask_sentinel_values: Null values equal to a missing-value sentinel.
     mask_out_of_range: Null values outside per-variable plausible ranges.
     mask_spikes: Null isolated spikes in each station's time series.
+    apply_ghcnh_row_checks: Apply the row-wise checks (0-2).
     apply_ghcnh_quality_control: Apply all of the checks.
+
+The row-wise checks (0-2) can run on the whole lazily scanned file without
+blocking predicate pushdown of a later time or location filter. The spike
+check (3) compares each value with its neighbors at the same station, so it
+should run after the data are subset to a case.
 """
 
 import logging
@@ -224,6 +230,42 @@ def mask_spikes(
     return lf.with_columns(masked)
 
 
+def apply_ghcnh_row_checks(
+    lf: pl.LazyFrame,
+    excluded_station_name_patterns: Iterable[str] = (
+        GHCNH_EXCLUDED_STATION_NAME_PATTERNS
+    ),
+    sentinels: Iterable[float] = GHCNH_SENTINEL_VALUES,
+    valid_ranges: Mapping[str, tuple[float, float]] = GHCNH_VALID_RANGES,
+    checked_columns: Iterable[str] | None = None,
+) -> pl.LazyFrame:
+    """Apply the station, sentinel, and range checks to GHCNh data.
+
+    Each of these checks looks at one row at a time, so they can be applied to
+    a lazily scanned file before it is filtered to a case.
+
+    Args:
+        lf: Station observations.
+        excluded_station_name_patterns: Drop stations whose name contains any
+            of these substrings.
+        sentinels: Missing-value codes to null in every checked column.
+        valid_ranges: Mapping of column name to inclusive (min, max).
+        checked_columns: Columns to check for sentinels. Defaults to the
+            columns in ``valid_ranges`` and ``GHCNH_SPIKE_THRESHOLDS``.
+
+    Returns:
+        ``lf`` without excluded stations and with sentinel and out-of-range
+        values replaced by null.
+    """
+    if checked_columns is None:
+        checked_columns = [*valid_ranges, *GHCNH_SPIKE_THRESHOLDS]
+    checked = list(dict.fromkeys(checked_columns))
+    lf = exclude_stations(lf, excluded_station_name_patterns)
+    lf = mask_sentinel_values(lf, checked, sentinels)
+    lf = mask_out_of_range(lf, valid_ranges)
+    return lf
+
+
 def apply_ghcnh_quality_control(
     lf: pl.LazyFrame,
     excluded_station_name_patterns: Iterable[str] = (
@@ -257,9 +299,12 @@ def apply_ghcnh_quality_control(
         The quality-controlled observations, sorted by station and time when
         the spike check runs.
     """
-    checked = list(dict.fromkeys([*valid_ranges, *spike_thresholds]))
-    lf = exclude_stations(lf, excluded_station_name_patterns)
-    lf = mask_sentinel_values(lf, checked, sentinels)
-    lf = mask_out_of_range(lf, valid_ranges)
+    lf = apply_ghcnh_row_checks(
+        lf,
+        excluded_station_name_patterns,
+        sentinels,
+        valid_ranges,
+        checked_columns=[*valid_ranges, *spike_thresholds],
+    )
     lf = mask_spikes(lf, spike_thresholds, max_gap_hours, station_column, time_column)
     return lf

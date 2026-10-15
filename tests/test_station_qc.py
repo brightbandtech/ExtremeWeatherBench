@@ -2,11 +2,12 @@
 
 from unittest import mock
 
+import numpy as np
 import pandas as pd
 import polars as pl
 import pytest
 
-from extremeweatherbench import inputs, station_qc
+from extremeweatherbench import cases, evaluate, inputs, regions, station_qc
 
 
 def _station_frame(temps, station="S1", start="2020-11-04", freq="1h", **columns):
@@ -131,6 +132,22 @@ class TestMaskSpikes:
         assert out.equals(df)
 
 
+class TestApplyGhcnhRowChecks:
+    def test_row_checks_skip_spikes(self):
+        df = _station_frame(
+            [10.0, -999.0, 11.0, 40.0, 12.0], name=["A (MOVING ICE STATION)"] * 5
+        )
+        assert station_qc.apply_ghcnh_row_checks(df.lazy()).collect().height == 0
+        out = station_qc.apply_ghcnh_row_checks(df.drop("name").lazy()).collect()
+        assert out["surface_air_temperature"].to_list() == [
+            10.0,
+            None,
+            11.0,
+            40.0,
+            12.0,
+        ]
+
+
 class TestApplyGhcnhQualityControl:
     def test_all_checks(self):
         df = _station_frame(
@@ -166,10 +183,20 @@ class TestGHCNQualityControl:
         bad = _station_frame([-999.0] * 4, station="HUU00061700")
         return pl.concat([good, bad]).lazy()
 
+    def _open_and_subset(self, ghcn, frame, case):
+        with mock.patch("polars.scan_parquet", return_value=frame):
+            data = ghcn._open_data_from_source()
+        data = inputs.maybe_subset_variables(
+            data,
+            ghcn.variables,
+            keep_if_present=ghcn.columns_kept_through_variable_subset(),
+        )
+        return ghcn.subset_data_to_case(data, case).collect()
+
     def test_quality_control_on_by_default(self, case, frame):
         ghcn = inputs.GHCN(variables=["surface_air_temperature"])
         assert ghcn.quality_control
-        out = ghcn.subset_data_to_case(frame, case).collect()
+        out = self._open_and_subset(ghcn, frame, case)
         assert out["valid_time"].is_sorted()
         assert out.height == 8
         bad = out.filter(pl.col("station") == "HUU00061700")
@@ -179,8 +206,93 @@ class TestGHCNQualityControl:
 
     def test_quality_control_can_be_disabled(self, case, frame):
         ghcn = inputs.GHCN(variables=["surface_air_temperature"], quality_control=False)
-        out = ghcn.subset_data_to_case(frame, case).collect()
+        out = self._open_and_subset(ghcn, frame, case)
         assert (out["surface_air_temperature"] == -999.0).sum() == 4
+        assert "station" not in out.columns
+
+    def test_station_kept_through_variable_subset(self, frame):
+        ghcn = inputs.GHCN(variables=["surface_air_temperature"])
+        out = inputs.maybe_subset_variables(
+            frame,
+            ghcn.variables,
+            keep_if_present=ghcn.columns_kept_through_variable_subset(),
+        )
+        assert "station" in out.collect_schema().names()
+
+    def test_metadata_columns_dropped_before_conversion(self, frame):
+        ghcn = inputs.GHCN(variables=["surface_air_temperature"])
+        named = frame.with_columns(name=pl.lit("GENEVA"))
+        ds = ghcn._custom_convert_to_dataset(named)
+        assert list(ds.data_vars) == ["surface_air_temperature"]
+
+
+class TestGHCNQualityControlPipeline:
+    """Run QC through ``evaluate.run_pipeline``, as the default GHCN targets do."""
+
+    @pytest.fixture
+    def source(self, tmp_path):
+        times = pd.date_range("2020-11-03", periods=96, freq="1h")
+        good = [10.0] * 96
+        good[50] = 40.0  # isolated spike at 2020-11-05 02:00
+
+        def station(station_id, name, lat, lon, temps):
+            n = len(temps)
+            return pl.DataFrame(
+                {
+                    "station": [station_id] * n,
+                    "name": [name] * n,
+                    "latitude": [lat] * n,
+                    "longitude": [lon] * n,
+                    "surface_air_temperature": temps,
+                    "valid_time": times[:n],
+                }
+            )
+
+        frame = pl.concat(
+            [
+                station("GOOD", "GENEVA", 47.0, 19.0, good),
+                station(
+                    "GLU00000037", "NEM (MOVING ICE STATION)", 48.0, 20.0, [4.0] * 96
+                ),
+            ]
+        )
+        path = tmp_path / "ghcnh.parquet"
+        frame.write_parquet(path)
+        return str(path)
+
+    @pytest.fixture
+    def case(self):
+        return cases.IndividualCase(
+            case_id_number=1,
+            title="test",
+            start_date=pd.Timestamp("2020-11-04"),
+            end_date=pd.Timestamp("2020-11-05"),
+            location=regions.BoundingBoxRegion(40, 55, 10, 30),
+            event_type="heat_wave",
+        )
+
+    def test_excludes_ice_station_and_masks_spike(self, source, case):
+        ghcn = inputs.GHCN(
+            source=source, variables=["surface_air_temperature"], storage_options={}
+        )
+        ds = evaluate.run_pipeline(case, ghcn)
+        assert list(ds.data_vars) == ["surface_air_temperature"]
+        assert ds.sizes["location"] == 1
+        assert float(ds["latitude"].item()) == 47.0
+        temps = ds["surface_air_temperature"].isel(location=0)
+        assert np.isnan(temps.sel(valid_time="2020-11-05 02:00").item())
+        assert float(temps.max()) == pytest.approx(283.15)
+
+    def test_disabled_keeps_ice_station_and_spike(self, source, case):
+        ghcn = inputs.GHCN(
+            source=source,
+            variables=["surface_air_temperature"],
+            storage_options={},
+            quality_control=False,
+        )
+        ds = evaluate.run_pipeline(case, ghcn)
+        assert ds.sizes["location"] == 2
+        assert float(ds["surface_air_temperature"].max()) == pytest.approx(313.15)
 
 
 class TestExcludeStations:
