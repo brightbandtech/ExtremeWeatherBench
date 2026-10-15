@@ -10,6 +10,27 @@ GitHub's auto-generated release notes can list PRs that were already
 squash-merged into `main`, because `develop` still contains those original
 commits. Prefer this changelog when writing GitHub release notes.
 
+## [Unreleased]
+
+### Fixed
+
+- The `GHCN` target now quality-controls station observations before scoring
+  (new `station_qc` module, on by default; pass `quality_control=False` to
+  turn it off). It nulls missing-value sentinels such as -999 (e.g. one
+  station reporting -999 C for all of 2020), physically impossible values
+  (e.g. 928 C air temperature), and isolated up-then-down spikes in
+  temperature and dew point. The spike check can also remove a real
+  short-lived extreme such as a heat burst; pressure is not spike-checked,
+  since tropical-cyclone eye passages and derecho wake lows look like
+  spikes (pressure still gets the sentinel and range checks). It also
+  drops the 39 Greenland ice-sheet stations named "MOVING ICE STATION",
+  several of which report temperatures far too warm for weeks at a time
+  (e.g. NEM averages +4.3 C over Jan-Mar 2023); this is a stopgap until a
+  climatology or neighbor-station check exists. GHCN scores for cases
+  touching affected stations change, and a case whose only stations are
+  excluded is no longer scored against GHCN
+  ([#431](https://github.com/brightbandtech/ExtremeWeatherBench/pull/431)).
+
 ## [1.1.0] - 2026-10-10
 
 ### Added

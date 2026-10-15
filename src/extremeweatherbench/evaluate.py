@@ -1314,6 +1314,7 @@ def run_pipeline(
                 data,
                 variables=input_data.variables,
                 source_module=source_module,
+                keep_if_present=input_data.columns_kept_through_variable_subset(),
             )
         valid_data = (
             to_subset.pipe(
