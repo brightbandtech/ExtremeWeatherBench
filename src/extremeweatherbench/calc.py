@@ -421,8 +421,17 @@ def geopotential_from_temperature_and_humidity(
 
     Returns:
         Geopotential (m^2/s^2) on the input levels, in the input level order.
+
+    Raises:
+        ValueError: If the pressure levels do not look like hPa (any level
+            above 1100).
     """
     levels = air_temperature[level_dim]
+    if float(levels.max()) > 1100.0:
+        raise ValueError(
+            f"Pressure levels on '{level_dim}' must be in hPa, but the largest "
+            f"is {float(levels.max())}; convert Pa levels to hPa first."
+        )
     order = np.argsort(-levels.values)  # highest pressure (lowest level) first
     temperature = air_temperature.isel({level_dim: order}).astype("float64")
     humidity = (

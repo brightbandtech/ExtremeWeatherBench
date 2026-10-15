@@ -2688,3 +2688,11 @@ class TestGeopotentialFromTemperatureAndHumidity:
         )
         eager = calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
         xr.testing.assert_allclose(phi.compute(), eager)
+
+    def test_pa_levels_raise(self):
+        """Levels in Pa instead of hPa are rejected."""
+        t, q, msl, t2 = self._column()
+        t = t.assign_coords(level=self.LEVELS * 100.0)
+        q = q.assign_coords(level=self.LEVELS * 100.0)
+        with pytest.raises(ValueError, match="hPa"):
+            calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
