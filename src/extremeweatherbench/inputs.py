@@ -176,6 +176,11 @@ CIRA_MODEL_NAMES = [
     "GRAP_v100_IFS",
 ]
 
+#: Wrapped longitude span (degrees) at or above which a point-target case
+#: region is treated as global. A near-global box such as 0..359.75 wraps to
+#: (0, -0.25), which would otherwise drop stations between -0.25 and 0.
+NEAR_GLOBAL_LONGITUDE_SPAN = 359.0
+
 
 def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
     """Default forecast preprocess function that does nothing."""
@@ -191,7 +196,12 @@ def _point_target_bounds(
     166.5, ..., -170.0) instead of the -180..180 total_bounds of its
     MultiPolygon, which would select the whole latitude band.
     """
-    return regions._wrapping_bounds(case_metadata.location.as_geopandas())
+    lon_min, lat_min, lon_max, lat_max = regions._wrapping_bounds(
+        case_metadata.location.as_geopandas()
+    )
+    if lon_min > lon_max and lon_max + 360 - lon_min >= NEAR_GLOBAL_LONGITUDE_SPAN:
+        return -180.0, lat_min, 180.0, lat_max
+    return lon_min, lat_min, lon_max, lat_max
 
 
 def _longitude_within(longitude, lon_min: float, lon_max: float):

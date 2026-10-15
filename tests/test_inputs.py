@@ -3166,8 +3166,8 @@ class TestCiraModelNames:
 class TestPointTargetAntimeridian:
     """GHCN and LSR subsetting for case regions at or across the antimeridian."""
 
-    # stations at 170E, 175W (185E), 179E, 0E and 100W, all at 65N
-    LONGITUDES = (170.0, -175.0, 179.0, 0.0, -100.0)
+    # stations at 170E, 175W (185E), 179E, 0E, 0.1W and 100W, all at 65N
+    LONGITUDES = (170.0, -175.0, 179.0, 0.0, -0.1, -100.0)
 
     def _case(self, longitude_min, longitude_max):
         return cases.IndividualCase(
@@ -3218,6 +3218,8 @@ class TestPointTargetAntimeridian:
             (166.5, 180.0, {170.0, 179.0}),
             # ordinary box
             (-110.0, -90.0, {-100.0}),
+            # near-global box keeps the sliver just west of 0
+            (0.0, 359.75, set(LONGITUDES)),
         ],
     )
     def test_ghcn_subset_longitudes(self, longitude_min, longitude_max, expected):
@@ -3239,6 +3241,7 @@ class TestPointTargetAntimeridian:
             (166.5, -170.0, {170.0, -175.0, 179.0}),
             (166.5, 180.0, {170.0, 179.0}),
             (-110.0, -90.0, {-100.0}),
+            (0.0, 359.75, set(LONGITUDES)),
         ],
     )
     def test_lsr_subset_longitudes(self, longitude_min, longitude_max, expected):
@@ -3252,3 +3255,23 @@ class TestPointTargetAntimeridian:
             self._lsr_frame(), self._case(longitude_min, longitude_max)
         )
         assert set(result["longitude"].to_list()) == expected
+
+    @pytest.mark.parametrize(
+        "longitude_min, longitude_max, expected",
+        [
+            # near-global boxes are widened to the full globe
+            (0.0, 359.75, (-180.0, 180.0)),
+            (0.5, 359.75, (-180.0, 180.0)),
+            # below the threshold the wrapped bounds are kept
+            (0.0, 358.5, (0.0, -1.5)),
+            # an ordinary antimeridian crossing keeps its wrapped bounds
+            (166.5, 190.0, (166.5, -170.0)),
+            (-110.0, -90.0, (-110.0, -90.0)),
+        ],
+    )
+    def test_point_target_bounds(self, longitude_min, longitude_max, expected):
+        lon_min, lat_min, lon_max, lat_max = inputs._point_target_bounds(
+            self._case(longitude_min, longitude_max)
+        )
+        assert (lon_min, lon_max) == pytest.approx(expected)
+        assert (lat_min, lat_max) == pytest.approx((62.0, 70.0))
