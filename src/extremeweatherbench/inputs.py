@@ -723,7 +723,26 @@ class GHCN(TargetBase):
             # convert to Kelvin, GHCN data is in Celsius by default
             if "surface_air_temperature" in columns:
                 data = data.with_columns(pl.col("surface_air_temperature").add(273.15))
-            data = data.collect(engine="streaming").to_pandas()
+            frame = data.collect(engine="streaming")
+            # Drop rows with no values left (e.g. nulled by quality control),
+            # so point_frame_to_dataset, which keeps the first of duplicate
+            # (time, lat, lon) rows, keeps a valid row over an empty one.
+            value_columns = [
+                c
+                for c in frame.columns
+                if c not in ("valid_time", "latitude", "longitude")
+            ]
+            if value_columns:
+                n_rows = frame.height
+                frame = frame.filter(
+                    ~pl.all_horizontal(pl.col(value_columns).is_null())
+                )
+                if frame.height < n_rows:
+                    logger.debug(
+                        "Dropped %s GHCN rows with no non-null values",
+                        n_rows - frame.height,
+                    )
+            data = frame.to_pandas()
             data["longitude"] = utils.convert_longitude_to_360(data["longitude"])
             try:
                 data = utils.point_frame_to_dataset(data)

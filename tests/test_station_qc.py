@@ -2,7 +2,6 @@
 
 from unittest import mock
 
-import numpy as np
 import pandas as pd
 import polars as pl
 import pytest
@@ -279,8 +278,10 @@ class TestGHCNQualityControlPipeline:
         assert list(ds.data_vars) == ["surface_air_temperature"]
         assert ds.sizes["location"] == 1
         assert float(ds["latitude"].item()) == 47.0
-        temps = ds["surface_air_temperature"].isel(location=0)
-        assert np.isnan(temps.sel(valid_time="2020-11-05 02:00").item())
+        temps = ds["surface_air_temperature"].isel(location=0).dropna("valid_time")
+        # the spike's row has no values left, so it is dropped before conversion
+        assert pd.Timestamp("2020-11-05 02:00") not in temps["valid_time"].values
+        assert temps.sizes["valid_time"] == 95
         assert float(temps.max()) == pytest.approx(283.15)
 
     def test_disabled_keeps_ice_station_and_spike(self, source, case):
@@ -343,3 +344,24 @@ class TestSkippedCheckWarnings:
             station_qc.mask_spikes(df.lazy())
             station_qc.exclude_stations(df.lazy(), [])
         assert caplog.text == ""
+
+
+class TestGHCNDuplicatesAfterQualityControl:
+    def test_valid_duplicate_wins_over_nulled_row(self):
+        # two colocated stations report at the same time; the first one's
+        # sentinel is nulled by QC and must not hide the second one's value
+        t = pd.Timestamp("2020-11-04")
+        frame = pl.DataFrame(
+            {
+                "station": ["A", "B"],
+                "valid_time": [t, t],
+                "latitude": [47.0, 47.0],
+                "longitude": [19.0, 19.0],
+                "surface_air_temperature": [-999.0, 12.0],
+            }
+        ).lazy()
+        ghcn = inputs.GHCN(variables=["surface_air_temperature"])
+        checked = station_qc.apply_ghcnh_row_checks(frame)
+        ds = ghcn._custom_convert_to_dataset(checked)
+        assert ds.sizes["location"] == 1
+        assert float(ds["surface_air_temperature"].item()) == pytest.approx(285.15)
