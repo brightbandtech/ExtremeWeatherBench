@@ -125,6 +125,18 @@ class TestMaskSpikes:
             "valid_time"
         ].item() == pd.Timestamp("2020-11-04 02:00")
 
+    def test_keeps_tropical_cyclone_pressure_minimum(self):
+        # an hourly eye passage looks like a spike but is real
+        mslp = [990.0, 975.0, 950.0, 975.0, 990.0]
+        df = _station_frame([10.0] * 5, air_pressure_at_mean_sea_level=mslp)
+        out = station_qc.apply_ghcnh_quality_control(df.lazy()).collect()
+        assert out["air_pressure_at_mean_sea_level"].to_list() == mslp
+
+    def test_pressure_still_range_checked(self):
+        df = _station_frame([10.0] * 2, air_pressure_at_mean_sea_level=[-999.0, 1200.0])
+        out = station_qc.apply_ghcnh_quality_control(df.lazy()).collect()
+        assert out["air_pressure_at_mean_sea_level"].to_list() == [None, None]
+
     def test_missing_station_column_is_noop(self):
         df = _station_frame([10.0, 35.0, 12.0]).drop("station")
         out = station_qc.mask_spikes(df.lazy()).collect()

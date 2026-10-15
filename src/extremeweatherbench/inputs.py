@@ -660,7 +660,8 @@ class GHCN(TargetBase):
     ``station_qc``: when the file is opened, known-bad stations (currently the
     Greenland "MOVING ICE STATION" sites) are dropped and missing-value
     sentinels (e.g. -999) and physically impossible values are nulled; after
-    the data are subset to a case, isolated spikes are nulled. The station
+    the data are subset to a case, isolated temperature and dew point spikes
+    are nulled. The station
     checks need the ``name`` column, which is still present when the file is
     opened, and the spike check needs the ``station`` column, which is kept
     through the variable subset. Both are dropped before conversion to xarray.

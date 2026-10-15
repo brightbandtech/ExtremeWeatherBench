@@ -19,9 +19,12 @@ station, whose rows are dropped entirely. The checks are applied in order:
 1. Sentinel values: values equal to a known missing-value code are nulled.
 2. Range: values outside a physically plausible range for the variable are
    nulled.
-3. Spike: a value that jumps away from both its previous and next observation
-   at the same station by more than a threshold, in opposite directions, and
-   with both neighbors close in time, is nulled.
+3. Spike: a temperature or dew point that jumps away from both its previous
+   and next observation at the same station by more than a threshold, in
+   opposite directions, and with both neighbors close in time, is nulled.
+   This can also null a real short-lived extreme such as a heat burst.
+   Pressure is not spike-checked, because tropical-cyclone eye passages and
+   derecho wake lows look like spikes.
 
 Public functions:
     exclude_stations: Drop rows from stations whose name matches a pattern.
@@ -82,13 +85,14 @@ GHCNH_VALID_RANGES: dict[str, tuple[float, float]] = {
 }
 
 # Minimum jump (raw units) away from both neighbors for a value to count as a
-# spike. Only smooth, continuous variables are checked; wind, humidity, and
-# precipitation legitimately change abruptly.
+# spike. Only temperature and dew point are checked. The trade-off is that a
+# real short-lived extreme, such as a heat burst, can be nulled. Wind,
+# humidity, and precipitation legitimately change abruptly. Pressure is left
+# out because real events look like spikes in hourly data: a tropical-cyclone
+# eye passage (e.g. 990, 975, 950, 975, 990 hPa) or a derecho wake low.
 GHCNH_SPIKE_THRESHOLDS: dict[str, float] = {
     "surface_air_temperature": 10.0,  # C
     "surface_dew_point": 10.0,  # C
-    "surface_air_pressure": 10.0,  # hPa
-    "air_pressure_at_mean_sea_level": 10.0,  # hPa
 }
 
 # Neighbors further apart in time than this are not used for the spike check.
@@ -200,7 +204,10 @@ def mask_spikes(
     observation at the same station, it differs from both by more than the
     variable's threshold, in opposite directions (up then down, or down then
     up), and both neighbors are within ``max_gap_hours``. A sustained change,
-    such as a front passing, moves in one direction and is kept.
+    such as a front passing, moves in one direction and is kept, but a real
+    short-lived extreme (e.g. a heat burst) can be nulled. The default
+    thresholds cover temperature and dew point only; see
+    ``GHCNH_SPIKE_THRESHOLDS`` for why pressure is not checked.
 
     Args:
         lf: Station observations.

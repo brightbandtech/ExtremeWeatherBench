@@ -18,7 +18,11 @@ commits. Prefer this changelog when writing GitHub release notes.
   (new `station_qc` module, on by default; pass `quality_control=False` to
   turn it off). It nulls missing-value sentinels such as -999 (e.g. one
   station reporting -999 C for all of 2020), physically impossible values
-  (e.g. 928 C air temperature), and isolated up-then-down spikes. It also
+  (e.g. 928 C air temperature), and isolated up-then-down spikes in
+  temperature and dew point. The spike check can also remove a real
+  short-lived extreme such as a heat burst; pressure is not spike-checked,
+  since tropical-cyclone eye passages and derecho wake lows look like
+  spikes (pressure still gets the sentinel and range checks). It also
   drops the 39 Greenland ice-sheet stations named "MOVING ICE STATION",
   several of which report temperatures far too warm for weeks at a time
   (e.g. NEM averages +4.3 C over Jan-Mar 2023); this is a stopgap until a
