@@ -30,6 +30,16 @@ commits. Prefer this changelog when writing GitHub release notes.
   touching affected stations change, and a case whose only stations are
   excluded is no longer scored against GHCN
   ([#431](https://github.com/brightbandtech/ExtremeWeatherBench/pull/431)).
+- `GHCN` and `LSR` now subset correctly for case regions that cross the
+  antimeridian. They filtered on the region's `total_bounds`, which for a
+  crossing region is -180..180, so the whole latitude band was kept (e.g. a
+  166.5E-190E box took stations from Alaska to Scandinavia). They now use
+  the same wrapped bounds as the gridded targets. A region spanning 359
+  degrees of longitude or more (e.g. the 0E-359.75E boxes of cases
+  1000-1003) is treated as global, so stations just west of 0 are kept.
+  `LSR` also no longer drops a region whose east edge is exactly 180,
+  which was converted to -180. GHCN and LSR scores for such cases change
+  ([#432](https://github.com/brightbandtech/ExtremeWeatherBench/pull/432)).
 
 ## [1.1.0] - 2026-10-10
 

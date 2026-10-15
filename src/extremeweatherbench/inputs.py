@@ -19,7 +19,7 @@ import pandas as pd
 import polars as pl
 import xarray as xr
 
-from extremeweatherbench import cases, derived, sources, station_qc, utils
+from extremeweatherbench import cases, derived, regions, sources, station_qc, utils
 
 if TYPE_CHECKING:
     from extremeweatherbench import metrics
@@ -176,10 +176,67 @@ CIRA_MODEL_NAMES = [
     "GRAP_v100_IFS",
 ]
 
+#: Wrapped longitude span (degrees) at or above which a point-target case
+#: region is treated as global. A near-global box such as 0..359.75 wraps to
+#: (0, -0.25), which would otherwise drop stations between -0.25 and 0.
+NEAR_GLOBAL_LONGITUDE_SPAN = 359.0
+
 
 def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
     """Default forecast preprocess function that does nothing."""
     return input_data
+
+
+def _point_target_bounds(
+    case_metadata: "cases.IndividualCase",
+) -> tuple[float, float, float, float]:
+    """Return the longitude/latitude bounds of a case region for point targets.
+
+    A region crossing the antimeridian comes back with lon_min > lon_max (e.g.
+    166.5, ..., -170.0) instead of the -180..180 total_bounds of its
+    MultiPolygon, which would select the whole latitude band. A wrapped
+    region spanning at least NEAR_GLOBAL_LONGITUDE_SPAN degrees is returned
+    as global (-180..180) so the sliver just west of its edge is not lost.
+
+    Args:
+        case_metadata: The case whose location defines the bounds.
+
+    Returns:
+        A tuple of (lon_min, lat_min, lon_max, lat_max) with longitudes in
+        [-180, 180]; lon_min > lon_max when the region wraps the antimeridian.
+    """
+    lon_min, lat_min, lon_max, lat_max = regions._wrapping_bounds(
+        case_metadata.location.as_geopandas()
+    )
+    if lon_min > lon_max and lon_max + 360 - lon_min >= NEAR_GLOBAL_LONGITUDE_SPAN:
+        return -180.0, lat_min, 180.0, lat_max
+    return lon_min, lat_min, lon_max, lat_max
+
+
+# TODO: consider a module-level type parameter (PEP 695 / TypeVar) for
+# helpers that return the same frame/expression type they receive, if more
+# than this one helper needs it; the library uses plain unions for now.
+def _longitude_within(
+    longitude: pl.Expr | pd.Series, lon_min: float, lon_max: float
+) -> pl.Expr | pd.Series:
+    """Return a boolean mask of longitudes within [lon_min, lon_max].
+
+    When lon_min > lon_max the range wraps the antimeridian, and longitudes
+    at or east of lon_min or at or west of lon_max are selected.
+
+    Args:
+        longitude: Longitudes in [-180, 180], as a polars expression or a
+            pandas Series.
+        lon_min: Western edge of the range, in [-180, 180].
+        lon_max: Eastern edge of the range, in [-180, 180].
+
+    Returns:
+        A boolean mask: a polars expression for a polars input, or a pandas
+        Series for a pandas input.
+    """
+    if lon_min > lon_max:
+        return (longitude >= lon_min) | (longitude <= lon_max)
+    return (longitude >= lon_min) & (longitude <= lon_max)
 
 
 @dataclasses.dataclass
@@ -697,15 +754,14 @@ class GHCN(TargetBase):
         # Create filter expressions for LazyFrame
         time_min = case_metadata.start_date - pd.Timedelta(days=2)
         time_max = case_metadata.end_date + pd.Timedelta(days=2)
-        case_location = case_metadata.location.as_geopandas()
+        lon_min, lat_min, lon_max, lat_max = _point_target_bounds(case_metadata)
         # Apply filters using proper polars expressions
         subset_target_data = data.filter(
             (pl.col("valid_time") >= time_min)
             & (pl.col("valid_time") <= time_max)
-            & (pl.col("latitude") >= case_location.total_bounds[1])
-            & (pl.col("latitude") <= case_location.total_bounds[3])
-            & (pl.col("longitude") >= case_location.total_bounds[0])
-            & (pl.col("longitude") <= case_location.total_bounds[2])
+            & (pl.col("latitude") >= lat_min)
+            & (pl.col("latitude") <= lat_max)
+            & _longitude_within(pl.col("longitude"), lon_min, lon_max)
         )
         if self.quality_control:
             # The spike check compares neighbors in each station's series, so
@@ -825,14 +881,13 @@ class LSR(TargetBase):
         data["valid_time"] = pd.to_datetime(data["valid_time"])
 
         # filters to apply to the target data including datetimes and location bounds
-        bounds = case_metadata.location.as_geopandas().total_bounds
+        lon_min, lat_min, lon_max, lat_max = _point_target_bounds(case_metadata)
         filters = (
             (data["valid_time"] >= case_metadata.start_date)
             & (data["valid_time"] <= case_metadata.end_date)
-            & (data["latitude"] >= bounds[1])
-            & (data["latitude"] <= bounds[3])
-            & (data["longitude"] >= utils.convert_longitude_to_180(bounds[0]))
-            & (data["longitude"] <= utils.convert_longitude_to_180(bounds[2]))
+            & (data["latitude"] >= lat_min)
+            & (data["latitude"] <= lat_max)
+            & _longitude_within(data["longitude"], lon_min, lon_max)
         )
         subset_target_data = data.loc[filters]
 

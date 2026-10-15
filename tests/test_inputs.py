@@ -1599,10 +1599,9 @@ class TestGHCN:
         mock_case.start_date = pd.Timestamp("2021-06-20")
         mock_case.end_date = pd.Timestamp("2021-06-22")
 
-        # Mock the as_geopandas() method to return an object with total_bounds
-        mock_geopandas = mock.Mock()
-        mock_geopandas.total_bounds = [-120, 30, -90, 50]
-        mock_case.location.as_geopandas.return_value = mock_geopandas
+        mock_case.location = regions.BoundingBoxRegion(
+            latitude_min=30, latitude_max=50, longitude_min=-120, longitude_max=-90
+        )
 
         ghcn = inputs.GHCN(
             source="test.parquet",
@@ -1646,10 +1645,9 @@ class TestGHCN:
         mock_case_metadata.start_date = pd.Timestamp("2021-06-20")
         mock_case_metadata.end_date = pd.Timestamp("2021-06-22")
 
-        # Mock the as_geopandas() method to return an object with total_bounds
-        mock_geopandas = mock.Mock()
-        mock_geopandas.total_bounds = [-120, 30, -90, 50]
-        mock_case_metadata.location.as_geopandas.return_value = mock_geopandas
+        mock_case_metadata.location = regions.BoundingBoxRegion(
+            latitude_min=30, latitude_max=50, longitude_min=-120, longitude_max=-90
+        )
 
         ghcn = inputs.GHCN(
             source="test.parquet",
@@ -1948,15 +1946,9 @@ class TestLSR:
         mock_case.start_date = pd.Timestamp("2021-06-20")
         mock_case.end_date = pd.Timestamp("2021-06-21")
 
-        # Mock the location.as_geopandas().total_bounds call
-        mock_geopandas = mock.Mock()
-        mock_geopandas.total_bounds = [
-            -110,
-            30,
-            -90,
-            50,
-        ]  # [lon_min, lat_min, lon_max, lat_max]
-        mock_case.location.as_geopandas.return_value = mock_geopandas
+        mock_case.location = regions.BoundingBoxRegion(
+            latitude_min=30, latitude_max=50, longitude_min=-110, longitude_max=-90
+        )
 
         lsr = inputs.LSR(
             source="test.parquet",
@@ -3169,3 +3161,167 @@ class TestCiraModelNames:
     def test_cira_model_names_no_duplicates(self):
         """Test that CIRA_MODEL_NAMES has no duplicate entries."""
         assert len(inputs.CIRA_MODEL_NAMES) == len(set(inputs.CIRA_MODEL_NAMES))
+
+
+class TestPointTargetAntimeridian:
+    """GHCN and LSR subsetting for case regions at or across the antimeridian."""
+
+    # stations at 170E, 175W (185E), 179E, 5E, 0E, 0.1W, 15W and 100W, all
+    # at 65N
+    LONGITUDES = (170.0, -175.0, 179.0, 5.0, 0.0, -0.1, -15.0, -100.0)
+
+    def _region_case(self, location):
+        return cases.IndividualCase(
+            case_id_number=1,
+            title="antimeridian",
+            start_date=pd.Timestamp("2021-06-20"),
+            end_date=pd.Timestamp("2021-06-22"),
+            location=location,
+            event_type="heat_wave",
+        )
+
+    def _case(self, longitude_min, longitude_max):
+        return self._region_case(
+            regions.BoundingBoxRegion(
+                latitude_min=62.0,
+                latitude_max=70.0,
+                longitude_min=longitude_min,
+                longitude_max=longitude_max,
+            )
+        )
+
+    def _ghcn_frame(self):
+        n = len(self.LONGITUDES)
+        return pl.DataFrame(
+            {
+                "valid_time": [pd.Timestamp("2021-06-21 12:00")] * n,
+                "latitude": [65.0] * n,
+                "longitude": list(self.LONGITUDES),
+                "station": [f"S{i}" for i in range(n)],
+                "name": [f"STATION {i}" for i in range(n)],
+                "surface_air_temperature": [10.0] * n,
+            }
+        ).lazy()
+
+    def _lsr_frame(self):
+        n = len(self.LONGITUDES)
+        return pd.DataFrame(
+            {
+                "valid_time": [pd.Timestamp("2021-06-21 18:00")] * n,
+                "latitude": ["65.0"] * n,
+                "longitude": [str(lon) for lon in self.LONGITUDES],
+                "report_type": ["hail"] * n,
+            }
+        )
+
+    @pytest.mark.parametrize(
+        "longitude_min, longitude_max, expected",
+        [
+            # crosses the antimeridian (0-360 and -180-180 spellings)
+            (166.5, 190.0, {170.0, -175.0, 179.0}),
+            (166.5, -170.0, {170.0, -175.0, 179.0}),
+            # ends at 180 without crossing
+            (166.5, 180.0, {170.0, 179.0}),
+            # ordinary box
+            (-110.0, -90.0, {-100.0}),
+            # near-global box keeps the sliver just west of 0
+            (0.0, 359.75, set(LONGITUDES)),
+            # crosses the prime meridian (0-360 and -180-180 spellings)
+            (350.0, 10.0, {5.0, 0.0, -0.1}),
+            (-10.0, 10.0, {5.0, 0.0, -0.1}),
+        ],
+    )
+    def test_ghcn_subset_longitudes(self, longitude_min, longitude_max, expected):
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+        result = ghcn.subset_data_to_case(
+            self._ghcn_frame(), self._case(longitude_min, longitude_max)
+        ).collect()
+        assert set(result["longitude"].to_list()) == expected
+
+    @pytest.mark.parametrize(
+        "longitude_min, longitude_max, expected",
+        [
+            (166.5, 190.0, {170.0, -175.0, 179.0}),
+            (166.5, -170.0, {170.0, -175.0, 179.0}),
+            (166.5, 180.0, {170.0, 179.0}),
+            (-110.0, -90.0, {-100.0}),
+            (0.0, 359.75, set(LONGITUDES)),
+            (350.0, 10.0, {5.0, 0.0, -0.1}),
+            (-10.0, 10.0, {5.0, 0.0, -0.1}),
+        ],
+    )
+    def test_lsr_subset_longitudes(self, longitude_min, longitude_max, expected):
+        lsr = inputs.LSR(
+            source="test.parquet",
+            variables=["report"],
+            variable_mapping={},
+            storage_options={},
+        )
+        result = lsr.subset_data_to_case(
+            self._lsr_frame(), self._case(longitude_min, longitude_max)
+        )
+        assert set(result["longitude"].to_list()) == expected
+
+    # centered regions near the dateline, 10 degrees wide: 173E..177W and
+    # 177E..173W
+    CENTERED_DATELINE = (
+        (178.0, {179.0}),
+        (-178.0, {179.0, -175.0}),
+    )
+
+    @pytest.mark.parametrize("center_longitude, expected", CENTERED_DATELINE)
+    def test_ghcn_subset_centered_region_at_dateline(self, center_longitude, expected):
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+        case = self._region_case(
+            regions.CenteredRegion(
+                latitude=65.0, longitude=center_longitude, bounding_box_degrees=10.0
+            )
+        )
+        result = ghcn.subset_data_to_case(self._ghcn_frame(), case).collect()
+        assert set(result["longitude"].to_list()) == expected
+
+    @pytest.mark.parametrize("center_longitude, expected", CENTERED_DATELINE)
+    def test_lsr_subset_centered_region_at_dateline(self, center_longitude, expected):
+        lsr = inputs.LSR(
+            source="test.parquet",
+            variables=["report"],
+            variable_mapping={},
+            storage_options={},
+        )
+        case = self._region_case(
+            regions.CenteredRegion(
+                latitude=65.0, longitude=center_longitude, bounding_box_degrees=10.0
+            )
+        )
+        result = lsr.subset_data_to_case(self._lsr_frame(), case)
+        assert set(result["longitude"].to_list()) == expected
+
+    @pytest.mark.parametrize(
+        "longitude_min, longitude_max, expected",
+        [
+            # near-global boxes are widened to the full globe
+            (0.0, 359.75, (-180.0, 180.0)),
+            (0.5, 359.75, (-180.0, 180.0)),
+            # below the threshold the wrapped bounds are kept
+            (0.0, 358.5, (0.0, -1.5)),
+            # an ordinary antimeridian crossing keeps its wrapped bounds
+            (166.5, 190.0, (166.5, -170.0)),
+            (-110.0, -90.0, (-110.0, -90.0)),
+        ],
+    )
+    def test_point_target_bounds(self, longitude_min, longitude_max, expected):
+        lon_min, lat_min, lon_max, lat_max = inputs._point_target_bounds(
+            self._case(longitude_min, longitude_max)
+        )
+        assert (lon_min, lon_max) == pytest.approx(expected)
+        assert (lat_min, lat_max) == pytest.approx((62.0, 70.0))
