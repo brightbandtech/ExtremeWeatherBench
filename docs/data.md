@@ -189,6 +189,23 @@ gs://extremeweatherbench/datasets/ghcnh_all_2020_2024.parq
 Temperature values in GHCN are stored in Celsius; EWB converts them to Kelvin
 automatically before computing metrics.
 
+By default (`quality_control=True`), `GHCN` quality-controls the observations
+with the checks in `ewb.station_qc`. It drops the Greenland "MOVING ICE
+STATION" sites, nulls missing-value sentinels (such as -999) and physically
+impossible values, and nulls isolated one-hour spikes in temperature and dew
+point. Pressure is not spike-checked, since tropical-cyclone eye passages and
+derecho wake lows look like spikes. The checks run after `variable_mapping`
+and expect raw GHCNh units (°C, hPa, m/s, %). Turn them off with:
+
+```python
+ghcn_target = ewb.inputs.GHCN(
+    variables=["surface_air_temperature"], quality_control=False
+)
+```
+
+Cached aligned targets do not record this setting, so use a fresh `cache_dir`
+when switching it or upgrading from 1.1.0.
+
 ### LSR
 
 `LSR` provides local storm reports from the SPC's report database (US) as well as compiled reports from Canada and Australia. Report types are encoded numerically at metric computation time: wind = 1, hail = 2, tornado = 3. Case date ranges should span 12 UTC to 12 UTC the following day to match the SPC reporting window.

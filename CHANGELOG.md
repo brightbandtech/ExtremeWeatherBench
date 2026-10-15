@@ -22,6 +22,40 @@ commits. Prefer this changelog when writing GitHub release notes.
   the Craven-Brooks significant severe parameter (CBSS) run on such
   forecasts; a no-op when `geopotential` or `geopotential_height` is present
   ([#433](https://github.com/brightbandtech/ExtremeWeatherBench/pull/433)).
+- `station_qc` module (`ewb.station_qc`) with the GHCNh checks used by the
+  `GHCN` target (`exclude_stations`, `mask_sentinel_values`,
+  `mask_out_of_range`, `mask_spikes`, `apply_ghcnh_row_checks`,
+  `apply_ghcnh_quality_control`) and their default settings
+  (`GHCNH_*` constants), plus a `GHCN.quality_control` field (default
+  `True`) ([#431](https://github.com/brightbandtech/ExtremeWeatherBench/pull/431)).
+- Two `InputBase` hooks for custom inputs, both no-ops by default:
+  `maybe_apply_quality_control(data)`, which `run_pipeline` calls right
+  after variable mapping and before preprocess, and
+  `columns_kept_through_variable_subset()`, which names extra columns to
+  keep through the tabular variable subset. `maybe_subset_variables` takes
+  a matching `keep_if_present=` argument
+  ([#431](https://github.com/brightbandtech/ExtremeWeatherBench/pull/431),
+  [#435](https://github.com/brightbandtech/ExtremeWeatherBench/pull/435)).
+
+### Changed
+
+- **Clear any `cache_dir` reused from 1.1.0 runs.** Cached aligned targets
+  are named by case and target name only, so a cache written by 1.1.0 is
+  reused as-is and its GHCN targets skip the new quality control.
+- `GHCN` drops rows with no non-null values before building the dataset,
+  and never turns the `station` or `name` columns into data variables,
+  whether or not `quality_control` is on. Hours whose only value was nulled
+  are therefore missing from the time axis rather than NaN, and a valid
+  row now wins over an empty duplicate at the same time and place, so
+  `quality_control=False` does not exactly reproduce 1.1.0.
+- GHCN quality control expects raw GHCNh units (°C, hPa, m/s, %) under EWB
+  column names; it runs after `variable_mapping`, so sources with other
+  column names are checked too. A custom GHCN-format source in other units
+  (e.g. Kelvin temperatures) must pass `quality_control=False`, or the
+  range check nulls its values. With quality control on, subclasses that
+  override `GHCN._custom_convert_to_dataset` also receive the `station`
+  column, and should drop it
+  ([#435](https://github.com/brightbandtech/ExtremeWeatherBench/pull/435)).
 
 ### Fixed
 
@@ -47,9 +81,12 @@ commits. Prefer this changelog when writing GitHub release notes.
   166.5E-190E box took stations from Alaska to Scandinavia). They now use
   the same wrapped bounds as the gridded targets. A region spanning 359
   degrees of longitude or more (e.g. the 0E-359.75E boxes of cases
-  1000-1003) is treated as global, so stations just west of 0 are kept.
-  `LSR` also no longer drops a region whose east edge is exactly 180,
-  which was converted to -180. GHCN and LSR scores for such cases change
+  1000-1003) is still treated as global, rather than losing the stations
+  just west of 0. `LSR` also no longer drops a region whose east edge is
+  exactly 180, which was converted to -180 (this also makes LSR select the
+  near-global boxes, which it previously left empty). Default
+  (`events.yaml`) scores are unchanged; GHCN and LSR scores for the
+  affected marginal-temperature and long-event cases change
   ([#432](https://github.com/brightbandtech/ExtremeWeatherBench/pull/432)).
 
 ## [1.1.0] - 2026-10-10
