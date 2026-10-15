@@ -358,6 +358,22 @@ class InputBase(abc.ABC):
             f"Override _custom_convert_to_dataset in your InputBase subclass."
         )
 
+    def maybe_apply_quality_control(self, data: IncomingDataInput) -> IncomingDataInput:
+        """Apply input-specific quality control, if any.
+
+        ``run_pipeline`` calls this right after ``maybe_map_variable_names``,
+        so checks can rely on EWB variable names, and before preprocess and
+        the variable subset, so they see the source values and any metadata
+        columns. Returns the data unchanged by default.
+
+        Args:
+            data: The opened data, with variable names mapped to EWB names.
+
+        Returns:
+            The data after quality control.
+        """
+        return data
+
     def columns_kept_through_variable_subset(self) -> list[str]:
         """Return extra columns to keep when subsetting tabular data to variables.
 
@@ -714,14 +730,14 @@ class GHCN(TargetBase):
     for lazy loading and efficient subsetting of large tabular datasets.
 
     When ``quality_control`` is True (the default), the data are checked with
-    ``station_qc``: when the file is opened, known-bad stations (currently the
-    Greenland "MOVING ICE STATION" sites) are dropped and missing-value
-    sentinels (e.g. -999) and physically impossible values are nulled; after
-    the data are subset to a case, isolated temperature and dew point spikes
-    are nulled. The station
-    checks need the ``name`` column, which is still present when the file is
-    opened, and the spike check needs the ``station`` column, which is kept
-    through the variable subset. Both are dropped before conversion to xarray.
+    ``station_qc``: once variable names are mapped to EWB names, known-bad
+    stations (currently the Greenland "MOVING ICE STATION" sites) are dropped
+    and missing-value sentinels (e.g. -999) and physically impossible values
+    are nulled; after the data are subset to a case, isolated temperature and
+    dew point spikes are nulled. The station checks need the ``name`` column,
+    which is still present before the variable subset, and the spike check
+    needs the ``station`` column, which is kept through the variable subset.
+    Both are dropped before conversion to xarray.
     """
 
     name: str = "GHCN"
@@ -732,11 +748,26 @@ class GHCN(TargetBase):
         target_data: pl.LazyFrame = pl.scan_parquet(
             self.source, storage_options=self.storage_options
         )
-        if self.quality_control:
-            # Row-wise checks only, so the case time/location filter applied
-            # later is still pushed down into the parquet scan.
-            target_data = station_qc.apply_ghcnh_row_checks(target_data)
         return target_data
+
+    def maybe_apply_quality_control(self, data: IncomingDataInput) -> IncomingDataInput:
+        """Drop known-bad stations and null sentinel and out-of-range values.
+
+        Runs after variable mapping, so the checks find EWB column names even
+        for sources that use other names. The checks are row-wise, so the
+        case time/location filter applied later is still pushed down into the
+        parquet scan.
+
+        Args:
+            data: The opened GHCN data, with EWB variable names.
+
+        Returns:
+            The data after the row checks, or unchanged if
+            ``quality_control`` is False.
+        """
+        if self.quality_control and isinstance(data, pl.LazyFrame):
+            data = station_qc.apply_ghcnh_row_checks(data)
+        return data
 
     def columns_kept_through_variable_subset(self) -> list[str]:
         """Keep the station identifier for the spike check, if it runs."""

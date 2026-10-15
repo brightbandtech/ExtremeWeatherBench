@@ -1291,6 +1291,9 @@ def run_pipeline(
     if preprocess_before_map:
         data = input_data.preprocess(data)
     data = input_data.maybe_map_variable_names(data)
+    # Input-specific QC (e.g. GHCN's row checks) needs EWB names, and must see
+    # the source values and metadata columns before preprocess and subsetting.
+    data = input_data.maybe_apply_quality_control(data)
     if not is_gridded and not preprocess_before_map:
         data = input_data.preprocess(data)
 
