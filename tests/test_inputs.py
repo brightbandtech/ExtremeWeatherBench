@@ -3166,22 +3166,28 @@ class TestCiraModelNames:
 class TestPointTargetAntimeridian:
     """GHCN and LSR subsetting for case regions at or across the antimeridian."""
 
-    # stations at 170E, 175W (185E), 179E, 0E, 0.1W and 100W, all at 65N
-    LONGITUDES = (170.0, -175.0, 179.0, 0.0, -0.1, -100.0)
+    # stations at 170E, 175W (185E), 179E, 5E, 0E, 0.1W, 15W and 100W, all
+    # at 65N
+    LONGITUDES = (170.0, -175.0, 179.0, 5.0, 0.0, -0.1, -15.0, -100.0)
 
-    def _case(self, longitude_min, longitude_max):
+    def _region_case(self, location):
         return cases.IndividualCase(
             case_id_number=1,
             title="antimeridian",
             start_date=pd.Timestamp("2021-06-20"),
             end_date=pd.Timestamp("2021-06-22"),
-            location=regions.BoundingBoxRegion(
+            location=location,
+            event_type="heat_wave",
+        )
+
+    def _case(self, longitude_min, longitude_max):
+        return self._region_case(
+            regions.BoundingBoxRegion(
                 latitude_min=62.0,
                 latitude_max=70.0,
                 longitude_min=longitude_min,
                 longitude_max=longitude_max,
-            ),
-            event_type="heat_wave",
+            )
         )
 
     def _ghcn_frame(self):
@@ -3220,6 +3226,9 @@ class TestPointTargetAntimeridian:
             (-110.0, -90.0, {-100.0}),
             # near-global box keeps the sliver just west of 0
             (0.0, 359.75, set(LONGITUDES)),
+            # crosses the prime meridian (0-360 and -180-180 spellings)
+            (350.0, 10.0, {5.0, 0.0, -0.1}),
+            (-10.0, 10.0, {5.0, 0.0, -0.1}),
         ],
     )
     def test_ghcn_subset_longitudes(self, longitude_min, longitude_max, expected):
@@ -3242,6 +3251,8 @@ class TestPointTargetAntimeridian:
             (166.5, 180.0, {170.0, 179.0}),
             (-110.0, -90.0, {-100.0}),
             (0.0, 359.75, set(LONGITUDES)),
+            (350.0, 10.0, {5.0, 0.0, -0.1}),
+            (-10.0, 10.0, {5.0, 0.0, -0.1}),
         ],
     )
     def test_lsr_subset_longitudes(self, longitude_min, longitude_max, expected):
@@ -3254,6 +3265,45 @@ class TestPointTargetAntimeridian:
         result = lsr.subset_data_to_case(
             self._lsr_frame(), self._case(longitude_min, longitude_max)
         )
+        assert set(result["longitude"].to_list()) == expected
+
+    # centered regions near the dateline, 10 degrees wide: 173E..177W and
+    # 177E..173W
+    CENTERED_DATELINE = (
+        (178.0, {179.0}),
+        (-178.0, {179.0, -175.0}),
+    )
+
+    @pytest.mark.parametrize("center_longitude, expected", CENTERED_DATELINE)
+    def test_ghcn_subset_centered_region_at_dateline(self, center_longitude, expected):
+        ghcn = inputs.GHCN(
+            source="test.parquet",
+            variables=["surface_air_temperature"],
+            variable_mapping={},
+            storage_options={},
+        )
+        case = self._region_case(
+            regions.CenteredRegion(
+                latitude=65.0, longitude=center_longitude, bounding_box_degrees=10.0
+            )
+        )
+        result = ghcn.subset_data_to_case(self._ghcn_frame(), case).collect()
+        assert set(result["longitude"].to_list()) == expected
+
+    @pytest.mark.parametrize("center_longitude, expected", CENTERED_DATELINE)
+    def test_lsr_subset_centered_region_at_dateline(self, center_longitude, expected):
+        lsr = inputs.LSR(
+            source="test.parquet",
+            variables=["report"],
+            variable_mapping={},
+            storage_options={},
+        )
+        case = self._region_case(
+            regions.CenteredRegion(
+                latitude=65.0, longitude=center_longitude, bounding_box_degrees=10.0
+            )
+        )
+        result = lsr.subset_data_to_case(self._lsr_frame(), case)
         assert set(result["longitude"].to_list()) == expected
 
     @pytest.mark.parametrize(
