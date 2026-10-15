@@ -2589,3 +2589,137 @@ class TestLandfallMetricAlignment:
         assert len(result.init_time) == 2
         # Time differences should be calculable (not NaN)
         assert not np.isnan(result.values).all()
+
+
+class TestGeopotentialFromTemperatureAndHumidity:
+    """Tests for the hypsometric geopotential derivation."""
+
+    LEVELS = np.array([50, 100, 150, 200, 250, 300, 400, 500, 700, 850, 925, 1000.0])
+
+    def _column(self, temperature=250.0, humidity=0.0, mslp=101325.0, t2m=None):
+        shape = (2, 3, len(self.LEVELS))
+        t = xr.DataArray(
+            np.full(shape, temperature),
+            dims=("latitude", "longitude", "level"),
+            coords={"level": self.LEVELS},
+        )
+        q = xr.full_like(t, humidity)
+        msl = xr.DataArray(np.full(shape[:2], mslp), dims=("latitude", "longitude"))
+        t2 = xr.full_like(msl, temperature if t2m is None else t2m)
+        return t, q, msl, t2
+
+    def test_isothermal_dry_matches_analytic(self):
+        """A dry isothermal atmosphere has phi(p) = Rd * T * ln(p_msl / p)."""
+        t, q, msl, t2 = self._column()
+        phi = calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
+        expected = calc.Rd * 250.0 * np.log(101325.0 / (self.LEVELS * 100.0))
+        np.testing.assert_allclose(
+            phi.isel(latitude=0, longitude=0).values, expected, rtol=1e-10
+        )
+
+    def test_preserves_dims_and_level_order(self):
+        t, q, msl, t2 = self._column()
+        phi = calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
+        assert phi.dims == t.dims
+        np.testing.assert_array_equal(phi["level"].values, self.LEVELS)
+        assert phi.attrs["units"] == "m^2/s^2"
+
+    def test_ascending_level_order_gives_same_values(self):
+        t, q, msl, t2 = self._column()
+        phi = calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
+        reversed_levels = calc.geopotential_from_temperature_and_humidity(
+            t.isel(level=slice(None, None, -1)),
+            q.isel(level=slice(None, None, -1)),
+            msl,
+            t2,
+        )
+        xr.testing.assert_allclose(phi, reversed_levels.sel(level=self.LEVELS))
+
+    def test_isothermal_moist_matches_analytic(self):
+        """Constant T and q give constant Tv, so phi = Rd * Tv * ln(p_msl / p)."""
+        q = 0.015
+        t, q_da, msl, t2 = self._column(temperature=290.0, humidity=q)
+        phi = calc.geopotential_from_temperature_and_humidity(t, q_da, msl, t2)
+        tv = 290.0 * (1.0 + q * (1.0 / calc.epsilon - 1.0))
+        expected = calc.Rd * tv * np.log(101325.0 / (self.LEVELS * 100.0))
+        np.testing.assert_allclose(
+            phi.isel(latitude=0, longitude=0).values, expected, rtol=1e-10
+        )
+
+    def test_constant_lapse_rate_matches_analytic(self):
+        """Dry column with T = T0 - lapse * z has a closed-form geopotential.
+
+        With ``a = Rd * lapse / g``, ``T(p) = T0 * (p / p0) ** a`` and
+        ``phi(p) = g * T0 / lapse * (1 - (p / p0) ** a)``. The kernel's
+        trapezoid in ln(p) is within about 5e-4 of this on these levels.
+        """
+        t0, lapse, p0 = 288.15, 0.0065, 101325.0
+        a = calc.Rd * lapse / calc.g0
+        p_ratio = self.LEVELS * 100.0 / p0
+        t, q, msl, t2 = self._column(mslp=p0, t2m=t0)
+        t = t.copy(data=np.broadcast_to(t0 * p_ratio**a, t.shape).copy())
+        phi = calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
+        expected = calc.g0 * t0 / lapse * (1.0 - p_ratio**a)
+        np.testing.assert_allclose(
+            phi.isel(latitude=0, longitude=0).values, expected, rtol=1e-3
+        )
+
+    def test_moist_layers_are_thicker(self):
+        """Virtual temperature exceeds temperature, so moist layers are thicker."""
+        dry = calc.geopotential_from_temperature_and_humidity(*self._column())
+        moist = calc.geopotential_from_temperature_and_humidity(
+            *self._column(humidity=0.01)
+        )
+        dry_thickness = dry.sel(level=300) - dry.sel(level=500)
+        moist_thickness = moist.sel(level=300) - moist.sel(level=500)
+        assert (moist_thickness > dry_thickness).all()
+
+    def test_low_mslp_gives_negative_lowest_level(self):
+        """With MSLP below 1000 hPa the 1000 hPa surface lies below sea level."""
+        t, q, msl, t2 = self._column(mslp=98000.0)
+        phi = calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
+        assert (phi.sel(level=1000) < 0).all()
+
+    def test_nan_propagates_only_upward(self):
+        t, q, msl, t2 = self._column()
+        t[0, 0, 5] = np.nan  # 300 hPa, the 6th level from the top
+        phi = calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
+        column = phi.isel(latitude=0, longitude=0)
+        assert np.isnan(column.sel(level=50))
+        assert np.isfinite(column.sel(level=1000))
+        assert np.isfinite(phi.isel(latitude=1, longitude=1)).all()
+
+    def test_dask_input_stays_lazy(self):
+        t, q, msl, t2 = self._column()
+        phi = calc.geopotential_from_temperature_and_humidity(
+            t.chunk({"latitude": 1}), q.chunk({"latitude": 1}), msl, t2
+        )
+        assert phi.chunks is not None
+        eager = calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
+        xr.testing.assert_allclose(phi.compute(), eager)
+
+    def test_mixed_numpy_and_dask_level_chunks(self):
+        """Dask humidity chunked along level works with numpy temperature."""
+        t, q, msl, t2 = self._column()
+        phi = calc.geopotential_from_temperature_and_humidity(
+            t, q.chunk({"level": 3}), msl, t2
+        )
+        eager = calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
+        xr.testing.assert_allclose(phi.compute(), eager)
+
+    def test_pa_levels_raise(self):
+        """Levels in Pa instead of hPa are rejected."""
+        t, q, msl, t2 = self._column()
+        t = t.assign_coords(level=self.LEVELS * 100.0)
+        q = q.assign_coords(level=self.LEVELS * 100.0)
+        with pytest.raises(ValueError, match="hPa"):
+            calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
+
+    def test_float32_input_gives_float32_output(self):
+        t, q, msl, t2 = self._column()
+        phi = calc.geopotential_from_temperature_and_humidity(
+            t.astype("float32"), q.astype("float32"), msl, t2
+        )
+        assert phi.dtype == np.float32
+        eager = calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
+        np.testing.assert_allclose(phi.values, eager.values, rtol=1e-6)

@@ -12,6 +12,17 @@ commits. Prefer this changelog when writing GitHub release notes.
 
 ## [Unreleased]
 
+### Added
+
+- `defaults.preprocess_derive_geopotential`: a forecast preprocess that
+  derives `geopotential` for forecasts that don't publish it, using the new
+  `calc.geopotential_from_temperature_and_humidity` (hypsometric integration
+  of temperature and specific humidity upward from mean sea level pressure,
+  a Numba column kernel applied lazily). Lets tropical cyclone tracking and
+  the Craven-Brooks significant severe parameter (CBSS) run on such
+  forecasts; a no-op when `geopotential` or `geopotential_height` is present
+  ([#433](https://github.com/brightbandtech/ExtremeWeatherBench/pull/433)).
+
 ### Fixed
 
 - The `GHCN` target now quality-controls station observations before scoring
