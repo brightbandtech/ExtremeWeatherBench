@@ -421,8 +421,10 @@ def geopotential_from_temperature_and_humidity(
         dims=[level_dim],
         coords={level_dim: levels.values[order]},
     )
-    if temperature.chunks is not None:  # the core dimension must be one chunk
+    # The core dimension must be a single chunk in every dask input.
+    if temperature.chunks is not None:
         temperature = temperature.chunk({level_dim: -1})
+    if humidity.chunks is not None:
         humidity = humidity.chunk({level_dim: -1})
     geopotential = xr.apply_ufunc(
         _hypsometric_geopotential_kernel,

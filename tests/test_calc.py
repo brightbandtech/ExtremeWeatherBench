@@ -2668,3 +2668,12 @@ class TestGeopotentialFromTemperatureAndHumidity:
         assert phi.chunks is not None
         eager = calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
         xr.testing.assert_allclose(phi.compute(), eager)
+
+    def test_mixed_numpy_and_dask_level_chunks(self):
+        """Dask humidity chunked along level works with numpy temperature."""
+        t, q, msl, t2 = self._column()
+        phi = calc.geopotential_from_temperature_and_humidity(
+            t, q.chunk({"level": 3}), msl, t2
+        )
+        eager = calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
+        xr.testing.assert_allclose(phi.compute(), eager)
