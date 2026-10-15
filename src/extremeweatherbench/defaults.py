@@ -118,8 +118,9 @@ def preprocess_derive_geopotential(ds: xr.Dataset) -> xr.Dataset:
     """Derive geopotential for forecasts that don't publish it.
 
     Uses ``calc.geopotential_from_temperature_and_humidity`` (hypsometric
-    integration upward from mean sea level). A no-op when ``geopotential``
-    is already present, so it is safe to use for any forecast. Pass it as a
+    integration upward from mean sea level). A no-op when ``geopotential`` or
+    ``geopotential_height`` is already present, so it is safe to use for any
+    forecast and never replaces a model's own height field. Pass it as a
     forecast's ``preprocess`` for tropical cyclones (300-500 hPa thickness)
     or severe convection (CAPE); for TC tracking, compose it with the
     thickness step, e.g. ``lambda ds:
@@ -140,7 +141,7 @@ def preprocess_derive_geopotential(ds: xr.Dataset) -> xr.Dataset:
     Raises:
         KeyError: If geopotential is missing and an input variable is too.
     """
-    if "geopotential" in ds.data_vars:
+    if "geopotential" in ds.data_vars or "geopotential_height" in ds.data_vars:
         return ds
     needed = [
         "air_temperature",

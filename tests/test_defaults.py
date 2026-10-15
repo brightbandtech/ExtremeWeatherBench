@@ -348,6 +348,21 @@ class TestPreprocessDeriveGeopotential:
         assert out is ds
         assert float(out["geopotential"].max()) == 1.0
 
+    def test_no_op_when_geopotential_height_present(self):
+        """A model's own height field must not be shadowed by a derived one."""
+        ds = self._dataset()
+        ds["geopotential_height"] = xr.full_like(ds["air_temperature"], 5.0)
+        out = defaults.preprocess_derive_geopotential(ds)
+        assert out is ds
+        assert "geopotential" not in out
+
+    def test_no_op_with_height_does_not_need_inputs(self):
+        """With geopotential_height present, missing humidity is fine."""
+        ds = self._dataset().drop_vars("specific_humidity")
+        ds["geopotential_height"] = xr.full_like(ds["air_temperature"], 5.0)
+        out = defaults.preprocess_derive_geopotential(ds)
+        assert out is ds
+
     def test_composes_with_tc_thickness(self):
         out = defaults.preprocess_cira_icechunk_tc_forecast_dataset(
             defaults.preprocess_derive_geopotential(self._dataset())
