@@ -370,6 +370,15 @@ class TestPreprocessDeriveGeopotential:
         assert "geopotential_thickness" in out
         assert (out["geopotential_thickness"] > 0).all()
 
+    def test_derives_specific_humidity_from_relative_humidity(self):
+        ds = self._dataset().drop_vars("specific_humidity")
+        ds["relative_humidity"] = xr.full_like(ds["air_temperature"], 50.0)
+        out = defaults.preprocess_derive_geopotential(ds)
+        assert "specific_humidity" in out
+        assert "geopotential" in out
+        assert "specific_humidity" not in ds  # input left untouched
+        assert np.isfinite(out["geopotential"]).all()
+
     def test_missing_inputs_raise(self):
         ds = self._dataset().drop_vars("surface_air_temperature")
         with pytest.raises(KeyError, match="surface_air_temperature"):

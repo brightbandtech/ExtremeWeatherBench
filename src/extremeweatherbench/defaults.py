@@ -130,7 +130,9 @@ def preprocess_derive_geopotential(ds: xr.Dataset) -> xr.Dataset:
     Needs the EWB variables ``air_temperature`` and ``specific_humidity`` on
     pressure levels plus ``air_pressure_at_mean_sea_level`` and
     ``surface_air_temperature`` (map source names with ``variable_mapping``,
-    which the pipeline applies before preprocess).
+    which the pipeline applies before preprocess). If ``specific_humidity``
+    is missing but ``relative_humidity`` (percent) is present, specific
+    humidity is derived from it first.
 
     Args:
         ds: The forecast dataset.
@@ -143,6 +145,13 @@ def preprocess_derive_geopotential(ds: xr.Dataset) -> xr.Dataset:
     """
     if "geopotential" in ds.data_vars or "geopotential_height" in ds.data_vars:
         return ds
+    ds = ds.copy()
+    if (
+        "specific_humidity" not in ds.data_vars
+        and "air_temperature" in ds.data_vars
+        and "relative_humidity" in ds.data_vars
+    ):
+        ds = _maybe_add_specific_humidity(ds)
     needed = [
         "air_temperature",
         "specific_humidity",
@@ -152,7 +161,6 @@ def preprocess_derive_geopotential(ds: xr.Dataset) -> xr.Dataset:
     missing = [name for name in needed if name not in ds.data_vars]
     if missing:
         raise KeyError(f"Cannot derive geopotential: missing {missing}.")
-    ds = ds.copy()
     ds["geopotential"] = calc.geopotential_from_temperature_and_humidity(
         ds["air_temperature"],
         ds["specific_humidity"],
