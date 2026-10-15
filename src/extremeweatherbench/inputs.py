@@ -190,11 +190,20 @@ def _default_preprocess(input_data: IncomingDataInput) -> IncomingDataInput:
 def _point_target_bounds(
     case_metadata: "cases.IndividualCase",
 ) -> tuple[float, float, float, float]:
-    """Return (lon_min, lat_min, lon_max, lat_max) of a case region, in [-180, 180].
+    """Return the longitude/latitude bounds of a case region for point targets.
 
     A region crossing the antimeridian comes back with lon_min > lon_max (e.g.
     166.5, ..., -170.0) instead of the -180..180 total_bounds of its
-    MultiPolygon, which would select the whole latitude band.
+    MultiPolygon, which would select the whole latitude band. A wrapped
+    region spanning at least NEAR_GLOBAL_LONGITUDE_SPAN degrees is returned
+    as global (-180..180) so the sliver just west of its edge is not lost.
+
+    Args:
+        case_metadata: The case whose location defines the bounds.
+
+    Returns:
+        A tuple of (lon_min, lat_min, lon_max, lat_max) with longitudes in
+        [-180, 180]; lon_min > lon_max when the region wraps the antimeridian.
     """
     lon_min, lat_min, lon_max, lat_max = regions._wrapping_bounds(
         case_metadata.location.as_geopandas()
@@ -204,10 +213,22 @@ def _point_target_bounds(
     return lon_min, lat_min, lon_max, lat_max
 
 
-def _longitude_within(longitude, lon_min: float, lon_max: float):
-    """Boolean mask of longitudes in [lon_min, lon_max], wrapping when lon_min > lon_max.
+def _longitude_within[T: (pl.Expr, pd.Series)](
+    longitude: T, lon_min: float, lon_max: float
+) -> T:
+    """Return a boolean mask of longitudes within [lon_min, lon_max].
 
-    Works on a polars expression or a pandas Series.
+    When lon_min > lon_max the range wraps the antimeridian, and longitudes
+    at or east of lon_min or at or west of lon_max are selected.
+
+    Args:
+        longitude: Longitudes in [-180, 180], as a polars expression or a
+            pandas Series.
+        lon_min: Western edge of the range, in [-180, 180].
+        lon_max: Eastern edge of the range, in [-180, 180].
+
+    Returns:
+        A boolean mask of the same type as ``longitude``.
     """
     if lon_min > lon_max:
         return (longitude >= lon_min) | (longitude <= lon_max)
