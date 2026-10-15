@@ -10,7 +10,7 @@ GitHub's auto-generated release notes can list PRs that were already
 squash-merged into `main`, because `develop` still contains those original
 commits. Prefer this changelog when writing GitHub release notes.
 
-## [Unreleased]
+## [1.1.1] - 2026-10-15
 
 ### Added
 
@@ -388,7 +388,8 @@ Automated git comparison with 0.2.0 is unreliable after a
 
 Initial tagged preview.
 
-[unreleased]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.1.0...HEAD
+[unreleased]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.0.2.post1...v1.1.0
 [1.0.2.post1]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.0.2...v1.0.2.post1
 [1.0.2]: https://github.com/brightbandtech/ExtremeWeatherBench/compare/v1.0.1...v1.0.2
