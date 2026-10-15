@@ -19,6 +19,7 @@ from extremeweatherbench.constants import (
     GRAVITY,
     KELVIN_TO_CELSIUS,
     NS_PER_HOUR,
+    Rd,
 )
 
 epsilon: float = EPSILON  # Ratio of molecular weights (H2O/dry air)
@@ -348,6 +349,103 @@ def nantrapezoid_pressure_levels(da: xr.DataArray):
         output_dtypes=[float],
     )
     return output
+
+
+@guvectorize(
+    [(float64[:], float64[:], float64[:], float64, float64, float64[:])],
+    "(n),(n),(n),(),()->(n)",
+    nopython=True,
+    target="cpu",
+)
+def _hypsometric_geopotential_kernel(t, q, p, p_msl, t_2m, out):
+    """Geopotential on one column of pressure levels (hypsometric equation).
+
+    Levels must be ordered from highest pressure (lowest level) upward. Starts
+    at mean sea level (geopotential 0 at ``p_msl``) and adds each layer's
+    thickness ``Rd * Tv_mean * ln(p_bottom / p_top)``, with ``Tv_mean`` the mean
+    of the layer's end-point virtual temperatures. The layer from sea level to
+    the lowest level uses the 2 m temperature (and the lowest level's humidity)
+    at its bottom; if the lowest level lies above the surface pressure
+    (``p_msl`` lower than that level), its geopotential comes out negative, as
+    in extrapolated reanalysis fields.
+    """
+    n = t.shape[0]
+    tv_prev = t[0] * (1.0 + q[0] / EPSILON) / (1.0 + q[0])
+    tv_sfc = t_2m * (1.0 + q[0] / EPSILON) / (1.0 + q[0])
+    phi = Rd * 0.5 * (tv_sfc + tv_prev) * np.log(p_msl / p[0])
+    out[0] = phi
+    for k in range(1, n):
+        tv = t[k] * (1.0 + q[k] / EPSILON) / (1.0 + q[k])
+        phi += Rd * 0.5 * (tv_prev + tv) * np.log(p[k - 1] / p[k])
+        out[k] = phi
+        tv_prev = tv
+
+
+def geopotential_from_temperature_and_humidity(
+    air_temperature: xr.DataArray,
+    specific_humidity: xr.DataArray,
+    air_pressure_at_mean_sea_level: xr.DataArray,
+    surface_air_temperature: xr.DataArray,
+    level_dim: str = "level",
+) -> xr.DataArray:
+    """Derive geopotential on pressure levels by hypsometric integration.
+
+    For forecasts that publish temperature and humidity on pressure levels but
+    no geopotential (needed for tropical cyclone tracking and CAPE). Integrates
+    upward from mean sea level using virtual temperature; a Numba column kernel
+    applied lazily with ``xr.apply_ufunc``, so dask inputs stay lazy.
+
+    Layer thicknesses (e.g. the 300-500 hPa thickness the TC tracker uses)
+    depend only on the layer's virtual temperature and are accurate to the
+    trapezoid in ln(p). Absolute values also carry the error of the sea-level
+    start over high terrain.
+
+    Args:
+        air_temperature: Temperature on pressure levels (K).
+        specific_humidity: Specific humidity on the same levels (kg/kg).
+        air_pressure_at_mean_sea_level: Mean sea level pressure (Pa).
+        surface_air_temperature: 2 m temperature (K).
+        level_dim: Name of the pressure-level dimension (values in hPa).
+
+    Returns:
+        Geopotential (m^2/s^2) on the input levels, in the input level order.
+    """
+    levels = air_temperature[level_dim]
+    order = np.argsort(-levels.values)  # highest pressure (lowest level) first
+    temperature = air_temperature.isel({level_dim: order}).astype("float64")
+    humidity = (
+        specific_humidity.isel({level_dim: order}).clip(0.0, None).astype("float64")
+    )
+    pressure_pa = xr.DataArray(
+        levels.values[order].astype("float64") * 100.0,
+        dims=[level_dim],
+        coords={level_dim: levels.values[order]},
+    )
+    if temperature.chunks is not None:  # the core dimension must be one chunk
+        temperature = temperature.chunk({level_dim: -1})
+        humidity = humidity.chunk({level_dim: -1})
+    geopotential = xr.apply_ufunc(
+        _hypsometric_geopotential_kernel,
+        temperature,
+        humidity,
+        pressure_pa,
+        air_pressure_at_mean_sea_level.astype("float64"),
+        surface_air_temperature.astype("float64"),
+        input_core_dims=[[level_dim], [level_dim], [level_dim], [], []],
+        output_core_dims=[[level_dim]],
+        dask="parallelized",
+        output_dtypes=[np.float64],
+    )
+    geopotential = geopotential.transpose(*air_temperature.dims).reindex(
+        {level_dim: levels.values}
+    )
+    geopotential.name = "geopotential"
+    geopotential.attrs = {
+        "units": "m^2/s^2",
+        "description": "Geopotential derived by hypsometric integration of "
+        "temperature and specific humidity upward from mean sea level pressure",
+    }
+    return geopotential
 
 
 def specific_humidity_from_relative_humidity(

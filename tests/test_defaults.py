@@ -302,3 +302,60 @@ class TestMaybeAddSpecificHumidity:
         ds["specific_humidity"] = (["level"], np.array([0.01, 0.02]))
         result = defaults._maybe_add_specific_humidity(ds)
         np.testing.assert_array_equal(result["specific_humidity"].values, [0.01, 0.02])
+
+
+class TestPreprocessDeriveGeopotential:
+    """Tests for defaults.preprocess_derive_geopotential."""
+
+    @staticmethod
+    def _dataset():
+        levels = np.array([200, 300, 500, 700, 850, 1000.0])
+        shape = (2, 2, len(levels))
+        return xr.Dataset(
+            {
+                "air_temperature": (
+                    ("latitude", "longitude", "level"),
+                    np.full(shape, 260.0),
+                ),
+                "specific_humidity": (
+                    ("latitude", "longitude", "level"),
+                    np.full(shape, 0.002),
+                ),
+                "air_pressure_at_mean_sea_level": (
+                    ("latitude", "longitude"),
+                    np.full(shape[:2], 101325.0),
+                ),
+                "surface_air_temperature": (
+                    ("latitude", "longitude"),
+                    np.full(shape[:2], 260.0),
+                ),
+            },
+            coords={"level": levels},
+        )
+
+    def test_adds_geopotential(self):
+        out = defaults.preprocess_derive_geopotential(self._dataset())
+        assert "geopotential" in out
+        # increases with height
+        assert (
+            out["geopotential"].sel(level=200) > out["geopotential"].sel(level=500)
+        ).all()
+
+    def test_no_op_when_present(self):
+        ds = self._dataset()
+        ds["geopotential"] = xr.full_like(ds["air_temperature"], 1.0)
+        out = defaults.preprocess_derive_geopotential(ds)
+        assert out is ds
+        assert float(out["geopotential"].max()) == 1.0
+
+    def test_composes_with_tc_thickness(self):
+        out = defaults.preprocess_cira_icechunk_tc_forecast_dataset(
+            defaults.preprocess_derive_geopotential(self._dataset())
+        )
+        assert "geopotential_thickness" in out
+        assert (out["geopotential_thickness"] > 0).all()
+
+    def test_missing_inputs_raise(self):
+        ds = self._dataset().drop_vars("surface_air_temperature")
+        with pytest.raises(KeyError, match="surface_air_temperature"):
+            defaults.preprocess_derive_geopotential(ds)

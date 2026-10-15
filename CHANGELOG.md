@@ -10,6 +10,17 @@ GitHub's auto-generated release notes can list PRs that were already
 squash-merged into `main`, because `develop` still contains those original
 commits. Prefer this changelog when writing GitHub release notes.
 
+## [Unreleased]
+
+### Added
+
+- `defaults.preprocess_derive_geopotential`: a forecast preprocess that
+  derives `geopotential` for forecasts that don't publish it, using the new
+  `calc.geopotential_from_temperature_and_humidity` (hypsometric integration
+  of temperature and specific humidity upward from mean sea level pressure,
+  a Numba column kernel applied lazily). Lets tropical cyclone tracking and
+  CAPE run on such forecasts; a no-op when geopotential is present.
+
 ## [1.1.0] - 2026-10-10
 
 ### Added
