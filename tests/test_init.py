@@ -30,6 +30,13 @@ class TestModuleImports:
 
         assert isinstance(regions, types.ModuleType)
 
+    def test_station_qc_is_lazy_submodule(self):
+        """Test that station_qc is reachable as ewb.station_qc."""
+        import extremeweatherbench as ewb
+
+        assert "station_qc" in ewb.__all__
+        assert isinstance(ewb.station_qc, types.ModuleType)
+
     def test_derived_is_module(self):
         """Test that derived is an actual module, not a SimpleNamespace."""
         from extremeweatherbench import derived
