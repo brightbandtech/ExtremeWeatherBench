@@ -420,7 +420,8 @@ def geopotential_from_temperature_and_humidity(
         level_dim: Name of the pressure-level dimension (values in hPa).
 
     Returns:
-        Geopotential (m^2/s^2) on the input levels, in the input level order.
+        Geopotential (m^2/s^2) on the input levels, in the input level order
+        and with the input temperature's floating-point dtype.
 
     Raises:
         ValueError: If the pressure levels do not look like hPa (any level
@@ -462,6 +463,9 @@ def geopotential_from_temperature_and_humidity(
     geopotential = geopotential.transpose(*air_temperature.dims).reindex(
         {level_dim: levels.values}
     )
+    # Integrate in float64 but return the input precision (e.g. float32).
+    if np.issubdtype(air_temperature.dtype, np.floating):
+        geopotential = geopotential.astype(air_temperature.dtype)
     geopotential.name = "geopotential"
     geopotential.attrs = {
         "units": "m^2/s^2",

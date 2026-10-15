@@ -2696,3 +2696,12 @@ class TestGeopotentialFromTemperatureAndHumidity:
         q = q.assign_coords(level=self.LEVELS * 100.0)
         with pytest.raises(ValueError, match="hPa"):
             calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
+
+    def test_float32_input_gives_float32_output(self):
+        t, q, msl, t2 = self._column()
+        phi = calc.geopotential_from_temperature_and_humidity(
+            t.astype("float32"), q.astype("float32"), msl, t2
+        )
+        assert phi.dtype == np.float32
+        eager = calc.geopotential_from_temperature_and_humidity(t, q, msl, t2)
+        np.testing.assert_allclose(phi.values, eager.values, rtol=1e-6)
