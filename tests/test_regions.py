@@ -2116,3 +2116,34 @@ class TestLongitudeCoordinateMismatch:
             lon_values <= 8.25,  # Eastern part
         )
         assert np.all(expected_condition)
+
+
+class TestWrappingBounds:
+    """Bounds used for antimeridian-crossing regions (point and gridded)."""
+
+    @staticmethod
+    def _gdf(*boxes):
+        return gpd.GeoDataFrame(
+            geometry=[shapely.MultiPolygon([shapely.box(*b) for b in boxes])]
+        )
+
+    def test_two_lobes_touching_dateline_wrap(self):
+        gdf = self._gdf((170, 40, 180, 50), (-180, 40, -170, 50))
+        assert regions._wrapping_bounds(gdf) == (170, 40, -170, 50)
+
+    def test_lobe_away_from_dateline_falls_back_to_total_bounds(self):
+        """Aleutians + Alaska + lower 48: the lower 48 must not be dropped."""
+        gdf = self._gdf(
+            (172, 51, 180, 55),  # Aleutians
+            (-180, 54, -130, 71),  # Alaska
+            (-125, 25, -66, 49),  # lower 48
+        )
+        assert regions._wrapping_bounds(gdf) == (-180, 25, 180, 71)
+
+    def test_bounding_box_region_across_dateline_still_wraps(self):
+        region = regions.BoundingBoxRegion.create_region(
+            latitude_min=40, latitude_max=50, longitude_min=170, longitude_max=190
+        )
+        lon_min, _, lon_max, _ = regions._wrapping_bounds(region.as_geopandas())
+        assert lon_min == pytest.approx(170)
+        assert lon_max == pytest.approx(-170)

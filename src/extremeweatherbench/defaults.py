@@ -114,6 +114,62 @@ def preprocess_cira_icechunk_tc_forecast_dataset(ds: xr.Dataset) -> xr.Dataset:
     return _add_tc_geopotential_thickness(ds)
 
 
+def preprocess_derive_geopotential(ds: xr.Dataset) -> xr.Dataset:
+    """Derive geopotential for forecasts that don't publish it.
+
+    Uses ``calc.geopotential_from_temperature_and_humidity`` (hypsometric
+    integration upward from mean sea level). A no-op when ``geopotential`` or
+    ``geopotential_height`` is already present, so it is safe to use for any
+    forecast and never replaces a model's own height field. Pass it as a
+    forecast's ``preprocess`` for tropical cyclones (300-500 hPa thickness)
+    or severe convection (CAPE); for TC tracking, compose it with the
+    thickness step, e.g. ``lambda ds:
+    preprocess_cira_icechunk_tc_forecast_dataset(
+    preprocess_derive_geopotential(ds))``.
+
+    Needs the EWB variables ``air_temperature`` and ``specific_humidity`` on
+    pressure levels plus ``air_pressure_at_mean_sea_level`` and
+    ``surface_air_temperature`` (map source names with ``variable_mapping``,
+    which the pipeline applies before preprocess). If ``specific_humidity``
+    is missing but ``relative_humidity`` (percent) is present, specific
+    humidity is derived from it first.
+
+    Args:
+        ds: The forecast dataset.
+
+    Returns:
+        The forecast dataset with ``geopotential`` (m^2/s^2).
+
+    Raises:
+        KeyError: If geopotential is missing and an input variable is too.
+    """
+    if "geopotential" in ds.data_vars or "geopotential_height" in ds.data_vars:
+        return ds
+    ds = ds.copy()
+    if (
+        "specific_humidity" not in ds.data_vars
+        and "air_temperature" in ds.data_vars
+        and "relative_humidity" in ds.data_vars
+    ):
+        ds = _maybe_add_specific_humidity(ds)
+    needed = [
+        "air_temperature",
+        "specific_humidity",
+        "air_pressure_at_mean_sea_level",
+        "surface_air_temperature",
+    ]
+    missing = [name for name in needed if name not in ds.data_vars]
+    if missing:
+        raise KeyError(f"Cannot derive geopotential: missing {missing}.")
+    ds["geopotential"] = calc.geopotential_from_temperature_and_humidity(
+        ds["air_temperature"],
+        ds["specific_humidity"],
+        ds["air_pressure_at_mean_sea_level"],
+        ds["surface_air_temperature"],
+    )
+    return ds
+
+
 def _maybe_add_specific_humidity(ds: xr.Dataset) -> xr.Dataset:
     """Add specific humidity from temperature and RH if it is missing.
 

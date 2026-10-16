@@ -133,6 +133,7 @@ def create_mock_input(variables: list[str], dataset: xr.Dataset, input_type: str
     # Mock all pipeline methods to return the dataset
     mock_input._open_data_from_source.return_value = dataset
     mock_input.maybe_map_variable_names.return_value = dataset
+    mock_input.maybe_apply_quality_control.side_effect = lambda d: d
     mock_input.maybe_subset_variables.return_value = dataset
     mock_input.subset_data_to_case.return_value = dataset
     mock_input.maybe_convert_to_dataset.return_value = dataset
