@@ -11,7 +11,6 @@ from typing import (
     Optional,
     Union,
     cast,
-    overload,
 )
 
 import icechunk
@@ -214,24 +213,9 @@ def _point_target_bounds(
     return lon_min, lat_min, lon_max, lat_max
 
 
-# TODO: consider a module-level type parameter (PEP 695 / TypeVar) for
-# helpers that return the same frame/expression type they receive, if more
-# than this one helper needs it; overloads keep the types exact for now.
-@overload
-def _longitude_within(
-    longitude: pl.Expr, lon_min: float, lon_max: float
-) -> pl.Expr: ...
-
-
-# The pre-commit mypy hook runs without pandas/polars types, so both
-# overloads look like Any there; the ignore is a no-op with real types.
-@overload
-def _longitude_within(  # type: ignore[overload-cannot-match]
-    longitude: pd.Series, lon_min: float, lon_max: float
-) -> pd.Series: ...
-
-
-def _longitude_within(longitude: Any, lon_min: float, lon_max: float) -> Any:
+def _longitude_within[T: (pl.Expr, pd.Series)](
+    longitude: T, lon_min: float, lon_max: float
+) -> T:
     """Return a boolean mask of longitudes within [lon_min, lon_max].
 
     When lon_min > lon_max the range wraps the antimeridian, and longitudes
