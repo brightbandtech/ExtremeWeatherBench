@@ -147,7 +147,11 @@ The schema must have at minimum: `valid_time` (datetime), `latitude`
 > converts longitude from −180–180 to 0–360 before building the
 > `xr.Dataset`. If your custom file already stores temperatures in
 > Kelvin or longitude in 0–360, override `_custom_convert_to_dataset`
-> in a subclass to skip those conversions. See the
+> in a subclass to skip those conversions, and pass
+> `quality_control=False`: the default quality control expects raw
+> GHCNh units (°C) and would null Kelvin temperatures as out of range.
+> With quality control on, your override also receives a `station`
+> column, which it should drop. See the
 > [BYOT](your_own_target.md) recipe for guidance on subclassing
 > `TargetBase`.
 

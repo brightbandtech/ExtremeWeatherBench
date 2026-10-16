@@ -90,6 +90,7 @@ def mock_target_base():
     )
 
     mock_target._open_data_from_source.return_value = mock_dataset
+    mock_target.maybe_apply_quality_control.side_effect = lambda d: d
     mock_target.maybe_map_variable_names.return_value = mock_dataset
     mock_target.subset_data_to_case.return_value = mock_dataset
     mock_target.maybe_convert_to_dataset.return_value = mock_dataset
@@ -119,6 +120,7 @@ def mock_forecast_base():
     )
 
     mock_forecast._open_data_from_source.return_value = mock_dataset
+    mock_forecast.maybe_apply_quality_control.side_effect = lambda d: d
     mock_forecast.maybe_map_variable_names.return_value = mock_dataset
     mock_forecast.subset_data_to_case.return_value = mock_dataset
     mock_forecast.maybe_convert_to_dataset.return_value = mock_dataset
@@ -2040,6 +2042,9 @@ class TestPipelineFunctions:
         sample_case_operator.forecast._open_data_from_source.return_value = (
             empty_dataset
         )
+        sample_case_operator.forecast.maybe_apply_quality_control.side_effect = (
+            lambda d: d
+        )
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             empty_dataset
         )
@@ -2071,6 +2076,9 @@ class TestPipelineFunctions:
         sample_case_operator.forecast._open_data_from_source.return_value = (
             empty_dataset
         )
+        sample_case_operator.forecast.maybe_apply_quality_control.side_effect = (
+            lambda d: d
+        )
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             empty_dataset
         )
@@ -2098,6 +2106,9 @@ class TestPipelineFunctions:
         empty_dataset = xr.Dataset()
         sample_case_operator.forecast._open_data_from_source.return_value = (
             empty_dataset
+        )
+        sample_case_operator.forecast.maybe_apply_quality_control.side_effect = (
+            lambda d: d
         )
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             empty_dataset
@@ -2272,6 +2283,9 @@ class TestPipelineFunctions:
         sample_case_operator.forecast._open_data_from_source.return_value = (
             sample_forecast_dataset
         )
+        sample_case_operator.forecast.maybe_apply_quality_control.side_effect = (
+            lambda d: d
+        )
         sample_case_operator.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
@@ -2321,6 +2335,9 @@ class TestPipelineFunctions:
         # Mock the pipeline methods
         sample_case_operator.target._open_data_from_source.return_value = (
             sample_target_dataset
+        )
+        sample_case_operator.target.maybe_apply_quality_control.side_effect = lambda d: (
+            d
         )
         sample_case_operator.target.maybe_map_variable_names.return_value = (
             sample_target_dataset
@@ -2374,6 +2391,7 @@ class TestPipelineFunctions:
         target.variables = ["surface_air_temperature"]
         target.preprocess_before_variable_mapping = False
         target._open_data_from_source.return_value = raw
+        target.maybe_apply_quality_control.side_effect = lambda d: d
         target.maybe_map_variable_names.return_value = mapped
         target.preprocess.side_effect = preprocess
         target.subset_data_to_case.return_value = mapped
@@ -2400,6 +2418,12 @@ class TestPipelineFunctions:
         assert method_names.index("maybe_map_variable_names") < method_names.index(
             "preprocess"
         )
+        # QC runs on mapped names, before preprocess can alter values
+        assert (
+            method_names.index("maybe_map_variable_names")
+            < method_names.index("maybe_apply_quality_control")
+            < method_names.index("preprocess")
+        )
         assert "t2" not in seen_columns[0]
         assert "surface_air_temperature" in seen_columns[0]
 
@@ -2423,6 +2447,7 @@ class TestPipelineFunctions:
         target.variables = ["surface_air_temperature"]
         target.preprocess_before_variable_mapping = False
         target._open_data_from_source.return_value = raw
+        target.maybe_apply_quality_control.side_effect = lambda d: d
         target.maybe_map_variable_names.return_value = raw.rename(
             columns={"t2": "surface_air_temperature"}
         )
@@ -2452,6 +2477,7 @@ class TestPipelineFunctions:
         target.variables = ["surface_wind_speed"]
         target.preprocess_before_variable_mapping = True
         target._open_data_from_source.return_value = raw
+        target.maybe_apply_quality_control.side_effect = lambda d: d
         target.maybe_map_variable_names.return_value = raw.rename(
             columns={"USA_WIND": "usa_surface_wind_speed"}
         )
@@ -2963,6 +2989,9 @@ class TestIntegration:
         sample_evaluation_object.forecast._open_data_from_source.return_value = (
             sample_forecast_dataset
         )
+        sample_evaluation_object.forecast.maybe_apply_quality_control.side_effect = (
+            lambda d: d
+        )
         sample_evaluation_object.forecast.maybe_map_variable_names.return_value = (
             sample_forecast_dataset
         )
@@ -2982,6 +3011,9 @@ class TestIntegration:
 
         sample_evaluation_object.target._open_data_from_source.return_value = (
             sample_target_dataset
+        )
+        sample_evaluation_object.target.maybe_apply_quality_control.side_effect = (
+            lambda d: d
         )
         sample_evaluation_object.target.maybe_map_variable_names.return_value = (
             sample_target_dataset
@@ -3083,6 +3115,7 @@ class TestIntegration:
         mock_maybe_subset_variables.return_value = sample_forecast_dataset
         for obj in [eval_obj.target, eval_obj.forecast]:
             obj._open_data_from_source.return_value = sample_forecast_dataset
+            obj.maybe_apply_quality_control.side_effect = lambda d: d
             obj.maybe_map_variable_names.return_value = sample_forecast_dataset
             obj.subset_data_to_case.return_value = sample_forecast_dataset
             obj.maybe_convert_to_dataset.return_value = sample_forecast_dataset

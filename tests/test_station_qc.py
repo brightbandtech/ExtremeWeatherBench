@@ -199,6 +199,9 @@ class TestGHCNQualityControl:
     def _open_and_subset(self, ghcn, frame, case):
         with mock.patch("polars.scan_parquet", return_value=frame):
             data = ghcn._open_data_from_source()
+        # same order as evaluate.run_pipeline
+        data = ghcn.maybe_map_variable_names(data)
+        data = ghcn.maybe_apply_quality_control(data)
         data = inputs.maybe_subset_variables(
             data,
             ghcn.variables,
@@ -308,6 +311,38 @@ class TestGHCNQualityControlPipeline:
         ds = evaluate.run_pipeline(case, ghcn)
         assert ds.sizes["location"] == 2
         assert float(ds["surface_air_temperature"].max()) == pytest.approx(313.15)
+
+    def test_runs_after_variable_mapping(self, tmp_path, case):
+        """Sources with non-EWB column names are still quality-controlled."""
+        times = pd.date_range("2020-11-03", periods=96, freq="1h")
+        temps = [10.0] * 96
+        temps[40] = -999.0  # missing-value sentinel at 2020-11-04 16:00
+        temps[60] = 928.0  # physically impossible at 2020-11-05 12:00
+        frame = pl.DataFrame(
+            {
+                "station": ["GOOD"] * 96 + ["GLU00000037"] * 96,
+                "stn_name": ["GENEVA"] * 96 + ["NEM (MOVING ICE STATION)"] * 96,
+                "latitude": [47.0] * 96 + [48.0] * 96,
+                "longitude": [19.0] * 96 + [20.0] * 96,
+                "t2m": temps + [4.0] * 96,
+                "valid_time": list(times) * 2,
+            }
+        )
+        path = tmp_path / "mapped.parquet"
+        frame.write_parquet(path)
+        ghcn = inputs.GHCN(
+            source=str(path),
+            variables=["surface_air_temperature"],
+            variable_mapping={"t2m": "surface_air_temperature", "stn_name": "name"},
+            storage_options={},
+        )
+        ds = evaluate.run_pipeline(case, ghcn)
+        assert ds.sizes["location"] == 1
+        assert float(ds["latitude"].item()) == 47.0
+        temps_out = ds["surface_air_temperature"].isel(location=0).dropna("valid_time")
+        assert float(temps_out.min()) == pytest.approx(283.15)
+        assert float(temps_out.max()) == pytest.approx(283.15)
+        assert temps_out.sizes["valid_time"] == 94
 
 
 class TestExcludeStations:

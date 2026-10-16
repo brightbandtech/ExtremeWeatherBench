@@ -426,15 +426,19 @@ def _wrapping_bounds(
     """Return (lon_min, lat_min, lon_max, lat_max), wrapping if needed.
 
     Antimeridian regions are MultiPolygons whose total_bounds span the
-    globe. The wrap is recovered from the lobes that touch ±180.
+    globe. The wrap is recovered from the lobes that touch ±180. If any lobe
+    touches neither edge (e.g. a shapefile of Alaska, the Aleutians and the
+    lower 48), the wrapped range would drop it, so total_bounds are returned.
     """
     lon_min, lat_min, lon_max, lat_max = gdf.total_bounds
     if not isinstance(gdf.geometry.iloc[0], shapely.MultiPolygon):
         return lon_min, lat_min, lon_max, lat_max
     lobes = gdf.geometry.explode(index_parts=False).bounds
-    east = lobes[np.isclose(lobes.maxx, 180.0)]
-    west = lobes[np.isclose(lobes.minx, -180.0)]
-    if east.empty or west.empty:
+    touches_east = np.isclose(lobes.maxx, 180.0)
+    touches_west = np.isclose(lobes.minx, -180.0)
+    east = lobes[touches_east]
+    west = lobes[touches_west]
+    if east.empty or west.empty or not (touches_east | touches_west).all():
         return lon_min, lat_min, lon_max, lat_max
     return east.minx.min(), lat_min, west.maxx.max(), lat_max
 
