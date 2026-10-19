@@ -1537,3 +1537,25 @@ def maybe_cache_and_compute(
         return xr.open_dataset(cache_path / f"{name}.zarr")
     else:
         return xr.open_dataarray(cache_path / f"{name}.zarr")
+
+def convert_init_and_valid_time_to_lead_time(da: xr.DataArray) -> xr.DataArray:
+    """Convert the combination of init_time and valid_time dimension to a lead_time dimension.
+    Args:
+        da: The dataarray to convert with init_time and valid_time dimensions.
+    Returns:
+        The dataarray with a lead_time (and valid_time) dimension.
+    """
+    lead_time = xr.DataArray(
+        da.valid_time, coords={"valid_time": da.valid_time}
+    ) - xr.DataArray(da.init_time, coords={"init_time": da.init_time})
+    da = da.assign_coords(lead_time=lead_time)
+    return xr.concat(
+        [
+            da.sel(valid_time=valid_t).swap_dims({"init_time": "lead_time"})
+            for valid_t in da.valid_time
+        ],
+        "valid_time",
+        coords="different",
+        compat="equals",
+        join="outer",
+    )
