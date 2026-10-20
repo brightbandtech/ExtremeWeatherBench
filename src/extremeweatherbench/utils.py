@@ -201,7 +201,16 @@ def remove_ocean_gridpoints(dataset: xr.Dataset) -> xr.Dataset:
     land_mask = land_sea_mask == 0
     # Subset the dataset to only include land gridpoints
     return dataset.where(land_mask)
-
+def read_event_yaml(input_pth: str | pathlib.Path) -> dict:
+    """Read events yaml from data."""
+    logger.warning(
+        "This function is deprecated and will be removed in a future release. "
+        "Please use cases.read_incoming_yaml instead."
+    )
+    input_pth = pathlib.Path(input_pth)
+    with open(input_pth, "rb") as f:
+        yaml_event_case = yaml.safe_load(f)
+    return yaml_event_case
 
 def derive_indices_from_init_time_and_lead_time(
     dataset: xr.Dataset,
@@ -558,6 +567,72 @@ def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:
         join="outer",
     )
 
+def convert_valid_time_to_init_time_updated(da: xr.DataArray) -> xr.DataArray:
+    """Convert the valid_time dimension to an init_time dimension.
+
+    Uses inner join to retain only the true forecast initialization time
+    common to all lead times, eliminating ghost dates and dimension collisions.
+    """
+    # 1. Drop existing init_time coordinate if present to avoid name collisions
+    if "init_time" in da.coords and "init_time" not in da.dims:
+        da = da.drop_vars("init_time")
+
+    # 2. Ensure lead_time coordinate matches timedelta representation
+    lead_time_coord = da.lead_time
+    if not np.issubdtype(lead_time_coord.dtype, np.timedelta64):
+        if np.max(lead_time_coord.values) > 1e10:
+            lead_time_coord = lead_time_coord.astype("timedelta64[ns]")
+        else:
+            lead_time_coord = lead_time_coord * np.timedelta64(1, "h")
+    
+    
+
+    # 3. Compute init_time coordinates (valid_time - lead_time)
+    init_time = xr.DataArray(
+        da.valid_time, coords={"valid_time": da.valid_time}
+    ) - xr.DataArray(lead_time_coord, coords={"lead_time": da.lead_time})
+
+    da = da.assign_coords(init_time=init_time)
+
+    # 4. Concatenate across lead_time using inner join:
+    # This automatically retains ONLY the true init_time ('2020-02-01 00:00:00')
+    # and drops all spurious outer-join shifted dates.
+    res = xr.concat(
+        [
+            da.sel(lead_time=lead).swap_dims({"valid_time": "init_time"})
+            for lead in da.lead_time
+        ],
+        "lead_time",
+        coords="different",
+        compat="equals",
+        join="inner",
+    )
+
+    return res
+
+def convert_init_and_valid_time_to_lead_and_init_time(da: xr.DataArray) -> xr.DataArray:
+    """Convert the combination of init_time and valid_time dimension to a lead_time dimension.
+
+    Args:
+        da: The dataarray to convert with init_time and valid_time dimensions.
+
+    Returns:
+        The dataarray with a lead_time (and init_time) dimension.
+    """
+    lead_time = xr.DataArray(
+        da.valid_time, coords={"valid_time": da.valid_time}
+    ) - xr.DataArray(da.init_time, coords={"init_time": da.init_time})
+    da = da.assign_coords(lead_time=lead_time)
+    return xr.concat(
+        [
+            da.sel(init_time=init_t).swap_dims({"valid_time": "lead_time"})
+            for init_t in da.init_time
+        ],
+        "init_time",
+        coords="different",
+        compat="equals",
+        join="outer",
+    )
 
 def maybe_get_closest_timestamp_to_center_of_valid_times(
     output_times: xr.DataArray,

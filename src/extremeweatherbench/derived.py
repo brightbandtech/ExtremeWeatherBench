@@ -260,6 +260,8 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             wind_speed=prepared_data["surface_wind_speed"],
             tc_track_analysis_data=tc_track_data,
             geopotential_thickness=prepared_data.get("geopotential_thickness", None),
+            u_wind=prepared_data["surface_eastward_wind"],
+            v_wind=prepared_data["surface_northward_wind"],
             slp_contour_magnitude=self.slp_contour_magnitude,
             dz_contour_magnitude=self.dz_contour_magnitude,
             min_distance_between_peaks_degrees=self.min_distance_between_peaks_degrees,

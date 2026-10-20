@@ -69,6 +69,8 @@ def generate_tc_tracks_by_init_time(
     sea_level_pressure: xr.DataArray,
     wind_speed: xr.DataArray,
     geopotential_thickness: xr.DataArray,
+    u_wind: xr.DataArray,
+    v_wind: xr.DataArray,
     tc_track_analysis_data: xr.DataArray,
     slp_contour_magnitude: float = 200.0,
     dz_contour_magnitude: float = -6.0,
@@ -168,9 +170,11 @@ def generate_tc_tracks_by_init_time(
         logger.warning("No TC track data matches forecast times - returning empty")
 
     # Transform data to have init_time as a dimension
-    slp_transformed = utils.convert_valid_time_to_init_time(sea_level_pressure)
-    wind_transformed = utils.convert_valid_time_to_init_time(wind_speed)
-    dz_transformed = utils.convert_valid_time_to_init_time(geopotential_thickness)
+    slp_transformed = utils.convert_valid_time_to_init_time_updated(sea_level_pressure)
+    wind_transformed = utils.convert_valid_time_to_init_time_updated(wind_speed)
+    dz_transformed = utils.convert_valid_time_to_init_time_updated(geopotential_thickness)
+    u_transformed = utils.convert_valid_time_to_init_time_updated(u_wind)
+    v_transformed = utils.convert_valid_time_to_init_time_updated(v_wind)
 
     # Create init_time_idx array for tracking
     n_init_times = len(slp_transformed.init_time)
@@ -189,6 +193,8 @@ def generate_tc_tracks_by_init_time(
         slp_transformed,
         wind_transformed,
         dz_transformed,
+        u_transformed,
+        v_transformed,
         init_time_idx_array,
         kwargs={
             "init_time_values": slp_transformed.init_time.values,
@@ -212,6 +218,8 @@ def generate_tc_tracks_by_init_time(
             "orography_filter_threshold": orography_filter_threshold,
         },
         input_core_dims=[
+            ["lead_time", "latitude", "longitude"],
+            ["lead_time", "latitude", "longitude"],
             ["lead_time", "latitude", "longitude"],
             ["lead_time", "latitude", "longitude"],
             ["lead_time", "latitude", "longitude"],
@@ -240,6 +248,9 @@ def generate_tc_tracks_by_init_time(
         lons = np.array([d["longitude"] for d in all_detections])
         slp_vals = np.array([d["slp"] for d in all_detections])
         wind_vals = np.array([d["wind"] for d in all_detections])
+        g_vals = np.array([d["z_wind"] for d in all_detections])
+        u_wind_vals = np.array([d["u_wind"] for d in all_detections])
+        v_wind_vals = np.array([d["v_wind"] for d in all_detections])
     else:
         n_detections = 0
         lead_time_indices = np.array([])
@@ -248,6 +259,9 @@ def generate_tc_tracks_by_init_time(
         lons = np.array([])
         slp_vals = np.array([])
         wind_vals = np.array([])
+        g_vals = np.array([])
+        u_wind_vals = np.array([])
+        v_wind_vals = np.array([])
 
     # Convert to xarray Dataset
     return _convert_detections_to_dataset(
@@ -258,6 +272,9 @@ def generate_tc_tracks_by_init_time(
         lons,
         slp_vals,
         wind_vals,
+        g_vals,
+        u_wind_vals,
+        v_wind_vals,
         sea_level_pressure.lead_time,
         sea_level_pressure.valid_time,
     )
@@ -267,6 +284,9 @@ def _process_single_init_time(
     slp_data: npt.NDArray,  # (lead_time, lat, lon)
     wind_data: npt.NDArray,  # (lead_time, lat, lon)
     dz_data: npt.NDArray,  # (lead_time, lat, lon)
+    u_wind_data: npt.NDArray, # (lead_time, lat, lon)
+    v_wind_data: npt.NDArray, # (lead_time, lat, lon)
+    
     init_time_idx: int,
     init_time_values: npt.NDArray,  # Unique init_time values from transform
     init_time_coord: xr.DataArray,  # Original 2D init_time coordinate
@@ -344,6 +364,8 @@ def _process_single_init_time(
     # Find all (lead_time, valid_time) pairs for this init_time
     mask = np.abs(init_time_coord - current_init_time) <= np.timedelta64(1, "s")
     lead_time_indices, valid_time_indices = np.where(mask)
+    valid_time_indices = np.arange(len(time_coord.valid_time.values))
+
 
     # Get valid times and sort by them
     valid_times = pd.to_datetime(
@@ -372,6 +394,8 @@ def _process_single_init_time(
         slp_slice = slp_data[_lt_idx]
         wind_slice = wind_data[_lt_idx]
         dz_slice = dz_data[_lt_idx]
+        u_slice = u_wind_data[_lt_idx]
+        v_slice = v_wind_data[_lt_idx]
 
         peaks = _find_peaks_batch(
             slp_slice=slp_slice,
@@ -399,6 +423,9 @@ def _process_single_init_time(
                 "slp_slice": slp_slice,
                 "wind_slice": wind_slice,
                 "timestep_idx": timestep_idx,
+                "u_slice": u_slice,
+                "v_slice": v_slice,
+                "dz_slice": dz_slice
             }
         )
 
@@ -409,6 +436,9 @@ def _process_single_init_time(
         slp_slice = peak_data["slp_slice"]
         wind_slice = peak_data["wind_slice"]
         timestep_idx = peak_data["timestep_idx"]
+        uu_slice = peak_data["u_slice"]
+        vv_slice = peak_data["v_slice"]
+        z_slice = peak_data["dz_slice"]
 
         lead_time_index = lead_time_indices_seq[timestep_idx]
         valid_time_index = valid_time_indices_seq[timestep_idx]
@@ -428,6 +458,10 @@ def _process_single_init_time(
                     for r, c in peaks
                 ]
             )
+
+            peak_u_winds = uu_slice[peaks[:, 0], peaks[:, 1]]
+            peak_v_winds = vv_slice[peaks[:, 0], peaks[:, 1]]
+            peak_z_slice = z_slice[peaks[:, 0], peaks[:, 1]]
 
             unassigned_peaks = list(range(len(peaks)))
 
@@ -459,6 +493,9 @@ def _process_single_init_time(
                             "longitude": peak_lons[best_idx],
                             "slp": peak_slps[best_idx],
                             "wind": peak_winds[best_idx],
+                            "z_wind": peak_z_slice[best_idx],
+                            "u_wind": float(peak_u_winds[best_idx]),
+                            "v_wind": float(peak_v_winds[best_idx]),
                         }
                     )
 
@@ -482,6 +519,9 @@ def _process_single_init_time(
                         "longitude": peak_lons[peak_idx],
                         "slp": peak_slps[peak_idx],
                         "wind": peak_winds[peak_idx],
+                        "z_wind": peak_z_slice[peak_idx],
+                        "u_wind": float(peak_u_winds[peak_idx]),
+                        "v_wind": float(peak_v_winds[peak_idx]),
                     }
                 )
 
@@ -531,6 +571,9 @@ def _process_single_init_time(
         detections,
         slp_data,
         wind_data,
+        dz_data, 
+        u_wind_data,
+        v_wind_data,
         lead_time_indices_seq,
         valid_time_indices_seq,
         latitude,
@@ -952,6 +995,9 @@ def _fill_track_gaps_from_fields(
     detections: list[dict],
     slp_data: npt.NDArray,
     wind_data: npt.NDArray,
+    dz_data: npt.NDArray,
+    u_wind_data: npt.NDArray,
+    v_wind_data: npt.NDArray,
     lead_time_indices_seq: npt.NDArray,
     valid_time_indices_seq: npt.NDArray,
     latitude: npt.NDArray,
@@ -1081,6 +1127,10 @@ def _fill_track_gaps_from_fields(
                 c,
                 wind_search_radius_gridpts,
             )
+            u_slice = np.squeeze(u_wind_data[_lt_idx])
+            v_slice = np.squeeze(v_wind_data[_lt_idx])
+            z_slice = np.squeeze(dz_data[_lt_idx])
+
 
             filled = {
                 "lead_time_index": int(_lt_idx),
@@ -1090,6 +1140,9 @@ def _fill_track_gaps_from_fields(
                 "longitude": float(longitude[c]),
                 "slp": float(slp_slice[r, c]),
                 "wind": float(peak_wind),
+                "z_wind": float(z_slice[r, c]),
+                "u_wind": float(u_slice[r, c]),
+                "v_wind": float(v_slice[r, c]),
             }
             new_detections.append(filled)
             ts_to_det[ts_idx] = filled
@@ -1106,6 +1159,9 @@ def _convert_detections_to_dataset(
     lons: npt.NDArray,
     slp_vals: npt.NDArray,
     wind_vals: npt.NDArray,
+    z_wind_vals: npt.NDArray,
+    u_wind_vals: npt.NDArray, 
+    v_wind_vals: npt.NDArray,  
     lead_time_coord: xr.DataArray,
     valid_time_coord: xr.DataArray,
 ) -> xr.Dataset:
@@ -1140,6 +1196,18 @@ def _convert_detections_to_dataset(
                     np.full((0, 0), np.nan),
                 ),
                 "surface_wind_speed": (
+                    ["lead_time", "valid_time"],
+                    np.full((0, 0), np.nan),
+                ),
+                "z_wind": (
+                    ["lead_time", "valid_time"],
+                    np.full((0, 0), np.nan),
+                ),
+                "u_wind": (
+                    ["lead_time", "valid_time"],
+                    np.full((0, 0), np.nan),
+                ),
+                "v_wind": (
                     ["lead_time", "valid_time"],
                     np.full((0, 0), np.nan),
                 ),
@@ -1185,6 +1253,9 @@ def _convert_detections_to_dataset(
     wind_out = np.full(output_shape, np.nan)
     lat_out = np.full(output_shape, np.nan)
     lon_out = np.full(output_shape, np.nan)
+    z_wind_out = np.full(output_shape, np.nan)
+    u_wind_out = np.full(output_shape, np.nan)
+    v_wind_out = np.full(output_shape, np.nan)
 
     # Fill arrays
     for (
@@ -1196,6 +1267,9 @@ def _convert_detections_to_dataset(
         wind_out[lead_time_index, valid_time_index] = float(wind_vals[det_idx])
         lat_out[lead_time_index, valid_time_index] = float(lats[det_idx])
         lon_out[lead_time_index, valid_time_index] = float(lons[det_idx])
+        z_wind_out[lead_time_index, valid_time_index] = float(z_wind_vals[det_idx])
+        u_wind_out[lead_time_index, valid_time_index] = float(u_wind_vals[det_idx])
+        v_wind_out[lead_time_index, valid_time_index] = float(v_wind_vals[det_idx])
 
     # Build dataset with MSLP and wind speed
     ds = xr.Dataset(
@@ -1205,6 +1279,9 @@ def _convert_detections_to_dataset(
                 slp_out,
             ),
             "surface_wind_speed": (["lead_time", "valid_time"], wind_out),
+            "z_wind": (["lead_time", "valid_time"], z_wind_out),
+            "u_wind": (["lead_time", "valid_time"], u_wind_out),
+            "v_wind": (["lead_time", "valid_time"], v_wind_out),
         },
         coords={
             "lead_time": lead_times,
