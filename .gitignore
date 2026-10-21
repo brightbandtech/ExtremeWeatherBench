@@ -15,3 +15,25 @@ wheels/
 .vscode/
 docs/source/_build/
 site/
+# Data files and research outputs
+*.csv
+*.tsv
+*.parquet
+*.nc
+*.h5
+*.zarr
+data/
+datasets/
+
+# Images and plots
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+
+# Logs and tracking tools
+*.log
+logs/
+wandb/
+mlruns/

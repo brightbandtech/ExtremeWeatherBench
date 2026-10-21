@@ -66,6 +66,7 @@ class ExtremeWeatherBench:
         self,
         case_metadata: Union[list[dict[str, Any]], "list[cases.IndividualCase]"],
         evaluation_objects: list["inputs.EvaluationObject"],
+        selected_ensemble: Optional[int]= None,
         cache_dir: str | pathlib.Path | None = None,
         region_subsetter: Optional["regions.RegionSubsetter"] = None,
     ):
@@ -83,6 +84,7 @@ class ExtremeWeatherBench:
         self.case_metadata = cases.load_individual_cases_from_dict(case_metadata)
         self.evaluation_objects = evaluation_objects
         self.cache_dir = pathlib.Path(cache_dir) if cache_dir else None
+        self.selected_ensemble = selected_ensemble
 
         # Instantiate cache dir if needed
         if self.cache_dir and not self.cache_dir.exists():
@@ -158,6 +160,9 @@ class ExtremeWeatherBench:
         """
         _validate_output_format(output_format)
         logger.info("Running ExtremeWeatherBench evaluations...")
+
+        if self.selected_ensemble is not None:
+            kwargs.setdefault("selected_ensemble", self.selected_ensemble)
 
         # Check for serial or parallel configuration
         parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
