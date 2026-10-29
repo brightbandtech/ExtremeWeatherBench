@@ -37,6 +37,12 @@ _OUTPUT_FILENAMES = {
     help="Optional directory for caching intermediate data",
 )
 @click.option(
+    "--cache-format",
+    type=click.Choice(["zarr", "netcdf"]),
+    default="zarr",
+    help="Format for cached intermediate data (default: zarr)",
+)
+@click.option(
     "--n-jobs",
     type=int,
     default=1,
@@ -80,6 +86,7 @@ def cli_runner(
     config_file: str | None,
     output_dir: str | None,
     cache_dir: str | None,
+    cache_format: str,
     n_jobs: int,
     parallel_config: dict | None,
     save_case_operators: str | None,
@@ -108,7 +115,10 @@ def cli_runner(
         config_file: Path to a config.py file containing evaluation objects.
         output_dir: Directory for analysis outputs (default: current directory).
         cache_dir: Optional directory for caching intermediate data. When set,
-            datasets or dataarrays are computed and cached as zarrs.
+            datasets or dataarrays are computed and cached as zarrs, or as netCDF
+            files with --cache-format netcdf.
+        cache_format: Format for cached intermediate data: "zarr" or "netcdf"
+            (default: "zarr").
         n_jobs: Number of parallel jobs to run (default: 1 for serial execution).
         parallel_config: Advanced parallel configuration using joblib. Takes
             precedence over n_jobs if provided.
@@ -131,6 +141,9 @@ def cli_runner(
 
         # Use custom output and cache directories (cache enables zarr storage)
         $ ewb --default --output-dir ./results --cache-dir ./cache
+
+        # Cache intermediate data as netCDF files instead of zarrs
+        $ ewb --default --cache-dir ./cache --cache-format netcdf
 
         # Use custom parallel configuration
         $ ewb --default --parallel-config '{"backend": "dask", "n_jobs": 4}'
@@ -176,6 +189,7 @@ def cli_runner(
         case_metadata=case_list,
         evaluation_objects=evaluation_objects,
         cache_dir=cache_dir if cache_dir else None,
+        cache_format=cache_format,
     )
 
     # Get case operators
