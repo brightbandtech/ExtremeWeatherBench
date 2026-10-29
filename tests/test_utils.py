@@ -1866,6 +1866,81 @@ class TestMaybeComputeAndMaybeCache:
         # Should return a dataset
         assert isinstance(result, xr.Dataset)
 
+    def test_netcdf_cache_format_writes_nc_file(self, tmp_path):
+        """Test cache_format="netcdf" stores a .nc file that round-trips."""
+        ds = xr.Dataset(
+            {"temp": (["time", "lat"], [[1, 2], [3, 4]])},
+            coords={"time": [0, 1], "lat": [10, 20]},
+        ).chunk()
+
+        result = utils.maybe_cache_and_compute(
+            ds, name="forecast", cache_dir=tmp_path, cache_format="netcdf"
+        )
+
+        # Should write a single netCDF file and no zarr store
+        assert (tmp_path / "forecast.nc").exists()
+        assert not (tmp_path / "forecast.zarr").exists()
+        assert isinstance(result, xr.Dataset)
+        xr.testing.assert_equal(result, ds)
+
+    def test_existing_netcdf_cache_loads_from_cache(self, tmp_path):
+        """Test that an existing netCDF cache is loaded instead of rewritten."""
+        ds = xr.Dataset({"temp": (["x"], [1, 2])}, coords={"x": [0, 1]})
+
+        # First call writes the cache, second call should read it back
+        utils.maybe_cache_and_compute(
+            ds, name="test", cache_dir=tmp_path, cache_format="netcdf"
+        )
+        result = utils.maybe_cache_and_compute(
+            ds + 10, name="test", cache_dir=tmp_path, cache_format="netcdf"
+        )
+
+        xr.testing.assert_equal(result, ds)
+
+    def test_netcdf_cache_sparse_unnamed_dataarray(
+        self, sample_sparse_target_dataarray, tmp_path
+    ):
+        """Test an unnamed sparse dataarray is densified and cached as netCDF."""
+        result = utils.maybe_cache_and_compute(
+            sample_sparse_target_dataarray,
+            name="test",
+            cache_dir=tmp_path,
+            cache_format="netcdf",
+        )
+
+        assert (tmp_path / "test.nc").exists()
+        assert isinstance(result, xr.DataArray)
+        assert result.name is None
+        np.testing.assert_array_equal(
+            result.values, sample_sparse_target_dataarray.data.todense()
+        )
+
+    def test_netcdf_cache_stores_dict_attrs_as_json(self, tmp_path):
+        """Test dict attrs, which netCDF can't store, are written as JSON."""
+        mapping = {"wind": 1, "hail": 2, "tor": 3}
+        ds = xr.Dataset(
+            {"report_type": (["x"], [1, 2])},
+            coords={"x": [0, 1]},
+            attrs={"report_type_mapping": mapping},
+        )
+
+        result = utils.maybe_cache_and_compute(
+            ds, name="lsr", cache_dir=tmp_path, cache_format="netcdf"
+        )
+
+        assert result.attrs["report_type_mapping"] == '{"wind": 1, "hail": 2, "tor": 3}'
+        # The input dataset keeps its dict attr
+        assert ds.attrs["report_type_mapping"] == mapping
+
+    def test_invalid_cache_format_raises(self, tmp_path):
+        """Test an unknown cache_format raises a ValueError."""
+        ds = xr.Dataset({"temp": (["x"], [1, 2])}, coords={"x": [0, 1]})
+
+        with pytest.raises(ValueError, match="cache_format"):
+            utils.maybe_cache_and_compute(
+                ds, name="test", cache_dir=tmp_path, cache_format="parquet"
+            )
+
 
 class TestCacheMaybeDensifyHelper:
     """Test the _cache_maybe_densify_helper function."""
