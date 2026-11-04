@@ -130,6 +130,7 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         max_spatial_distance_degrees: float = 5.0,
         max_temporal_hours: float = 48.0,
         use_contour_validation: bool = True,
+        use_contour_validation_fallback: bool = False,
         timestep_count_wind_minimum: int = 10,
         latitude_max_degrees: float = 50.0,
         surface_pressure_threshold: float = 101000.0,
@@ -159,6 +160,8 @@ class TropicalCycloneTrackVariables(DerivedVariable):
                 Defaults to 48.0.
             use_contour_validation: Whether to apply closed contour validation.
                 Defaults to True.
+            use_contour_validation_fallback: Whether to fall back to the non-contour-validated case when contour validation eliminates all possible cyclone center candidates.
+                Defaults to False.
             timestep_count_wind_minimum: Minimum number of lead times where
                 the neighbourhood peak wind (max within
                 wind_search_radius_degrees) is >= 10 m/s for a track to be
@@ -191,6 +194,7 @@ class TropicalCycloneTrackVariables(DerivedVariable):
         self.max_spatial_distance_degrees = max_spatial_distance_degrees
         self.max_temporal_hours = max_temporal_hours
         self.use_contour_validation = use_contour_validation
+        self.use_contour_validation_fallback = use_contour_validation_fallback
         self.timestep_count_wind_minimum = timestep_count_wind_minimum
         self.latitude_max_degrees = latitude_max_degrees
         self.surface_pressure_threshold = surface_pressure_threshold
@@ -260,12 +264,15 @@ class TropicalCycloneTrackVariables(DerivedVariable):
             wind_speed=prepared_data["surface_wind_speed"],
             tc_track_analysis_data=tc_track_data,
             geopotential_thickness=prepared_data.get("geopotential_thickness", None),
+            u_wind=prepared_data["surface_eastward_wind"],
+            v_wind=prepared_data["surface_northward_wind"],
             slp_contour_magnitude=self.slp_contour_magnitude,
             dz_contour_magnitude=self.dz_contour_magnitude,
             min_distance_between_peaks_degrees=self.min_distance_between_peaks_degrees,
             max_spatial_distance_degrees=self.max_spatial_distance_degrees,
             max_temporal_hours=self.max_temporal_hours,
             use_contour_validation=self.use_contour_validation,
+            use_contour_validation_fallback=self.use_contour_validation_fallback,
             timestep_count_wind_minimum=self.timestep_count_wind_minimum,
             latitude_max_degrees=self.latitude_max_degrees,
             surface_pressure_threshold=self.surface_pressure_threshold,

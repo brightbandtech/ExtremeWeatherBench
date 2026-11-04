@@ -12,7 +12,7 @@ from typing import Any, Literal
 import geopandas as gpd
 import numpy as np
 import numpy.typing as npt
-import pandas as pd  # type: ignore[import-untyped]
+import pandas as pd  
 import pooch
 import regionmask
 import shapely
@@ -524,6 +524,18 @@ def unstack_valid_time_pairs(
 
     When ``like`` is given, reindex onto its lead_time and valid_time so
     fill cells come back as NaN on the original dense grid.
+
+    Args:
+        obj (xr.Dataset | xr.DataArray): The input dataset or data array 
+            containing a flattened "sample" dimension to be unstacked.
+        like (xr.Dataset | xr.DataArray, optional): A reference dataset or 
+            data array whose "lead_time" and "valid_time" coordinates will 
+            be used for reindexing. Defaults to None.
+
+    Returns:
+        xr.Dataset | xr.DataArray: The unstacked dataset or data array 
+            restored to its original multi-index coordinate dimensions, 
+            with missing values filled as NaN if reindexed against ``like``.
     """
     if "sample" not in obj.dims:
         return obj
@@ -534,20 +546,47 @@ def unstack_valid_time_pairs(
 
 
 def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:
-    """Convert the valid_time dimension to a init_time dimension.
+    """Convert the valid_time dimension to an init_time dimension.
+
+    Uses inner join to retain only the true forecast initialization time
+    common to all lead times, eliminating ghost dates and dimension collisions.
 
     Args:
-        da: The dataarray to convert with lead_time and valid_time dimensions.
+        da (xr.DataArray): The input DataArray containing "valid_time" 
+            and "lead_time" dimensions or coordinates.
 
     Returns:
-        The dataarray with an init_time dimension.
+        xr.DataArray: A new DataArray where the valid_time dimension 
+            has been swapped to an init_time coordinate/dimension using 
+            an inner join across all lead times.
     """
-    lead_time = _lead_time_as_timedelta(da.lead_time)
+
+    # 1. Drop existing init_time coordinate if present to avoid name collisions
+    if "init_time" in da.coords and "init_time" not in da.dims:
+        da = da.drop_vars("init_time")
+
+    # 2. Ensure lead_time coordinate matches timedelta representation
+    lead_time_coord = da.lead_time
+    if not np.issubdtype(lead_time_coord.dtype, np.timedelta64):
+        if np.max(lead_time_coord.values) > 1e10:
+            lead_time_coord = lead_time_coord.astype("timedelta64[ns]")
+        else:
+            lead_time_coord = lead_time_coord * np.timedelta64(1, "h")
+
+    # 3. Compute init_time coordinates (valid_time - lead_time)
     init_time = xr.DataArray(
         da.valid_time, coords={"valid_time": da.valid_time}
-    ) - xr.DataArray(lead_time, coords={"lead_time": da.lead_time})
+    ) - xr.DataArray(lead_time_coord, coords={"lead_time": da.lead_time})
+
     da = da.assign_coords(init_time=init_time)
-    return xr.concat(
+    n_valid = da.sizes.get("valid_time", 0)
+    n_lead = da.sizes.get("lead_time", 0)
+    join_type = "inner" if n_valid == n_lead else "outer"
+
+    # 4. Concatenate across lead_time using inner join:
+    # This automatically retains ONLY the true init_time ('2020-02-01 00:00:00')
+    # and drops all spurious outer-join shifted dates.
+    res = xr.concat(
         [
             da.sel(lead_time=lead).swap_dims({"valid_time": "init_time"})
             for lead in da.lead_time
@@ -555,9 +594,34 @@ def convert_valid_time_to_init_time(da: xr.DataArray) -> xr.DataArray:
         "lead_time",
         coords="different",
         compat="equals",
-        join="outer",
+        join=join_type,
     )
 
+    return res
+
+def convert_init_and_valid_time_to_lead_and_init_time(da: xr.DataArray) -> xr.DataArray:
+    """Convert the combination of init_time and valid_time dimension to a lead_time dimension.
+
+    Args:
+        da: The dataarray to convert with init_time and valid_time dimensions.
+
+    Returns:
+        The dataarray with a lead_time (and init_time) dimension.
+    """
+    lead_time = xr.DataArray(
+        da.valid_time, coords={"valid_time": da.valid_time}
+    ) - xr.DataArray(da.init_time, coords={"init_time": da.init_time})
+    da = da.assign_coords(lead_time=lead_time)
+    return xr.concat(
+        [
+            da.sel(init_time=init_t).swap_dims({"valid_time": "lead_time"})
+            for init_t in da.init_time
+        ],
+        "init_time",
+        coords="different",
+        compat="equals",
+        join="outer",
+    )
 
 def maybe_get_closest_timestamp_to_center_of_valid_times(
     output_times: xr.DataArray,
@@ -1537,3 +1601,25 @@ def maybe_cache_and_compute(
         return xr.open_dataset(cache_path / f"{name}.zarr")
     else:
         return xr.open_dataarray(cache_path / f"{name}.zarr")
+
+def convert_init_and_valid_time_to_lead_time(da: xr.DataArray) -> xr.DataArray:
+    """Convert the combination of init_time and valid_time dimension to a lead_time dimension.
+    Args:
+        da: The dataarray to convert with init_time and valid_time dimensions.
+    Returns:
+        The dataarray with a lead_time (and valid_time) dimension.
+    """
+    lead_time = xr.DataArray(
+        da.valid_time, coords={"valid_time": da.valid_time}
+    ) - xr.DataArray(da.init_time, coords={"init_time": da.init_time})
+    da = da.assign_coords(lead_time=lead_time)
+    return xr.concat(
+        [
+            da.sel(valid_time=valid_t).swap_dims({"init_time": "lead_time"})
+            for valid_t in da.valid_time
+        ],
+        "valid_time",
+        coords="different",
+        compat="equals",
+        join="outer",
+    )

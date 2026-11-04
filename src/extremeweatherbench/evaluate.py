@@ -159,6 +159,7 @@ class ExtremeWeatherBench:
         _validate_output_format(output_format)
         logger.info("Running ExtremeWeatherBench evaluations...")
 
+
         # Check for serial or parallel configuration
         parallel_config = _parallel_serial_config_check(n_jobs, parallel_config)
 
