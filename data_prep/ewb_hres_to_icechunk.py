@@ -202,9 +202,24 @@ ROOT_ATTRS = {
     "model": "IFS_HRES",
     "fcst_step_hours": 6,
     "steps": 40,
-    "source": "ECMWF IFS HRES operational forecasts (0.25 deg)",
-    # TODO(#438): replace with the ECMWF attribution wording cleared for redistribution.
-    "attribution": "Source: ECMWF IFS HRES operational forecasts.",
+    # Attribution per ECMWF's CC BY 4.0 terms (apps.ecmwf.int/datasets/licences/general/).
+    "attribution": (
+        "© 2023-2024 European Centre for Medium-Range Weather Forecasts (ECMWF). "
+        "Source: www.ecmwf.int. ECMWF IFS HRES operational forecast data processed "
+        "by Brightband for ExtremeWeatherBench."
+    ),
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "modifications": (
+        "Converted from GRIB to Zarr; variables renamed to ERA5/WeatherBench2 "
+        "conventions; latitude reordered to ascending (-90 to 90) and pressure levels "
+        "to ascending (50 to 1000 hPa); rechunked to one 2-D field per chunk. "
+        "Values are otherwise unmodified."
+    ),
+    "disclaimer": (
+        "ECMWF does not accept any liability whatsoever for any error or omission in "
+        "the data, their availability, or for any loss or damage arising from their use."
+    ),
     "processed_by": "Brightband for ExtremeWeatherBench",
 }
 
@@ -529,6 +544,8 @@ def validate(
         decode_times=False,
     ).drop_vars("valid_time")
     ref = xr.decode_cf(ref)
+
+    check(tgt.attrs == ROOT_ATTRS, "root attrs (incl. ECMWF attribution) as specified")
 
     # Schema vs GraphCast.
     for name in VAR_ATTRS:

@@ -96,6 +96,21 @@ THICKNESS_ATTRS = {
     "param_id": 129,
 }
 
+# Group attrs: the source store's ECMWF attribution, licence and disclaimer
+# (required; see ewb_hres_to_icechunk.py), plus this group's own modifications.
+ATTRIBUTION_KEYS = (
+    "attribution",
+    "license",
+    "license_url",
+    "disclaimer",
+    "processed_by",
+)
+MODIFICATIONS = (
+    "Subset of gs://{bucket}/{prefix}: 2m_temperature, mean_sea_level_pressure "
+    "and 10 m winds unmodified; geopotential_thickness_300-500 derived as "
+    "(z300 - z500) / 9.80665 m. See that store's `modifications` for prior changes."
+)
+
 ZSTD = [{"name": "zstd", "configuration": {"level": 0, "checksum": False}}]
 TIME_UNITS = "hours since 2023-01-01 00:00:00"
 TEMPLATE_MSG = f"Initialize {TARGET_GROUP} template"
@@ -145,7 +160,22 @@ def subset(src: xr.Dataset) -> xr.Dataset:
     return ds
 
 
-def build_template(src: xr.Dataset) -> xr.Dataset:
+def group_attrs(src: xr.Dataset, source_url: str) -> dict:
+    """Group attributes: the source's ECMWF attribution plus this subset's changes.
+
+    Raises:
+        KeyError: If the source store lacks any of the attribution attributes.
+    """
+    missing = [k for k in ATTRIBUTION_KEYS if k not in src.attrs]
+    if missing:
+        raise KeyError(f"source store is missing attribution attrs {missing}")
+    bucket, prefix = source_url.removeprefix("gs://").split("/", 1)
+    attrs = {k: src.attrs[k] for k in ATTRIBUTION_KEYS}
+    attrs["modifications"] = MODIFICATIONS.format(bucket=bucket, prefix=prefix)
+    return attrs
+
+
+def build_template(src: xr.Dataset, source_url: str) -> xr.Dataset:
     """Build the target dataset with placeholder (never computed) data.
 
     Coordinates come from the source in full; each data variable is a single
@@ -171,7 +201,7 @@ def build_template(src: xr.Dataset) -> xr.Dataset:
             da.empty(shape, chunks=shape, dtype="float32"),
             attrs=dict(attrs),
         )
-    return xr.Dataset(data_vars, coords=coords, attrs=dict(src.attrs))
+    return xr.Dataset(data_vars, coords=coords, attrs=group_attrs(src, source_url))
 
 
 def encoding_for(ds: xr.Dataset) -> dict:
@@ -227,7 +257,7 @@ def write_template(
     repo: icechunk.Repository, branch: str, src: xr.Dataset, src_id: str
 ) -> None:
     """Write the group's array metadata and coordinates, with no data chunks."""
-    ds = build_template(src)
+    ds = build_template(src, src_id.split()[0])
     session = repo.writable_session(branch)
     ds.to_zarr(
         session.store,
@@ -328,6 +358,11 @@ def validate(
 
     check(
         set(tgt.data_vars) == set(ref.data_vars), f"variables {sorted(tgt.data_vars)}"
+    )
+    check(
+        all(tgt.attrs.get(k) == src.attrs.get(k) for k in ATTRIBUTION_KEYS)
+        and "modifications" in tgt.attrs,
+        "ECMWF attribution, licence and disclaimer carried from source",
     )
     for name in DATA_VARS:
         t, r = tgt[name], ref[name]
