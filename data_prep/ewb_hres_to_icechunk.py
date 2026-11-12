@@ -2,9 +2,9 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "arraylake>=0.20",
+#     "arraylake>=1.8.0",
 #     "dask>=2024.1",
-#     "icechunk>=1.0",
+#     "icechunk>=2.3.1",
 #     "numpy>=1.26",
 #     "pandas>=2.0",
 #     "xarray>=2025.1",
