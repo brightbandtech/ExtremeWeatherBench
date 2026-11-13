@@ -1930,12 +1930,12 @@ class TestMaybeComputeAndMaybeCache:
         # The input keeps its uncompressed encoding
         assert not ds["temp"].encoding["zlib"]
 
-    def test_netcdf_cache_stores_dict_attrs_as_json(self, tmp_path):
-        """Test dict attrs, which netCDF can't store, are written as JSON."""
+    def test_netcdf_cache_stores_unsupported_attrs_as_json(self, tmp_path):
+        """Test attrs netCDF can't store are written as JSON at every level."""
         mapping = {"wind": 1, "hail": 2, "tor": 3}
         ds = xr.Dataset(
-            {"report_type": (["x"], [1, 2])},
-            coords={"x": [0, 1]},
+            {"report_type": (["x"], [1, 2], {"units": "1", "flagged": True})},
+            coords={"x": ("x", [0, 1], {"source": None})},
             attrs={"report_type_mapping": mapping},
         )
 
@@ -1944,8 +1944,13 @@ class TestMaybeComputeAndMaybeCache:
         )
 
         assert result.attrs["report_type_mapping"] == '{"wind": 1, "hail": 2, "tor": 3}'
-        # The input dataset keeps its dict attr
+        assert result["report_type"].attrs["units"] == "1"
+        assert result["report_type"].attrs["flagged"] == "true"
+        assert result["x"].attrs["source"] == "null"
+        # The input dataset keeps its original attrs
         assert ds.attrs["report_type_mapping"] == mapping
+        assert ds["report_type"].attrs["flagged"] is True
+        assert ds["x"].attrs["source"] is None
 
     def test_invalid_cache_format_raises(self, tmp_path):
         """Test an unknown cache_format raises a ValueError."""

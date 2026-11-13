@@ -1498,13 +1498,37 @@ def _cache_maybe_densify_helper(
         raise TypeError(f"data must be xr.Dataset or xr.DataArray, got {type(data)}")
 
 
+def _is_netcdf_attr(value: Any) -> bool:
+    """Check whether netCDF can store an attribute value.
+
+    netCDF attributes can be strings, numbers (but not bools) or lists of them.
+    """
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
+    items = value if isinstance(value, (list, tuple)) else [value]
+    return all(
+        isinstance(item, (str, bytes, int, float, np.number))
+        and not isinstance(item, bool)
+        for item in items
+    )
+
+
+def _netcdf_attrs(attrs: dict[Any, Any]) -> dict[Any, Any]:
+    """Return attrs with values netCDF can't store, such as dicts, written as JSON."""
+    return {
+        key: value if _is_netcdf_attr(value) else json.dumps(value, default=str)
+        for key, value in attrs.items()
+    }
+
+
 def _cache_netcdf_helper(
     data: xr.Dataset | xr.DataArray,
 ) -> xr.Dataset | xr.DataArray:
     """Helper function to prepare a dataset or dataarray for caching as netCDF.
 
-    Data variables are zlib compressed, and dict attrs (such as the LSR target's
-    report_type_mapping), which netCDF can't store, are written as JSON strings.
+    Data variables are zlib compressed. Attribute values netCDF can't store, such as
+    dicts (the LSR target's report_type_mapping), None or bools, are written as JSON
+    strings, on the dataset and on every variable and coordinate.
 
     Args:
         data: The dataset or dataarray to prepare.
@@ -1513,13 +1537,13 @@ def _cache_netcdf_helper(
         A shallow copy of the data that can be written with to_netcdf.
     """
     data = data.copy(deep=False)
-    data.attrs = {
-        key: json.dumps(value) if isinstance(value, dict) else value
-        for key, value in data.attrs.items()
-    }
-    data_arrays = (
-        list(data.data_vars.values()) if isinstance(data, xr.Dataset) else [data]
-    )
+    if isinstance(data, xr.Dataset):
+        data.attrs = _netcdf_attrs(data.attrs)
+        data_arrays = list(data.data_vars.values())
+    else:
+        data_arrays = [data]
+    for array in [*data_arrays, *data.coords.values()]:
+        array.attrs = _netcdf_attrs(array.attrs)
     for array in data_arrays:
         # Replace the source encoding: its compression settings, such as complevel=0
         # from a netCDF source, would otherwise override zlib
