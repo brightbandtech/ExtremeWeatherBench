@@ -1498,6 +1498,35 @@ def _cache_maybe_densify_helper(
         raise TypeError(f"data must be xr.Dataset or xr.DataArray, got {type(data)}")
 
 
+def _cache_netcdf_helper(
+    data: xr.Dataset | xr.DataArray,
+) -> xr.Dataset | xr.DataArray:
+    """Helper function to prepare a dataset or dataarray for caching as netCDF.
+
+    Data variables are zlib compressed, and dict attrs (such as the LSR target's
+    report_type_mapping), which netCDF can't store, are written as JSON strings.
+
+    Args:
+        data: The dataset or dataarray to prepare.
+
+    Returns:
+        A shallow copy of the data that can be written with to_netcdf.
+    """
+    data = data.copy(deep=False)
+    data.attrs = {
+        key: json.dumps(value) if isinstance(value, dict) else value
+        for key, value in data.attrs.items()
+    }
+    data_arrays = (
+        list(data.data_vars.values()) if isinstance(data, xr.Dataset) else [data]
+    )
+    for array in data_arrays:
+        # Replace the source encoding: its compression settings, such as complevel=0
+        # from a netCDF source, would otherwise override zlib
+        array.encoding = {"zlib": True}
+    return data
+
+
 def validate_cache_format(cache_format: str) -> None:
     """Raise ValueError unless cache_format is a supported cache format."""
     if cache_format not in CACHE_FORMATS:
@@ -1526,7 +1555,7 @@ def maybe_cache_and_compute(
             datasets or dataarrays will be cached in cache_format and loaded from the
             cache. Default is None.
         cache_format: "zarr" to cache as zarr stores, or "netcdf" to cache as single
-            netCDF files. Default is "zarr".
+            compressed netCDF files. Default is "zarr".
 
     Returns:
         The computed dataset if cache_dir is set, otherwise the
@@ -1553,13 +1582,7 @@ def maybe_cache_and_compute(
         progress.set_phase(f"caching {name}")
         data_to_cache = _cache_maybe_densify_helper(data)
         if cache_format == "netcdf":
-            # netCDF can't store dict attrs like LSR report_type_mapping; save as JSON
-            json_attrs = {
-                key: json.dumps(value)
-                for key, value in data_to_cache.attrs.items()
-                if isinstance(value, dict)
-            }
-            data_to_cache.assign_attrs(json_attrs).to_netcdf(cache_file)
+            _cache_netcdf_helper(data_to_cache).to_netcdf(cache_file)
         else:
             data_to_cache.to_zarr(cache_file, zarr_format=2, mode="w")
 

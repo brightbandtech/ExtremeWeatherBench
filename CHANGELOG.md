@@ -15,10 +15,10 @@ commits. Prefer this changelog when writing GitHub release notes.
 ### Added
 
 - `cache_format` on `ExtremeWeatherBench` and `--cache-format` in the CLI:
-  `"netcdf"` writes each case cache as a single netCDF file instead of a zarr
-  store (`"zarr"` stays the default). Dict-valued attributes, such as the
-  `LSR` target's `report_type_mapping`, are stored as JSON strings in the
-  netCDF files
+  `"netcdf"` writes each case cache as a single zlib-compressed netCDF file
+  instead of a zarr store (`"zarr"` stays the default). Dict-valued attributes,
+  such as the `LSR` target's `report_type_mapping`, are stored as JSON strings
+  in the netCDF files
   ([#437](https://github.com/brightbandtech/ExtremeWeatherBench/pull/437)).
 
 ## [1.1.1] - 2026-10-15

@@ -1911,9 +1911,24 @@ class TestMaybeComputeAndMaybeCache:
         assert (tmp_path / "test.nc").exists()
         assert isinstance(result, xr.DataArray)
         assert result.name is None
+        assert result.encoding["zlib"]
         np.testing.assert_array_equal(
             result.values, sample_sparse_target_dataarray.data.todense()
         )
+
+    def test_netcdf_cache_is_compressed(self, tmp_path):
+        """Test netCDF caches are zlib compressed, also for netCDF-sourced data."""
+        source = tmp_path / "source.nc"
+        xr.Dataset({"temp": (["x"], np.zeros(100))}).to_netcdf(source)
+        ds = xr.open_dataset(source)
+
+        utils.maybe_cache_and_compute(
+            ds, name="test", cache_dir=tmp_path, cache_format="netcdf"
+        )
+
+        assert xr.open_dataset(tmp_path / "test.nc")["temp"].encoding["zlib"]
+        # The input keeps its uncompressed encoding
+        assert not ds["temp"].encoding["zlib"]
 
     def test_netcdf_cache_stores_dict_attrs_as_json(self, tmp_path):
         """Test dict attrs, which netCDF can't store, are written as JSON."""
