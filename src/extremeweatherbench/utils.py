@@ -8,7 +8,7 @@ import logging
 import operator
 import pathlib
 from collections.abc import Callable, Sequence
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 import geopandas as gpd
 import numpy as np
@@ -41,6 +41,10 @@ operators = {
     "==": operator.eq,
     "!=": operator.ne,
 }
+
+# On-disk formats for the case caches written by maybe_cache_and_compute
+CacheFormat = Literal["zarr", "netcdf"]
+CACHE_FORMATS: tuple[str, ...] = get_args(CacheFormat)
 
 
 def _empty_init_time_array() -> xr.DataArray:
@@ -1494,6 +1498,14 @@ def _cache_maybe_densify_helper(
         raise TypeError(f"data must be xr.Dataset or xr.DataArray, got {type(data)}")
 
 
+def validate_cache_format(cache_format: str) -> None:
+    """Raise ValueError unless cache_format is a supported cache format."""
+    if cache_format not in CACHE_FORMATS:
+        raise ValueError(
+            f"Unknown cache_format '{cache_format}'. Expected one of {CACHE_FORMATS}."
+        )
+
+
 def maybe_cache_and_compute(
     data: xr.Dataset | xr.DataArray,
     name: str,
@@ -1527,10 +1539,7 @@ def maybe_cache_and_compute(
     if cache_dir is None:
         return data
 
-    if cache_format not in ("zarr", "netcdf"):
-        raise ValueError(
-            f"Unknown cache_format '{cache_format}'. Expected 'zarr' or 'netcdf'."
-        )
+    validate_cache_format(cache_format)
 
     # Compute and cache dataset or dataarray
     logger.info("Computing datasets and storing at %s...", cache_dir)

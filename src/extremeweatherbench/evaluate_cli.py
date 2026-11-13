@@ -6,7 +6,7 @@ import pickle
 import click
 import pandas as pd
 
-from extremeweatherbench import cases, defaults, evaluate, outputs
+from extremeweatherbench import cases, defaults, evaluate, outputs, utils
 
 _OUTPUT_FILENAMES = {
     "csv": "evaluation_results.csv",
@@ -38,7 +38,7 @@ _OUTPUT_FILENAMES = {
 )
 @click.option(
     "--cache-format",
-    type=click.Choice(["zarr", "netcdf"]),
+    type=click.Choice(utils.CACHE_FORMATS),
     default="zarr",
     help="Format for cached intermediate data (default: zarr)",
 )

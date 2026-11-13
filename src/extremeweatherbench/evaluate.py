@@ -87,10 +87,7 @@ class ExtremeWeatherBench:
         Raises:
             ValueError: If cache_format is not "zarr" or "netcdf".
         """
-        if cache_format not in ("zarr", "netcdf"):
-            raise ValueError(
-                f"Unknown cache_format '{cache_format}'. Expected 'zarr' or 'netcdf'."
-            )
+        utils.validate_cache_format(cache_format)
         # Load the case metadata from the input
         self.case_metadata = cases.load_individual_cases_from_dict(case_metadata)
         self.evaluation_objects = evaluation_objects
