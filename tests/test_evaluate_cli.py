@@ -115,6 +115,60 @@ class TestDefaultMode:
         call_args = mock_ewb_class.call_args
         assert call_args[1]["cache_dir"] == str(cache_dir)
 
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    def test_default_mode_with_cache_format(
+        self,
+        mock_ewb_class,
+        mock_load_cases,
+        mock_get_brightband,
+        runner,
+        temp_config_dir,
+    ):
+        """Test --cache-format is passed to ExtremeWeatherBench."""
+        mock_ewb = mock.Mock()
+        mock_ewb.case_operators = []
+        mock_ewb.run_evaluation.return_value = pd.DataFrame()
+        mock_ewb_class.return_value = mock_ewb
+        mock_load_cases.return_value = []
+
+        cache_dir = temp_config_dir / "cache"
+
+        # Defaults to zarr when --cache-format is not given
+        result = runner.invoke(
+            evaluate_cli.cli_runner, ["--default", "--cache-dir", str(cache_dir)]
+        )
+        assert result.exit_code == 0
+        assert mock_ewb_class.call_args[1]["cache_format"] == "zarr"
+
+        result = runner.invoke(
+            evaluate_cli.cli_runner,
+            ["--default", "--cache-dir", str(cache_dir), "--cache-format", "netcdf"],
+        )
+        assert result.exit_code == 0
+        assert mock_ewb_class.call_args[1]["cache_format"] == "netcdf"
+
+    @mock.patch(
+        "extremeweatherbench.defaults.get_brightband_evaluation_objects",
+        return_value=[],
+    )
+    @mock.patch("extremeweatherbench.evaluate_cli._load_default_cases")
+    @mock.patch("extremeweatherbench.evaluate.ExtremeWeatherBench")
+    def test_invalid_cache_format(
+        self, mock_ewb_class, mock_load_cases, mock_get_brightband, runner
+    ):
+        """Test an unknown --cache-format is rejected before evaluation."""
+        result = runner.invoke(
+            evaluate_cli.cli_runner, ["--default", "--cache-format", "parquet"]
+        )
+
+        assert result.exit_code != 0
+        mock_ewb_class.assert_not_called()
+
 
 class TestConfigFileMode:
     """Test --config-file mode functionality."""

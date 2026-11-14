@@ -3,11 +3,12 @@ specialized package."""
 
 import datetime
 import inspect
+import json
 import logging
 import operator
 import pathlib
 from collections.abc import Callable, Sequence
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 import geopandas as gpd
 import numpy as np
@@ -40,6 +41,10 @@ operators = {
     "==": operator.eq,
     "!=": operator.ne,
 }
+
+# On-disk formats for the case caches written by maybe_cache_and_compute
+CacheFormat = Literal["zarr", "netcdf"]
+CACHE_FORMATS: tuple[str, ...] = get_args(CacheFormat)
 
 
 def _empty_init_time_array() -> xr.DataArray:
@@ -1493,10 +1498,72 @@ def _cache_maybe_densify_helper(
         raise TypeError(f"data must be xr.Dataset or xr.DataArray, got {type(data)}")
 
 
+def _is_netcdf_attr(value: Any) -> bool:
+    """Check whether netCDF can store an attribute value.
+
+    netCDF attributes can be strings, numbers (but not bools) or lists of them.
+    """
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
+    items = value if isinstance(value, (list, tuple)) else [value]
+    return all(
+        isinstance(item, (str, bytes, int, float, np.number))
+        and not isinstance(item, bool)
+        for item in items
+    )
+
+
+def _netcdf_attrs(attrs: dict[Any, Any]) -> dict[Any, Any]:
+    """Return attrs with values netCDF can't store, such as dicts, written as JSON."""
+    return {
+        key: value if _is_netcdf_attr(value) else json.dumps(value, default=str)
+        for key, value in attrs.items()
+    }
+
+
+def _cache_netcdf_helper(
+    data: xr.Dataset | xr.DataArray,
+) -> xr.Dataset | xr.DataArray:
+    """Helper function to prepare a dataset or dataarray for caching as netCDF.
+
+    Data variables are zlib compressed. Attribute values netCDF can't store, such as
+    dicts (the LSR target's report_type_mapping), None or bools, are written as JSON
+    strings, on the dataset and on every variable and coordinate.
+
+    Args:
+        data: The dataset or dataarray to prepare.
+
+    Returns:
+        A shallow copy of the data that can be written with to_netcdf.
+    """
+    data = data.copy(deep=False)
+    if isinstance(data, xr.Dataset):
+        data.attrs = _netcdf_attrs(data.attrs)
+        data_arrays = list(data.data_vars.values())
+    else:
+        data_arrays = [data]
+    for array in [*data_arrays, *data.coords.values()]:
+        array.attrs = _netcdf_attrs(array.attrs)
+    for array in data_arrays:
+        # Replace the source encoding: its compression settings, such as complevel=0
+        # from a netCDF source, would otherwise override zlib
+        array.encoding = {"zlib": True}
+    return data
+
+
+def validate_cache_format(cache_format: str) -> None:
+    """Raise ValueError unless cache_format is a supported cache format."""
+    if cache_format not in CACHE_FORMATS:
+        raise ValueError(
+            f"Unknown cache_format '{cache_format}'. Expected one of {CACHE_FORMATS}."
+        )
+
+
 def maybe_cache_and_compute(
     data: xr.Dataset | xr.DataArray,
     name: str,
     cache_dir: str | pathlib.Path | None = None,
+    cache_format: str = "zarr",
 ) -> xr.Dataset | xr.DataArray:
     """Compute and cache datasets if cache_dir is provided.
 
@@ -1509,31 +1576,42 @@ def maybe_cache_and_compute(
         data: The dataset or dataarray to compute and cache.
         name: The name of the dataset for naming cached files.
         cache_dir: The directory to cache the datasets. If provided,
-            datasets or dataarrays will be cached as zarrs and loaded from the cache.
-            Default is None.
+            datasets or dataarrays will be cached in cache_format and loaded from the
+            cache. Default is None.
+        cache_format: "zarr" to cache as zarr stores, or "netcdf" to cache as single
+            compressed netCDF files. Default is "zarr".
 
     Returns:
         The computed dataset if cache_dir is set, otherwise the
         original dataset.
+
+    Raises:
+        ValueError: If cache_format is not "zarr" or "netcdf".
     """
     # If no caching, return as dataset or dataarray
     if cache_dir is None:
         return data
 
+    validate_cache_format(cache_format)
+
     # Compute and cache dataset or dataarray
     logger.info("Computing datasets and storing at %s...", cache_dir)
     cache_path = pathlib.Path(cache_dir)
+    suffix = ".nc" if cache_format == "netcdf" else ".zarr"
+    cache_file = cache_path / f"{name}{suffix}"
 
     # If the cache file does not exist, maybe densify the data and cache it. Sparse data
-    # must be densified to be stored in zarrs
-    if not (cache_path / f"{name}.zarr").exists():
+    # must be densified to be stored in zarrs or netCDF files
+    if not cache_file.exists():
         progress.set_phase(f"caching {name}")
-        _cache_maybe_densify_helper(data).to_zarr(
-            cache_path / f"{name}.zarr", zarr_format=2, mode="w"
-        )
+        data_to_cache = _cache_maybe_densify_helper(data)
+        if cache_format == "netcdf":
+            _cache_netcdf_helper(data_to_cache).to_netcdf(cache_file)
+        else:
+            data_to_cache.to_zarr(cache_file, zarr_format=2, mode="w")
 
     # Load the data from the cache, matching the type of the input data
     if isinstance(data, xr.Dataset):
-        return xr.open_dataset(cache_path / f"{name}.zarr")
+        return xr.open_dataset(cache_file)
     else:
-        return xr.open_dataarray(cache_path / f"{name}.zarr")
+        return xr.open_dataarray(cache_file)
