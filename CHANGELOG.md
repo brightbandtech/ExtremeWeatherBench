@@ -10,6 +10,17 @@ GitHub's auto-generated release notes can list PRs that were already
 squash-merged into `main`, because `develop` still contains those original
 commits. Prefer this changelog when writing GitHub release notes.
 
+## [Unreleased]
+
+### Added
+
+- `cache_format` on `ExtremeWeatherBench` and `--cache-format` in the CLI:
+  `"netcdf"` writes each case cache as a single zlib-compressed netCDF file
+  instead of a zarr store (`"zarr"` stays the default). Attribute values that
+  netCDF can't store, such as the `LSR` target's `report_type_mapping` dict,
+  are stored as JSON strings in the netCDF files
+  ([#437](https://github.com/brightbandtech/ExtremeWeatherBench/pull/437)).
+
 ## [1.1.1] - 2026-10-15
 
 ### Added

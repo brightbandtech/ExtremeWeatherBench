@@ -341,6 +341,84 @@ class TestExtremeWeatherBench:
 
         assert ewb.cache_dir == cache_dir
 
+    def test_initialization_with_cache_format(
+        self, sample_cases_list, sample_evaluation_object
+    ):
+        """Test cache_format defaults to zarr and accepts netcdf."""
+        ewb = evaluate.ExtremeWeatherBench(
+            case_metadata=sample_cases_list,
+            evaluation_objects=[sample_evaluation_object],
+        )
+        assert ewb.cache_format == "zarr"
+
+        ewb = evaluate.ExtremeWeatherBench(
+            case_metadata=sample_cases_list,
+            evaluation_objects=[sample_evaluation_object],
+            cache_format="netcdf",
+        )
+        assert ewb.cache_format == "netcdf"
+
+    def test_initialization_with_invalid_cache_format(
+        self, sample_cases_list, sample_evaluation_object
+    ):
+        """Test an unknown cache_format fails before any case runs."""
+        with pytest.raises(ValueError, match="cache_format"):
+            evaluate.ExtremeWeatherBench(
+                case_metadata=sample_cases_list,
+                evaluation_objects=[sample_evaluation_object],
+                cache_format="parquet",
+            )
+
+    @pytest.mark.parametrize(
+        "parallel_config", [None, {"backend": "threading", "n_jobs": 2}]
+    )
+    @mock.patch("extremeweatherbench.evaluate._evaluate_metric")
+    @mock.patch("extremeweatherbench.evaluate._build_datasets")
+    def test_run_evaluation_writes_netcdf_cache(
+        self,
+        mock_build_datasets,
+        mock_evaluate_metric,
+        parallel_config,
+        sample_cases_list,
+        sample_evaluation_object,
+        sample_case_operator,
+        sample_forecast_dataset,
+        sample_target_dataset,
+        tmp_path,
+    ):
+        """Test serial and parallel runs write the case caches as netCDF."""
+        mock_build_datasets.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+        sample_case_operator.target.maybe_align_forecast_to_target.return_value = (
+            sample_forecast_dataset,
+            sample_target_dataset,
+        )
+        mock_metric = mock.Mock(spec=metrics.BaseMetric)
+        mock_metric.forecast_variable = None
+        mock_metric.target_variable = None
+        mock_metric.maybe_expand_composite.return_value = [mock_metric]
+        mock_metric.maybe_prepare_composite_kwargs.side_effect = lambda **kwargs: kwargs
+        sample_case_operator.metric_list = [mock_metric]
+        mock_evaluate_metric.return_value = _annotated_result()
+
+        with mock.patch.object(
+            evaluate.ExtremeWeatherBench, "case_operators", new=[sample_case_operator]
+        ):
+            ewb = evaluate.ExtremeWeatherBench(
+                case_metadata=sample_cases_list,
+                evaluation_objects=[sample_evaluation_object],
+                cache_dir=tmp_path,
+                cache_format="netcdf",
+            )
+            ewb.run_evaluation(parallel_config=parallel_config, progress=False)
+
+        case_id = sample_case_operator.case_metadata.case_id_number
+        assert (tmp_path / f"{case_id}_MockForecast.nc").exists()
+        assert (tmp_path / f"{case_id}_MockTarget.nc").exists()
+        assert not list(tmp_path.glob("*.zarr"))
+
     @mock.patch("extremeweatherbench.cases.build_case_operators")
     def test_case_operators_property(
         self,
@@ -405,6 +483,7 @@ class TestExtremeWeatherBench:
             mock_run_evaluation.assert_called_once_with(
                 [sample_case_operator],
                 cache_dir=None,
+                cache_format="zarr",
                 parallel_config=None,
                 progress=True,
             )
@@ -438,6 +517,7 @@ class TestExtremeWeatherBench:
             mock_run_evaluation.assert_called_once_with(
                 [sample_case_operator],
                 cache_dir=None,
+                cache_format="zarr",
                 parallel_config={"backend": "loky", "n_jobs": 2},
                 progress=True,
             )
@@ -691,7 +771,7 @@ class TestRunCaseOperators:
         result = evaluate._run_evaluation([sample_case_operator], cache_dir=None)
 
         mock_compute_case_operator_results.assert_called_once_with(
-            sample_case_operator, None
+            sample_case_operator, None, cache_format="zarr"
         )
         assert len(result) == 1
         assert result[0] is mock_results
@@ -713,6 +793,7 @@ class TestRunCaseOperators:
         mock_run_parallel_evaluation.assert_called_once_with(
             [sample_case_operator],
             cache_dir=None,
+            cache_format="zarr",
             parallel_config={"backend": "threading", "n_jobs": 4},
             progress=True,
         )
@@ -827,7 +908,7 @@ class TestRunSerial:
         result = evaluate._run_evaluation([sample_case_operator], parallel_config=None)
 
         mock_compute_case_operator_results.assert_called_once_with(
-            sample_case_operator, None
+            sample_case_operator, None, cache_format="zarr"
         )
         assert len(result) == 1
         assert result[0] is mock_result

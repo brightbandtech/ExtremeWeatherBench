@@ -60,6 +60,8 @@ class ExtremeWeatherBench:
         region_subsetter: An optional region subsetter to subset the cases that are
             part of the evaluation to a Region object or a dictionary of lat/lon
             bounds.
+        cache_format: The format of the cached mid-flight outputs, "zarr" or
+            "netcdf".
     """
 
     def __init__(
@@ -68,6 +70,7 @@ class ExtremeWeatherBench:
         evaluation_objects: list["inputs.EvaluationObject"],
         cache_dir: str | pathlib.Path | None = None,
         region_subsetter: Optional["regions.RegionSubsetter"] = None,
+        cache_format: str = "zarr",
     ):
         """Initialize the ExtremeWeatherBench workflow.
 
@@ -78,11 +81,18 @@ class ExtremeWeatherBench:
                 serial runs.
             region_subsetter: Optional RegionSubsetter to filter cases by
                 spatial region.
+            cache_format: Format for cached mid-flight outputs, "zarr" or
+                "netcdf". Defaults to "zarr".
+
+        Raises:
+            ValueError: If cache_format is not "zarr" or "netcdf".
         """
+        utils.validate_cache_format(cache_format)
         # Load the case metadata from the input
         self.case_metadata = cases.load_individual_cases_from_dict(case_metadata)
         self.evaluation_objects = evaluation_objects
         self.cache_dir = pathlib.Path(cache_dir) if cache_dir else None
+        self.cache_format = cache_format
 
         # Instantiate cache dir if needed
         if self.cache_dir and not self.cache_dir.exists():
@@ -165,6 +175,7 @@ class ExtremeWeatherBench:
         run_results = _run_evaluation(
             self.case_operators,
             cache_dir=self.cache_dir,
+            cache_format=self.cache_format,
             parallel_config=parallel_config,
             progress=progress,
             **kwargs,
@@ -254,6 +265,7 @@ def _parallel_serial_config_check(
 def _run_evaluation(
     case_operators: list["cases.CaseOperator"],
     cache_dir: pathlib.Path | None = None,
+    cache_format: str = "zarr",
     parallel_config: dict | None = None,
     progress: bool = True,
     **kwargs,
@@ -263,6 +275,7 @@ def _run_evaluation(
     Args:
         case_operators: List of case operators to run.
         cache_dir: Optional directory for caching (serial mode only).
+        cache_format: Format for cached data, "zarr" or "netcdf".
         parallel_config: Optional dict of joblib parallel configuration.
         progress: Whether to display progress bars. Defaults to True.
         **kwargs: Additional keyword arguments passed to case operators.
@@ -276,6 +289,7 @@ def _run_evaluation(
             run_results = _run_parallel_evaluation(
                 case_operators,
                 cache_dir=cache_dir,
+                cache_format=cache_format,
                 parallel_config=parallel_config,
                 progress=progress,
                 **kwargs,
@@ -303,7 +317,10 @@ def _run_evaluation(
                         try:
                             run_results.append(
                                 _compute_case_operator_results(
-                                    case_operator, cache_dir, **kwargs
+                                    case_operator,
+                                    cache_dir,
+                                    cache_format=cache_format,
+                                    **kwargs,
                                 )
                             )
                         finally:
@@ -322,6 +339,7 @@ def _run_parallel_evaluation(
     case_operators: list["cases.CaseOperator"],
     parallel_config: dict,
     cache_dir: pathlib.Path | None = None,
+    cache_format: str = "zarr",
     progress: bool = True,
     **kwargs,
 ) -> list[list[xr.DataArray]]:
@@ -331,6 +349,7 @@ def _run_parallel_evaluation(
         case_operators: List of case operators to run.
         parallel_config: Joblib parallel configuration dict.
         cache_dir: Optional directory for caching (unused in parallel mode).
+        cache_format: Format for cached data, "zarr" or "netcdf".
         progress: Whether to display progress bars. Defaults to True.
         **kwargs: Additional arguments, must include 'parallel_config' dict.
 
@@ -421,6 +440,7 @@ def _run_parallel_evaluation(
                 joblib.delayed(_compute_operator_group_with_progress)(
                     group,
                     cache_dir=cache_dir,
+                    cache_format=cache_format,
                     event_queue=event_queue,
                     log_queue=log_queue,
                     **kwargs,
@@ -593,6 +613,7 @@ def _run_pipeline_maybe_cached(
 def _compute_operator_group_with_progress(
     indexed_ops: list[IndexedOperator],
     cache_dir: pathlib.Path | None = None,
+    cache_format: str = "zarr",
     event_queue=None,
     log_queue=None,
     **kwargs,
@@ -610,6 +631,7 @@ def _compute_operator_group_with_progress(
             _compute_case_operator_with_progress(
                 indexed.operator,
                 cache_dir=cache_dir,
+                cache_format=cache_format,
                 event_queue=event_queue,
                 log_queue=log_queue,
                 dispatch_id=indexed.index,
@@ -730,6 +752,7 @@ def compute_case_operator(
     case_operator: "cases.CaseOperator",
     cache_dir: pathlib.Path | None = None,
     output_format: str = "pandas",
+    cache_format: str = "zarr",
     **kwargs,
 ) -> pd.DataFrame | xr.Dataset:
     """Compute the resulting evaluation of a case operator.
@@ -745,6 +768,7 @@ def compute_case_operator(
         cache_dir: The directory to cache mid-flight outputs (serial mode).
         output_format: "pandas" for the long-form DataFrame, or "xarray"
             for the flat Dataset from outputs.results_to_dataset.
+        cache_format: Format for cached mid-flight outputs, "zarr" or "netcdf".
 
     Returns:
         The case operator's results in the requested output_format.
@@ -755,13 +779,16 @@ def compute_case_operator(
         ValueError: If output_format is not "pandas" or "xarray".
     """
     _validate_output_format(output_format)
-    results = _compute_case_operator_results(case_operator, cache_dir, **kwargs)
+    results = _compute_case_operator_results(
+        case_operator, cache_dir, cache_format=cache_format, **kwargs
+    )
     return _convert_results(results, output_format)
 
 
 def _compute_case_operator_results(
     case_operator: "cases.CaseOperator",
     cache_dir: pathlib.Path | None = None,
+    cache_format: str = "zarr",
     **kwargs,
 ) -> list[xr.DataArray]:
     """Compute the annotated metric results for a case operator.
@@ -775,6 +802,7 @@ def _compute_case_operator_results(
     Args:
         case_operator: The case operator to compute the results of.
         cache_dir: The directory to cache mid-flight outputs (serial mode).
+        cache_format: Format for cached data, "zarr" or "netcdf".
 
     Returns:
         A list of annotated metric result DataArrays.
@@ -816,11 +844,13 @@ def _compute_case_operator_results(
     aligned_forecast_ds = utils.maybe_cache_and_compute(
         aligned_forecast_ds,
         cache_dir=cache_dir,
+        cache_format=cache_format,
         name=f"{case_operator.case_metadata.case_id_number}_{case_operator.forecast.name}",
     )
     aligned_target_ds = utils.maybe_cache_and_compute(
         aligned_target_ds,
         cache_dir=cache_dir,
+        cache_format=cache_format,
         name=f"{case_operator.case_metadata.case_id_number}_{case_operator.target.name}",
     )
     # Compute once so each metric does not rebuild the same dask graph.
@@ -875,6 +905,7 @@ def _compute_case_operator_results(
 def _compute_case_operator_with_progress(
     case_operator: "cases.CaseOperator",
     cache_dir: pathlib.Path | None = None,
+    cache_format: str = "zarr",
     event_queue=None,
     log_queue=None,
     dispatch_id=None,
@@ -888,6 +919,7 @@ def _compute_case_operator_with_progress(
     Args:
         case_operator: The case operator to compute.
         cache_dir: The directory to cache mid-flight outputs.
+        cache_format: Format for cached data, "zarr" or "netcdf".
         event_queue: Cross-process queue for progress events, or None.
         log_queue: Cross-process queue for log records, or None. When
             set, this process's log records and warnings are forwarded
@@ -902,7 +934,9 @@ def _compute_case_operator_with_progress(
         A list of annotated metric result DataArrays.
     """
     if event_queue is None:
-        return _compute_case_operator_results(case_operator, cache_dir, **kwargs)
+        return _compute_case_operator_results(
+            case_operator, cache_dir, cache_format=cache_format, **kwargs
+        )
 
     case_id = case_operator.case_metadata.case_id_number
     slot_key = dispatch_id if dispatch_id is not None else case_id
@@ -927,7 +961,9 @@ def _compute_case_operator_with_progress(
     )
     try:
         with log_context, progress_module.DaskTaskSink(sink, case_id):
-            return _compute_case_operator_results(case_operator, cache_dir, **kwargs)
+            return _compute_case_operator_results(
+                case_operator, cache_dir, cache_format=cache_format, **kwargs
+            )
     finally:
         sink(
             progress_module.ProgressEvent(
