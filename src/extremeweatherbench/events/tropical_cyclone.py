@@ -581,6 +581,26 @@ def find_furthest_contour_from_point(
     return furthest_point, furthest_point  # Return as tuple of arrays
 
 
+def _uniform_grid_spacing(coords: npt.NDArray) -> float | None:
+    """Spacing (degrees) of a strictly monotone, evenly spaced 1-D coordinate.
+
+    The windows below are sized from the first cell spacing; on a non-uniform
+    grid that spacing can be wider than the spacing near the point, which
+    would make the window too small. Returns None for non-uniform, too-short,
+    or non-finite (NaN/inf) coordinates so the caller keeps the whole-field
+    path. The relative tolerance only has to absorb float32 rounding of a
+    truly uniform grid; the one-cell window margin dwarfs it.
+    """
+    if coords.size < 2:
+        return None
+    step = abs(float(coords[1]) - float(coords[0]))
+    if not np.isfinite(step) or step <= 0:
+        return None
+    if not np.allclose(np.abs(np.diff(coords)), step, rtol=1e-3, atol=1e-9):
+        return None
+    return step
+
+
 def _coordinate_window(
     point: tuple[int, int],
     radius_degrees: float,
@@ -597,15 +617,13 @@ def _coordinate_window(
     within ``radius_degrees`` of the point.
 
     Returns None when the longitude window would wrap the antimeridian, or the
-    coordinates are too short to measure: the caller then falls back to the
+    coordinates are not uniform 1-D degrees: the caller then falls back to the
     whole-field search, which keeps results identical in the rare edge cases.
     """
     nlat, nlon = lat_coords.size, lon_coords.size
-    if nlat < 2 or nlon < 2:
-        return None
-    dlat = abs(float(lat_coords[1]) - float(lat_coords[0]))
-    dlon = abs(float(lon_coords[1]) - float(lon_coords[0]))
-    if not (dlat > 0 and dlon > 0):
+    dlat = _uniform_grid_spacing(lat_coords)
+    dlon = _uniform_grid_spacing(lon_coords)
+    if dlat is None or dlon is None:
         return None
     row, col = int(point[0]), int(point[1])
     half_lat = int(np.ceil(radius_degrees / dlat)) + 1
@@ -1027,13 +1045,13 @@ def _create_spatial_mask(
     # allocated a (n_track_points, nlat, nlon) float field per call — the
     # largest temporary in detection, and ~99% of it always compared False.
     # Windows are conservative (see _coordinate_window) and wrap at the
-    # antimeridian; degenerate grids fall back to the full field.
-    dlat = abs(float(lat_coords[1]) - float(lat_coords[0])) if nlat > 1 else 0.0
-    dlon = abs(float(lon_coords[1]) - float(lon_coords[0])) if nlon > 1 else 0.0
+    # antimeridian; non-uniform or degenerate grids fall back to the full field.
+    dlat = _uniform_grid_spacing(lat_coords)
+    dlon = _uniform_grid_spacing(lon_coords)
     for tc_lat, tc_lon in zip(tc_lats, tc_lons, strict=True):
         row0 = int(np.argmin(np.abs(lat_coords - tc_lat)))
         col0 = int(np.argmin(np.abs(((lon_coords - tc_lon + 180) % 360) - 180)))
-        if dlat > 0 and dlon > 0:
+        if dlat is not None and dlon is not None:
             half_lat = int(np.ceil(max_distance_degrees / dlat)) + 1
             r0, r1 = max(0, row0 - half_lat), min(nlat, row0 + half_lat + 1)
             # conservative longitude half-width; see _coordinate_window

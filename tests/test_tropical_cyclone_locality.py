@@ -121,6 +121,54 @@ def test_spatial_mask_empty_and_degenerate_grids():
     ).any()
 
 
+def test_spatial_mask_falls_back_on_non_uniform_and_nan_grids():
+    """The window sizes itself on the first cell spacing; grids where that is
+    not the spacing everywhere (or where a coordinate is NaN) must keep the
+    whole-field result exactly."""
+    lat = np.concatenate([np.arange(90, 0, -2.0), np.arange(0, -90.01, -0.5)])
+    lon = np.concatenate([np.arange(0, 180, 2.0), np.arange(180, 360, 0.5)])
+    df = pd.DataFrame({"latitude": [-40.0, 30.0], "longitude": [200.0, 100.0]})
+    np.testing.assert_array_equal(
+        tc._create_spatial_mask(lat, lon, df, 5.0),
+        reference_spatial_mask(lat, lon, df, 5.0),
+    )
+    lat_nan = np.arange(90, -90.01, -0.25)
+    lat_nan[-1] = np.nan
+    lon_ok = np.arange(0, 360, 0.25)
+    df_nan = pd.DataFrame({"latitude": [20.0], "longitude": [100.0]})
+    np.testing.assert_array_equal(
+        tc._create_spatial_mask(lat_nan, lon_ok, df_nan, 5.0),
+        reference_spatial_mask(lat_nan, lon_ok, df_nan, 5.0),
+    )
+
+
+def test_coordinate_window_rejects_non_uniform_and_nan_grids():
+    lat = np.arange(90, -90.01, -0.25)
+    lon = np.arange(0, 360, 0.25)
+    assert tc._coordinate_window((400, 800), 7.5, lat, lon) is not None
+    lon_bad = lon.copy()
+    lon_bad[800] += 0.1  # one misplaced cell
+    assert tc._coordinate_window((400, 800), 7.5, lat, lon_bad) is None
+    lat_bad = lat.copy()
+    lat_bad[-1] = np.nan
+    assert tc._coordinate_window((400, 800), 7.5, lat_bad, lon) is None
+
+
+def test_windowed_contours_equal_global_on_non_uniform_grids():
+    """With the fallback in place a windowed call is the global call."""
+    field = _low_field(nlat=201, nlon=400, nlow=12, seed=13)
+    lon = field.longitude.values.copy()
+    lon[1] += 0.05  # non-uniform in exactly one gap
+    field = field.assign_coords(longitude=lon)
+    for point in _minima(field)[:10]:
+        point = tuple(int(v) for v in point)
+        glob = tc.find_contours_from_point_specified_field(field, point, 300.0)
+        loc = tc.find_contours_from_point_specified_field(field, point, 300.0, 7.5)
+        assert len(glob) == len(loc)
+        for c1, c2 in zip(glob, loc):
+            np.testing.assert_allclose(c1, c2, atol=0.0)
+
+
 # --------------------------------------------------------------------------
 # find_contours_from_point_specified_field
 # --------------------------------------------------------------------------
