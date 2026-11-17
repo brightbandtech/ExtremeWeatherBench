@@ -179,27 +179,27 @@ hres_forecast = ewb.inputs.get_ifs_hres_icechunk(
 
 > **Detailed Explanation**: `get_ifs_hres_icechunk` is a thin wrapper. To open the
 > store yourself (e.g. to pin a branch or inspect it in a notebook):
->
-> ```python
-> import icechunk
-> import xarray as xr
-> import extremeweatherbench as ewb
->
-> storage = icechunk.gcs_storage(
->     bucket="brightband-public-mlwp-forecast-archive",
->     prefix="ifs-hres.hres.icechunk",
->     from_env=True,
-> )
-> repo = icechunk.Repository.open(storage)
-> ds = xr.open_zarr(repo.readonly_session("main").store, consolidated=False)
->
-> hres_forecast = ewb.inputs.XarrayForecast(
->     ds=ds,
->     name="IFS-HRES",
->     variables=["surface_air_temperature"],
->     variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
-> )
-> ```
+
+```python
+import icechunk
+import xarray as xr
+import extremeweatherbench as ewb
+
+storage = icechunk.gcs_storage(
+    bucket="brightband-public-mlwp-forecast-archive",
+    prefix="ifs-hres.hres.icechunk",
+    from_env=True,
+)
+repo = icechunk.Repository.open(storage)
+ds = xr.open_zarr(repo.readonly_session("main").store, consolidated=False)
+
+hres_forecast = ewb.inputs.XarrayForecast(
+    ds=ds,
+    name="IFS-HRES",
+    variables=["surface_air_temperature"],
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
+)
+```
 
 **Licence and attribution.** The data are ECMWF IFS HRES operational forecasts,
 redistributed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). If you
