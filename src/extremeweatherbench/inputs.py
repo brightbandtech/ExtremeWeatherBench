@@ -1718,7 +1718,9 @@ def get_ifs_hres_icechunk(
     """
     return XarrayForecast(
         ds=open_ifs_hres_icechunk(branch=branch),
-        source=f"gs://{IFS_HRES_ICECHUNK_BUCKET}/{IFS_HRES_ICECHUNK_PREFIX}",
+        # The branch is part of the source so that forecasts opened from
+        # different branches never share an evaluation cache entry.
+        source=f"gs://{IFS_HRES_ICECHUNK_BUCKET}/{IFS_HRES_ICECHUNK_PREFIX}@{branch}",
         variables=variables if variables is not None else [],
         variable_mapping=HRES_metadata_variable_mapping,
         name=name,

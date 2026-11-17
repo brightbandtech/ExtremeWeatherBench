@@ -13,7 +13,7 @@ import xarray as xr
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from extremeweatherbench import cases, inputs, regions, utils
+from extremeweatherbench import cases, evaluate, inputs, regions, utils
 
 
 class TestInputBase:
@@ -3382,9 +3382,23 @@ class TestGetIFSHRESIcechunk:
         assert forecast.name == "IFS-HRES"
         assert forecast.variables == ["surface_air_temperature"]
         assert forecast.variable_mapping is inputs.HRES_metadata_variable_mapping
-        assert forecast.source.endswith("ifs-hres.hres.icechunk")
+        assert forecast.source.endswith("ifs-hres.hres.icechunk@main")
         mapped = forecast.maybe_map_variable_names(forecast._open_data_from_source())
         assert "surface_air_temperature" in mapped
+
+    def test_branches_get_distinct_cache_keys(self, fake_ds):
+        """Forecasts from different branches don't share an evaluation cache key."""
+        case = mock.Mock(case_id_number=1)
+        with mock.patch.object(inputs, "open_ifs_hres_icechunk", return_value=fake_ds):
+            main = inputs.get_ifs_hres_icechunk(variables=["surface_air_temperature"])
+            other = inputs.get_ifs_hres_icechunk(
+                variables=["surface_air_temperature"], branch="other"
+            )
+        assert main.name == other.name
+        assert main.source != other.source
+        assert evaluate._pipeline_cache_key(case, main) != evaluate._pipeline_cache_key(
+            case, other
+        )
 
     def test_get_defaults_to_all_variables(self, fake_ds):
         """Omitting variables gives an empty selection (all variables)."""
