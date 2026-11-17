@@ -132,6 +132,85 @@ my_forecast = ewb.inputs.XarrayForecast(
 Providing a descriptive `name` is recommended so evaluation outputs are labelled
 correctly in the output DataFrame.
 
+### IFS HRES for the EWB paper cases
+
+The WeatherBench2 HRES zarr used in the `ZarrForecast` example ends in 2022, so it
+does not cover the 2023–24 cases evaluated in the EWB paper. Brightband publishes the
+ECMWF IFS HRES archive used for those cases as an [Icechunk](https://icechunk.io/)
+repo:
+
+```
+gs://brightband-public-mlwp-forecast-archive/ifs-hres.hres.icechunk
+```
+
+| | |
+|---|---|
+| Init times | 2023-01-01 00 UTC to 2024-12-31 12 UTC, every 12 h (1462) |
+| Lead times | 0–240 h, every 6 h (41), as `timedelta64` |
+| Grid | 0.25°, `latitude` −90 to 90, `longitude` 0 to 359.75 |
+| Pressure levels | 13, 50–1000 hPa (`level`) |
+| Surface variables | `2m_temperature`, `10m_u_component_of_wind`, `10m_v_component_of_wind`, `mean_sea_level_pressure` |
+| Pressure-level variables | `geopotential`, `temperature`, `u_component_of_wind`, `v_component_of_wind`, `specific_humidity` |
+
+All variables are `float32` and use ERA5/WeatherBench2 names, so
+`HRES_metadata_variable_mapping` maps them to EWB names. The store also has a 2-D
+`valid_time(init_time, lead_time)` coordinate.
+
+**Access requires a Google account.** Like the other stores in this bucket, the repo
+does not allow anonymous reads. Authenticate once with Application Default
+Credentials before opening it:
+
+```bash
+gcloud auth application-default login
+```
+
+`ewb.inputs.get_ifs_hres_icechunk()` opens the `main` branch and returns an
+`XarrayForecast` with the variable mapping already set:
+
+```python
+import extremeweatherbench as ewb
+
+hres_forecast = ewb.inputs.get_ifs_hres_icechunk(
+    variables=["surface_air_temperature"],
+    # optional: event-specific preprocessing, as for any forecast
+    preprocess=ewb.defaults.preprocess_heatwave_forecast_dataset,
+)
+```
+
+> **Detailed Explanation**: `get_ifs_hres_icechunk` is a thin wrapper. To open the
+> store yourself (e.g. to pin a branch or inspect it in a notebook):
+
+```python
+import icechunk
+import xarray as xr
+import extremeweatherbench as ewb
+
+storage = icechunk.gcs_storage(
+    bucket="brightband-public-mlwp-forecast-archive",
+    prefix="ifs-hres.hres.icechunk",
+    from_env=True,
+)
+repo = icechunk.Repository.open(storage)
+ds = xr.open_zarr(repo.readonly_session("main").store, consolidated=False)
+
+hres_forecast = ewb.inputs.XarrayForecast(
+    ds=ds,
+    name="IFS-HRES",
+    variables=["surface_air_temperature"],
+    variable_mapping=ewb.inputs.HRES_metadata_variable_mapping,
+)
+```
+
+**Licence and attribution.** The data are ECMWF IFS HRES operational forecasts,
+redistributed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). If you
+use them, credit ECMWF: "© 2023-2024 European Centre for Medium-Range Weather
+Forecasts (ECMWF). Source: www.ecmwf.int." Brightband converted the data from GRIB
+to Zarr, renamed variables, reordered latitude and pressure levels to ascending
+order and rechunked them; values are otherwise unmodified. ECMWF accepts no
+liability for errors or omissions in the data or for any loss or damage arising
+from their use. The full attribution, licence, modifications and disclaimer are in
+the dataset's root attributes (`ds.attrs`).
+
 ## Target datasets
 
 EWB ships five built-in target classes covering gridded reanalysis, station
@@ -318,7 +397,7 @@ Three built-in mappings are provided in `extremeweatherbench.inputs`:
 | Mapping | Use with |
 |---|---|
 | `ERA5_metadata_variable_mapping` | `ERA5` target or ERA5-formatted forecasts |
-| `HRES_metadata_variable_mapping` | ECMWF HRES from WeatherBench2 |
+| `HRES_metadata_variable_mapping` | ECMWF HRES from WeatherBench2 or the [IFS HRES icechunk store](#ifs-hres-for-the-ewb-paper-cases) |
 | `CIRA_metadata_variable_mapping` | CIRA AIWP models via kerchunk or icechunk |
 
 The `ERA5` and `IBTrACS` target classes apply their respective built-in mappings by

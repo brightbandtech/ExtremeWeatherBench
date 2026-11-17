@@ -13,7 +13,7 @@ import xarray as xr
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from extremeweatherbench import cases, inputs, regions, utils
+from extremeweatherbench import cases, evaluate, inputs, regions, utils
 
 
 class TestInputBase:
@@ -3325,3 +3325,84 @@ class TestPointTargetAntimeridian:
         )
         assert (lon_min, lon_max) == pytest.approx(expected)
         assert (lat_min, lat_max) == pytest.approx((62.0, 70.0))
+
+
+class TestGetIFSHRESIcechunk:
+    """Tests for open_ifs_hres_icechunk and get_ifs_hres_icechunk (no network)."""
+
+    @pytest.fixture
+    def fake_ds(self):
+        """A tiny dataset shaped like the IFS HRES store."""
+        return xr.Dataset(
+            {
+                "2m_temperature": (
+                    ("init_time", "lead_time", "latitude", "longitude"),
+                    np.zeros((1, 2, 2, 2), dtype="float32"),
+                )
+            },
+            coords={
+                "init_time": pd.to_datetime(["2023-01-01"]),
+                "lead_time": pd.to_timedelta([0, 6], unit="h"),
+                "latitude": [-90.0, 90.0],
+                "longitude": [0.0, 180.0],
+            },
+        )
+
+    def test_open_uses_authenticated_gcs_storage(self, fake_ds):
+        """The store is opened from the right bucket with credentials from env."""
+        with (
+            mock.patch.object(inputs.icechunk, "gcs_storage") as gcs_storage,
+            mock.patch.object(inputs.icechunk.Repository, "open") as repo_open,
+            mock.patch.object(inputs.xr, "open_zarr", return_value=fake_ds) as oz,
+        ):
+            ds = inputs.open_ifs_hres_icechunk(branch="test-branch")
+
+        gcs_storage.assert_called_once_with(
+            bucket="brightband-public-mlwp-forecast-archive",
+            prefix="ifs-hres.hres.icechunk",
+            from_env=True,
+        )
+        repo_open.assert_called_once_with(gcs_storage.return_value)
+        session = repo_open.return_value.readonly_session
+        session.assert_called_once_with(branch="test-branch")
+        oz.assert_called_once_with(session.return_value.store, consolidated=False)
+        assert ds is fake_ds
+
+    def test_get_returns_xarray_forecast(self, fake_ds):
+        """The helper wraps the dataset with the HRES variable mapping."""
+        with mock.patch.object(
+            inputs, "open_ifs_hres_icechunk", return_value=fake_ds
+        ) as opener:
+            forecast = inputs.get_ifs_hres_icechunk(
+                variables=["surface_air_temperature"]
+            )
+
+        opener.assert_called_once_with(branch="main")
+        assert isinstance(forecast, inputs.XarrayForecast)
+        assert forecast.name == "IFS-HRES"
+        assert forecast.variables == ["surface_air_temperature"]
+        assert forecast.variable_mapping is inputs.HRES_metadata_variable_mapping
+        assert forecast.source.endswith("ifs-hres.hres.icechunk@main")
+        mapped = forecast.maybe_map_variable_names(forecast._open_data_from_source())
+        assert "surface_air_temperature" in mapped
+
+    def test_branches_get_distinct_cache_keys(self, fake_ds):
+        """Forecasts from different branches don't share an evaluation cache key."""
+        case = mock.Mock(case_id_number=1)
+        with mock.patch.object(inputs, "open_ifs_hres_icechunk", return_value=fake_ds):
+            main = inputs.get_ifs_hres_icechunk(variables=["surface_air_temperature"])
+            other = inputs.get_ifs_hres_icechunk(
+                variables=["surface_air_temperature"], branch="other"
+            )
+        assert main.name == other.name
+        assert main.source != other.source
+        assert evaluate._pipeline_cache_key(case, main) != evaluate._pipeline_cache_key(
+            case, other
+        )
+
+    def test_get_defaults_to_all_variables(self, fake_ds):
+        """Omitting variables gives an empty selection (all variables)."""
+        with mock.patch.object(inputs, "open_ifs_hres_icechunk", return_value=fake_ds):
+            forecast = inputs.get_ifs_hres_icechunk(name="HRES-public")
+        assert forecast.variables == []
+        assert forecast.name == "HRES-public"
