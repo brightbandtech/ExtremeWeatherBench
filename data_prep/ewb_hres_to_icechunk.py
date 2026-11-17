@@ -426,6 +426,40 @@ def completed_batches(repo: icechunk.Repository) -> set[tuple[int, int]]:
     return done
 
 
+SNAPSHOT_RE = re.compile(r" snapshot (\w+)$")
+
+
+def recorded_source_snapshots(repo: icechunk.Repository) -> set[str]:
+    """Source snapshot IDs named by the template and batch commits on main."""
+    found = set()
+    for snap in repo.ancestry(branch="main"):
+        message = snap.message.strip()
+        if "Initialize ifs-hres template" in message or BATCH_RE.search(message):
+            m = SNAPSHOT_RE.search(message)
+            if m:
+                found.add(m.group(1))
+    return found
+
+
+def check_source_snapshot(repo: icechunk.Repository, src_snapshot: str) -> None:
+    """Refuse to resume a store that was written from a different source snapshot.
+
+    Resuming skips the index ranges already committed, so reading a different
+    source snapshot would silently mix two versions of the archive.
+
+    Raises:
+        SystemExit: If the store's commits name any other source snapshot.
+    """
+    recorded = recorded_source_snapshots(repo)
+    if recorded - {src_snapshot}:
+        raise SystemExit(
+            f"This store was written from source snapshot(s) {sorted(recorded)}, "
+            f"but this run reads {src_snapshot}. To resume, re-run with "
+            "--source-snapshot set to the recorded snapshot; to copy a "
+            "different snapshot, write to a new --prefix."
+        )
+
+
 def write_template(
     repo: icechunk.Repository, src: xr.Dataset, src_snapshot: str
 ) -> None:
@@ -684,6 +718,7 @@ def main() -> None:
         logger.info("Validation %s", "PASSED" if passed else "FAILED")
         raise SystemExit(0 if passed else 1)
 
+    check_source_snapshot(repo, src_snapshot)
     with dask.config.set(scheduler="threads", num_workers=args.workers):
         if created or not has_template(repo):
             write_template(repo, src, src_snapshot)

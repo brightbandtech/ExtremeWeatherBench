@@ -253,6 +253,39 @@ def completed_batches(repo: icechunk.Repository, branch: str) -> set[tuple[int, 
     return done
 
 
+SOURCE_RE = re.compile(r" from (\S+ snapshot \w+)$")
+
+
+def recorded_sources(repo: icechunk.Repository, branch: str) -> set[str]:
+    """Source IDs named by the group's template and batch commits on ``branch``."""
+    found = set()
+    for snap in repo.ancestry(branch=branch):
+        message = snap.message.strip()
+        if TEMPLATE_MSG in message or BATCH_RE.search(message):
+            m = SOURCE_RE.search(message)
+            if m:
+                found.add(m.group(1))
+    return found
+
+
+def check_source(repo: icechunk.Repository, branch: str, src_id: str) -> None:
+    """Refuse to reuse a branch whose group was written from a different source.
+
+    Resuming skips the index ranges already committed, so reading a different
+    bucket, prefix or snapshot would silently mix sources.
+
+    Raises:
+        SystemExit: If the branch's commits name any other source.
+    """
+    recorded = recorded_sources(repo, branch)
+    if recorded - {src_id}:
+        raise SystemExit(
+            f"{TARGET_GROUP} on branch {branch} was written from {sorted(recorded)}, "
+            f"but this run reads {src_id}. Resume with the same source, or build "
+            "from a branch whose history has no earlier write of this group."
+        )
+
+
 def write_template(
     repo: icechunk.Repository, branch: str, src: xr.Dataset, src_id: str
 ) -> None:
@@ -475,6 +508,7 @@ def main() -> None:
         raise SystemExit(0 if passed else 1)
 
     ensure_branch(repo, args.branch)
+    check_source(repo, args.branch, src_id)
     with dask.config.set(scheduler="threads", num_workers=args.workers):
         if not has_template(repo, args.branch):
             write_template(repo, args.branch, src, src_id)
