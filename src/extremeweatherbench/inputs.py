@@ -165,12 +165,6 @@ CIRA_CREDENTIALS = icechunk.containers_credentials(
     {"s3://noaa-oar-mlwp-data/": icechunk.s3_credentials(anonymous=True)}
 )
 
-#: Icechunk repo holding the ECMWF IFS HRES forecasts (2023-2024) used for the
-#: ExtremeWeatherBench paper cases. Reads need an authenticated Google account
-#: (e.g. ``gcloud auth application-default login``); anonymous reads are refused.
-IFS_HRES_ICECHUNK_BUCKET = "brightband-public-mlwp-forecast-archive"
-IFS_HRES_ICECHUNK_PREFIX = "ifs-hres.hres.icechunk"
-
 CIRA_MODEL_NAMES = [
     "AURO_v100_GFS",
     "FOUR_v200_IFS",
@@ -1666,63 +1660,3 @@ def get_cira_icechunk(
         preprocess=preprocess,
     )
     return cira_model_forecast
-
-
-def open_ifs_hres_icechunk(branch: str = "main") -> xr.Dataset:
-    """Open the IFS HRES Icechunk store used for the EWB paper cases.
-
-    The store lives at ``gs://brightband-public-mlwp-forecast-archive/
-    ifs-hres.hres.icechunk`` and holds ECMWF IFS HRES forecasts initialized
-    at 00 and 12 UTC from 2023-01-01 to 2024-12-31, out to 240 h every 6 h,
-    on a 0.25 degree grid. Variables use ERA5/WeatherBench2 names. Credentials
-    are taken from the environment (Google Application Default Credentials).
-
-    Args:
-        branch: The Icechunk branch to open. Defaults to "main".
-
-    Returns:
-        The lazily opened forecast dataset with dimensions ``init_time``,
-        ``lead_time``, ``level``, ``latitude`` and ``longitude``.
-    """
-    storage = icechunk.gcs_storage(
-        bucket=IFS_HRES_ICECHUNK_BUCKET,
-        prefix=IFS_HRES_ICECHUNK_PREFIX,
-        from_env=True,
-    )
-    session = icechunk.Repository.open(storage).readonly_session(branch=branch)
-    return xr.open_zarr(session.store, consolidated=False)
-
-
-def get_ifs_hres_icechunk(
-    variables: list[str | derived.DerivedVariable] | None = None,
-    preprocess: Callable = _default_preprocess,
-    name: str = "IFS-HRES",
-    branch: str = "main",
-) -> XarrayForecast:
-    """Get a forecast object for the IFS HRES Icechunk store.
-
-    See `open_ifs_hres_icechunk` for the store's location and coverage. The
-    data are ECMWF IFS HRES forecasts, licensed under CC BY 4.0; the dataset's
-    root attributes carry the required attribution.
-
-    Args:
-        variables: The variables to select from the store. Defaults to all
-            variables.
-        preprocess: The preprocessing function to apply to the forecast.
-            Defaults to the passthrough preprocess function.
-        name: The name of the forecast object. Defaults to "IFS-HRES".
-        branch: The Icechunk branch to open. Defaults to "main".
-
-    Returns:
-        An XarrayForecast object for the IFS HRES store.
-    """
-    return XarrayForecast(
-        ds=open_ifs_hres_icechunk(branch=branch),
-        # The branch is part of the source so that forecasts opened from
-        # different branches never share an evaluation cache entry.
-        source=f"gs://{IFS_HRES_ICECHUNK_BUCKET}/{IFS_HRES_ICECHUNK_PREFIX}@{branch}",
-        variables=variables if variables is not None else [],
-        variable_mapping=HRES_metadata_variable_mapping,
-        name=name,
-        preprocess=preprocess,
-    )
