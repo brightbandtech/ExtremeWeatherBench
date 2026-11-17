@@ -20,6 +20,12 @@ logger = logging.getLogger(__name__)
 Location = namedtuple("Location", ["latitude", "longitude"])
 
 
+# Extra room (degrees) given to the local contour search beyond the largest
+# accepted great-circle distance, so a contour that touches the window edge is
+# never clipped into a shape the global search would have accepted.
+CONTOUR_WINDOW_MARGIN_DEGREES = 1.0
+
+
 def _neighbourhood_max_wind(
     wind_slice: npt.NDArray,
     row: int,
@@ -575,8 +581,56 @@ def find_furthest_contour_from_point(
     return furthest_point, furthest_point  # Return as tuple of arrays
 
 
+def _coordinate_window(
+    point: tuple[int, int],
+    radius_degrees: float,
+    lat_coords: npt.NDArray,
+    lon_coords: npt.NDArray,
+) -> tuple[slice, slice] | None:
+    """Index window around ``point`` that provably covers ``radius_degrees``.
+
+    Great-circle distance is at least the latitude separation and at least the
+    longitude separation scaled by cos(latitude), so a window of
+    ``radius_degrees`` in latitude and ``radius_degrees / cos(lat)`` in longitude
+    (with a one-cell margin on each side, and cos taken at the *highest* |lat| in
+    the latitude window so the bound is conservative) contains every grid cell
+    within ``radius_degrees`` of the point.
+
+    Returns None when the longitude window would wrap the antimeridian, or the
+    coordinates are too short to measure: the caller then falls back to the
+    whole-field search, which keeps results identical in the rare edge cases.
+    """
+    nlat, nlon = lat_coords.size, lon_coords.size
+    if nlat < 2 or nlon < 2:
+        return None
+    dlat = abs(float(lat_coords[1]) - float(lat_coords[0]))
+    dlon = abs(float(lon_coords[1]) - float(lon_coords[0]))
+    if not (dlat > 0 and dlon > 0):
+        return None
+    row, col = int(point[0]), int(point[1])
+    half_lat = int(np.ceil(radius_degrees / dlat)) + 1
+    r0, r1 = max(0, row - half_lat), min(nlat, row + half_lat + 1)
+    if r1 - r0 < 3:
+        return None
+    # Clairaut's relation bounds a geodesic's longitude sweep: a path of length
+    # <= radius_degrees between two points no farther from the equator than
+    # phi_max satisfies |dlon| <= radius_degrees / cos(phi_max). cos is smallest
+    # at the highest |latitude| in the window, so cos_min gives the conservative
+    # (widest) longitude span -- and correctly opens to the whole globe at a
+    # point near a pole, where every longitude is within range.
+    cos_min = float(np.min(np.abs(np.cos(np.radians(lat_coords[r0:r1])))))
+    half_lon = min(nlon, int(np.ceil(radius_degrees / max(cos_min, 1e-9) / dlon)) + 1)
+    c0, c1 = col - half_lon, col + half_lon + 1
+    if c0 < 0 or c1 > nlon:  # antimeridian: fall back to the global search
+        return None
+    return slice(r0, r1), slice(c0, c1)
+
+
 def find_contours_from_point_specified_field(
-    field: xr.DataArray, point: tuple[float, float], level: float
+    field: xr.DataArray,
+    point: tuple[float, float],
+    level: float,
+    search_radius_degrees: float | None = None,
 ) -> Sequence[Sequence[tuple[float, float]]]:
     """Find the contours from a point for a specified field.
 
@@ -585,15 +639,40 @@ def find_contours_from_point_specified_field(
         point: The point at which the field is subtracted from to find the
             anomaly contours
         level: The anomaly level to find the contours at
+        search_radius_degrees: When given, only the neighbourhood of ``point``
+            is contoured instead of the whole (global) field. A contour is only
+            ever accepted if every one of its points lies within
+            ``max_gc_distance_*_degrees`` of the point (see
+            ``find_valid_candidates``), so a window at least that wide returns
+            exactly the same set of *acceptable* contours while touching a few
+            thousand cells instead of a million. Contours are returned in the
+            full-field index space, so callers are unaffected.
 
     Returns:
         The contours as a list of tuples of latitude and longitude.
     """
-    field_at_point = field - field.isel(latitude=point[0], longitude=point[1])
-    contours = measure.find_contours(
-        field_at_point.values, level=level, positive_orientation="high"
-    )
-    return contours
+    window = None
+    if search_radius_degrees is not None:
+        window = _coordinate_window(
+            (int(point[0]), int(point[1])),
+            search_radius_degrees,
+            np.asarray(field.coords["latitude"].values, dtype=float),
+            np.asarray(field.coords["longitude"].values, dtype=float),
+        )
+    if window is None:
+        field_at_point = field - field.isel(latitude=point[0], longitude=point[1])
+        return measure.find_contours(
+            field_at_point.values, level=level, positive_orientation="high"
+        )
+
+    (rslice, cslice) = window
+    r0, c0 = rslice.start, cslice.start
+    values = np.asarray(field.transpose("latitude", "longitude").values)
+    sub = values[rslice, cslice] - float(values[int(point[0]), int(point[1])])
+    return [
+        np.column_stack([c[:, 0] + r0, c[:, 1] + c0])
+        for c in measure.find_contours(sub, level=level, positive_orientation="high")
+    ]
 
 
 def find_valid_contour_from_point(
@@ -874,13 +953,22 @@ def _find_peaks_for_time_slice(
             coords={"latitude": lat_da, "longitude": lon_da},
         )
 
+        # Contouring is restricted to the neighbourhood of the peak: a contour
+        # is only ever accepted when its FURTHEST point is within
+        # max_gc_distance_*_degrees of the peak (find_valid_candidates), so a
+        # window at least that wide can only discard contours that were going to
+        # be rejected. The margin absorbs the marching-squares edge cell.
+        contour_window_degrees = (
+            max(max_gc_distance_slp_contour_degrees, max_gc_distance_dz_contour_degrees)
+            + CONTOUR_WINDOW_MARGIN_DEGREES
+        )
         for peak in peaks:
             # Generate contours for this peak
             slp_contours = find_contours_from_point_specified_field(
-                slp_da, peak, slp_contour_magnitude
+                slp_da, peak, slp_contour_magnitude, contour_window_degrees
             )
             dz_contours = find_contours_from_point_specified_field(
-                dz_da, peak, dz_contour_magnitude
+                dz_da, peak, dz_contour_magnitude, contour_window_degrees
             )
 
             # Check if this peak passes contour validation
@@ -925,26 +1013,48 @@ def _create_spatial_mask(
     Returns:
         Spatial mask as a boolean array
     """
-
-    lat_grid, lon_grid = np.meshgrid(lat_coords, lon_coords, indexing="ij")
-    if nearby_tc_track_data.empty:
-        return np.zeros_like(lat_grid, dtype=bool)
+    nlat, nlon = lat_coords.size, lon_coords.size
+    if nearby_tc_track_data.empty or nlat == 0 or nlon == 0:
+        return np.zeros((nlat, nlon), dtype=bool)
 
     tc_lats = nearby_tc_track_data["latitude"].to_numpy(dtype=float)
     tc_lons = nearby_tc_track_data["longitude"].to_numpy(dtype=float)
-    spatial_mask = np.zeros_like(lat_grid, dtype=bool)
-    # Chunk track points so (n_tracks, nlat, nlon) stays bounded.
-    for start in range(0, len(tc_lats), 32):
-        stop = start + 32
+    spatial_mask = np.zeros((nlat, nlon), dtype=bool)
+
+    # Each track point marks a disc of radius max_distance_degrees (5 degrees at
+    # 0.25 degree resolution is ~0.2% of the globe), so the distance field is
+    # built in that neighbourhood instead of globally. The previous version
+    # allocated a (n_track_points, nlat, nlon) float field per call — the
+    # largest temporary in detection, and ~99% of it always compared False.
+    # Windows are conservative (see _coordinate_window) and wrap at the
+    # antimeridian; degenerate grids fall back to the full field.
+    dlat = abs(float(lat_coords[1]) - float(lat_coords[0])) if nlat > 1 else 0.0
+    dlon = abs(float(lon_coords[1]) - float(lon_coords[0])) if nlon > 1 else 0.0
+    for tc_lat, tc_lon in zip(tc_lats, tc_lons, strict=True):
+        row0 = int(np.argmin(np.abs(lat_coords - tc_lat)))
+        col0 = int(np.argmin(np.abs(((lon_coords - tc_lon + 180) % 360) - 180)))
+        if dlat > 0 and dlon > 0:
+            half_lat = int(np.ceil(max_distance_degrees / dlat)) + 1
+            r0, r1 = max(0, row0 - half_lat), min(nlat, row0 + half_lat + 1)
+            # conservative longitude half-width; see _coordinate_window
+            cos_min = float(np.min(np.abs(np.cos(np.radians(lat_coords[r0:r1])))))
+            half_lon = min(
+                nlon,
+                int(np.ceil(max_distance_degrees / max(cos_min, 1e-9) / dlon)) + 1,
+            )
+        else:
+            r0, r1, half_lon = 0, nlat, nlon
+        rows = np.arange(r0, r1)
+        cols = np.arange(col0 - half_lon, col0 + half_lon + 1) % nlon
         distances = calc.haversine_distance(
-            [lat_grid[np.newaxis], lon_grid[np.newaxis]],
+            [lat_coords[rows][:, np.newaxis], lon_coords[cols][np.newaxis, :]],
             [
-                tc_lats[start:stop, np.newaxis, np.newaxis],
-                tc_lons[start:stop, np.newaxis, np.newaxis],
+                np.full((rows.size, cols.size), tc_lat),
+                np.full((rows.size, cols.size), tc_lon),
             ],
             units="degrees",
         )
-        spatial_mask |= np.any(distances <= max_distance_degrees, axis=0)
+        spatial_mask[np.ix_(rows, cols)] |= distances <= max_distance_degrees
     return spatial_mask
 
 
