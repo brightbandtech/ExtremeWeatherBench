@@ -45,6 +45,11 @@ Usage:
     uv run data_prep/ewb_hres_to_icechunk.py \\
         --bucket brightband-public-mlwp-forecast-archive --prefix ifs-hres.hres.icechunk
 
+Memory and ``--workers``: the default is one Dask thread per CPU. More threads
+do not speed up the copy and cost memory. On a 32 vCPU VM, ``--workers 128``
+(4 x nproc) peaked around 29 GB RSS and was OOM-killed, whereas ``--workers 64``
+gave the same throughput (~24.5 s per init time) at ~9-17 GB RSS.
+
 Requires an Arraylake login with read access to ``brightband/ecmwf``
 (``arraylake auth login``) and GCS write access to the target bucket (ADC, or
 ``--gcloud-token`` to use ``gcloud auth print-access-token`` instead).
@@ -634,7 +639,15 @@ def main() -> None:
     p.add_argument(
         "--max-batches", type=int, default=None, help="Stop after this many batches"
     )
-    p.add_argument("--workers", type=int, default=os.cpu_count(), help="Dask threads")
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=os.cpu_count(),
+        help=(
+            "Dask threads (default: nproc). 4 x nproc was OOM-killed at ~29 GB RSS "
+            "on 32 vCPU; 64 matched its throughput at ~9-17 GB"
+        ),
+    )
     p.add_argument(
         "--gcloud-token",
         action="store_true",
