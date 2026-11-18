@@ -658,6 +658,322 @@ class Accuracy(ThresholdMetric):
         return transformed.accuracy()
 
 
+class ContingencyScore(ThresholdMetric):
+    """Base class for a threshold metric that is one score of the contingency table.
+
+    Subclasses set `table_score` to the name of the `BinaryContingencyManager` method
+    from `scores` that gives the score.
+    """
+
+    table_score: str = ""
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=self.forecast_threshold,
+                target_threshold=self.target_threshold,
+                preserve_dims=self.preserve_dims,
+            )
+        return getattr(transformed, self.table_score)()
+
+
+class ProbabilityOfDetection(ContingencyScore):
+    """Probability of Detection metric.
+
+    The share of observed events that the forecast caught,
+    TP / (TP + FN). 1 is best.
+
+    Args:
+        name: The name of the metric. Defaults to "ProbabilityOfDetection".
+    """
+
+    table_score = "probability_of_detection"
+
+    def __init__(self, name: str = "ProbabilityOfDetection", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+
+class FrequencyBias(ContingencyScore):
+    """Frequency Bias metric.
+
+    The number of forecast events over the number of observed events,
+    (TP + FP) / (TP + FN). 1 is unbiased and above 1 forecasts too many events.
+
+    Args:
+        name: The name of the metric. Defaults to "FrequencyBias".
+    """
+
+    table_score = "frequency_bias"
+
+    def __init__(self, name: str = "FrequencyBias", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+
+class EquitableThreatScore(ContingencyScore):
+    """Equitable Threat Score metric.
+
+    The Critical Success Index after taking out the hits that chance alone would
+    give. 1 is best and 0 is no better than chance.
+
+    Args:
+        name: The name of the metric. Defaults to "EquitableThreatScore".
+    """
+
+    table_score = "equitable_threat_score"
+
+    def __init__(self, name: str = "EquitableThreatScore", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+
+class HeidkeSkillScore(ContingencyScore):
+    """Heidke Skill Score metric.
+
+    The share of correct calls beyond what chance would give. 1 is best and 0 is no
+    better than chance.
+
+    Args:
+        name: The name of the metric. Defaults to "HeidkeSkillScore".
+    """
+
+    table_score = "heidke_skill_score"
+
+    def __init__(self, name: str = "HeidkeSkillScore", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+
+class ContingencyCount(ThresholdMetric):
+    """Base class for a threshold metric that is one cell of the contingency table.
+
+    `TruePositives` and the other cell metrics return each cell as a share of the
+    total. A share cannot be added across cases, but a count can, so cases can be
+    pooled before a score such as the Critical Success Index is taken. Subclasses set
+    `count_key` to the key of `get_counts()` that holds the cell.
+    """
+
+    count_key: str = ""
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> Any:
+        # Use pre-computed manager if provided, else compute
+        transformed = kwargs.get("transformed_manager")
+        if transformed is None:
+            transformed = self.transformed_contingency_manager(
+                forecast=forecast,
+                target=target,
+                forecast_threshold=self.forecast_threshold,
+                target_threshold=self.target_threshold,
+                preserve_dims=self.preserve_dims,
+            )
+        return transformed.get_counts()[self.count_key]
+
+
+class TruePositiveCount(ContingencyCount):
+    """The number of pairs where the forecast and the target both have an event.
+
+    Args:
+        name: The name of the metric. Defaults to "TruePositiveCount".
+    """
+
+    count_key = "tp_count"
+
+    def __init__(self, name: str = "TruePositiveCount", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+
+class FalsePositiveCount(ContingencyCount):
+    """The number of pairs where only the forecast has an event.
+
+    Args:
+        name: The name of the metric. Defaults to "FalsePositiveCount".
+    """
+
+    count_key = "fp_count"
+
+    def __init__(self, name: str = "FalsePositiveCount", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+
+class FalseNegativeCount(ContingencyCount):
+    """The number of pairs where only the target has an event.
+
+    Args:
+        name: The name of the metric. Defaults to "FalseNegativeCount".
+    """
+
+    count_key = "fn_count"
+
+    def __init__(self, name: str = "FalseNegativeCount", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+
+class TrueNegativeCount(ContingencyCount):
+    """The number of pairs where neither the forecast nor the target has an event.
+
+    Args:
+        name: The name of the metric. Defaults to "TrueNegativeCount".
+    """
+
+    count_key = "tn_count"
+
+    def __init__(self, name: str = "TrueNegativeCount", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+
+class FractionsSkillScoreError(BaseMetric):
+    """The error sum of the Fractions Skill Score (Roberts and Lean 2008).
+
+    For each point, the share of a square around it that is an event is found in the
+    forecast and in the target. This is the sum over every dimension except
+    `preserve_dims` of the squared difference of those shares. The sum can be added
+    across cases, and the score is then 1 less this over the sum from
+    `FractionsSkillScoreWorst`. Points with no value count as no event. The data needs
+    `latitude` and `longitude` dimensions.
+
+    Args:
+        name: The name of the metric. Defaults to "FractionsSkillScoreError".
+        forecast_threshold: A forecast point is an event at or above this. Defaults
+            to 0.5.
+        target_threshold: A target point is an event at or above this. Defaults to
+            0.5.
+        window_size: The side of the square neighbourhood, in grid points. Defaults
+            to 9.
+    """
+
+    def __init__(
+        self,
+        name: str = "FractionsSkillScoreError",
+        *args,
+        forecast_threshold: float = 0.5,
+        target_threshold: float = 0.5,
+        window_size: int = 9,
+        **kwargs,
+    ):
+        super().__init__(name, *args, **kwargs)
+        self.forecast_threshold = forecast_threshold
+        self.target_threshold = target_threshold
+        self.window_size = window_size
+
+    def event_fractions(self, data: xr.DataArray, threshold: float) -> xr.DataArray:
+        """The share of each point's square neighbourhood that is an event.
+
+        Args:
+            data: The values, with `latitude` and `longitude` dimensions.
+            threshold: A point is an event at or above this.
+
+        Returns:
+            Shares from 0 to 1, shaped like `data`. Outside the grid counts as no
+            event.
+        """
+        events = xr.where(data.notnull(), data >= threshold, False).astype("float32")
+        return xr.apply_ufunc(
+            ndimage.uniform_filter,
+            events,
+            kwargs={
+                "size": self.window_size,
+                "mode": "constant",
+                "cval": 0.0,
+                "axes": (-2, -1),
+            },
+            input_core_dims=[["latitude", "longitude"]],
+            output_core_dims=[["latitude", "longitude"]],
+            dask="parallelized",
+            dask_gufunc_kwargs={"allow_rechunk": True},
+            output_dtypes=[np.float32],
+        )
+
+    def sums(
+        self, forecast: xr.DataArray, target: xr.DataArray
+    ) -> tuple[xr.DataArray, xr.DataArray]:
+        """The error sum and the worst-case sum over all but the preserved dimensions.
+
+        Args:
+            forecast: The forecast DataArray.
+            target: The target DataArray.
+
+        Returns:
+            The summed squared difference of the shares, and the summed squares of
+            both shares, which is the most the first could be.
+        """
+        forecast_share = self.event_fractions(forecast, self.forecast_threshold)
+        target_share = self.event_fractions(target, self.target_threshold)
+        keep = (
+            [self.preserve_dims]
+            if isinstance(self.preserve_dims, str)
+            else list(self.preserve_dims)
+        )
+        over = [dim for dim in forecast_share.dims if dim not in keep]
+        error = ((forecast_share - target_share) ** 2).sum(dim=over)
+        worst = (forecast_share**2 + target_share**2).sum(dim=over)
+        return error, worst
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> xr.DataArray:
+        return self.sums(forecast, target)[0]
+
+
+class FractionsSkillScoreWorst(FractionsSkillScoreError):
+    """The worst-case sum of the Fractions Skill Score.
+
+    The largest the error sum could be, the summed squared shares of the forecast and
+    the target. The score is 1 less `FractionsSkillScoreError` over this.
+
+    Args:
+        name: The name of the metric. Defaults to "FractionsSkillScoreWorst".
+    """
+
+    def __init__(self, name: str = "FractionsSkillScoreWorst", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> xr.DataArray:
+        return self.sums(forecast, target)[1]
+
+
+class FractionsSkillScore(FractionsSkillScoreError):
+    """Fractions Skill Score metric.
+
+    Gives credit to events that are a little off, by comparing how much of a square
+    around each point is an event in the forecast and in the target. 1 is perfect and
+    0 is no skill. Where neither field has an event the score is NaN.
+
+    Args:
+        name: The name of the metric. Defaults to "FractionsSkillScore".
+    """
+
+    def __init__(self, name: str = "FractionsSkillScore", *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+
+    def _compute_metric(
+        self,
+        forecast: xr.DataArray,
+        target: xr.DataArray,
+        **kwargs: Any,
+    ) -> xr.DataArray:
+        error, worst = self.sums(forecast, target)
+        return 1 - error / worst.where(worst > 0)
+
+
 class MeanSquaredError(BaseMetric):
     """Mean Squared Error metric.
 

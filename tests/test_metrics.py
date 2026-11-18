@@ -1,6 +1,7 @@
 """Tests for the metrics module."""
 
 import inspect
+from typing import Any
 from unittest import mock
 
 import numpy as np
@@ -3352,3 +3353,185 @@ class TestBaseMetricVariableValidation:
         metric = metrics.MeanAbsoluteError()
         assert metric.forecast_variable is None
         assert metric.target_variable is None
+
+
+def contingency_table(
+    hits: int, misses: int, false_alarms: int, correct_negatives: int
+) -> tuple[xr.DataArray, xr.DataArray]:
+    """A forecast and target on a 10 x 10 grid with one lead time.
+
+    The pair gives exactly this contingency table at a threshold of 0.5.
+    """
+    n = hits + misses + false_alarms + correct_negatives
+    assert n == 100
+    target, forecast = np.zeros(n), np.zeros(n)
+    target[: hits + misses] = 1
+    forecast[:hits] = 1
+    forecast[hits + misses : hits + misses + false_alarms] = 1
+    dims = ("lead_time", "latitude", "longitude")
+    coords = {"lead_time": [10]}
+    return (
+        xr.DataArray(forecast.reshape(1, 10, 10), dims=dims, coords=coords),
+        xr.DataArray(target.reshape(1, 10, 10), dims=dims, coords=coords),
+    )
+
+
+def single_value(result: xr.DataArray) -> float:
+    """The one number in a result that kept a single lead time."""
+    return float(result.squeeze().item())
+
+
+def score_table(metric_class: type, **kwargs: Any) -> float:
+    """A metric on 6 hits, 2 misses, 4 false alarms and 88 correct negatives."""
+    forecast, target = contingency_table(6, 2, 4, 88)
+    metric = metric_class(forecast_threshold=0.5, target_threshold=0.5, **kwargs)
+    return single_value(metric.compute_metric(forecast, target))
+
+
+class TestContingencyScores:
+    """Tests for the scores that are one number from the contingency table."""
+
+    def test_probability_of_detection(self):
+        """POD is hits over hits and misses."""
+        assert score_table(metrics.ProbabilityOfDetection) == pytest.approx(6 / 8)
+
+    def test_frequency_bias(self):
+        """Frequency bias is forecast events over observed events."""
+        assert score_table(metrics.FrequencyBias) == pytest.approx(10 / 8)
+
+    def test_equitable_threat_score(self):
+        """ETS takes out the hits that chance alone would give."""
+        chance = 8 * 10 / 100
+        expected = (6 - chance) / (6 + 2 + 4 - chance)
+        assert score_table(metrics.EquitableThreatScore) == pytest.approx(expected)
+
+    def test_heidke_skill_score(self):
+        """HSS matches the textbook formula."""
+        expected = 2 * (6 * 88 - 4 * 2) / ((6 + 2) * (2 + 88) + (6 + 4) * (4 + 88))
+        assert score_table(metrics.HeidkeSkillScore) == pytest.approx(expected)
+
+    def test_a_perfect_forecast_scores_one(self):
+        """Every one of these scores is 1 for a perfect forecast."""
+        forecast, target = contingency_table(8, 0, 0, 92)
+        for metric_class in (
+            metrics.ProbabilityOfDetection,
+            metrics.FrequencyBias,
+            metrics.EquitableThreatScore,
+            metrics.HeidkeSkillScore,
+        ):
+            metric = metric_class(forecast_threshold=0.5, target_threshold=0.5)
+            assert single_value(metric.compute_metric(forecast, target)) == (
+                pytest.approx(1.0)
+            )
+
+    def test_they_work_inside_a_composite(self):
+        """The scores can be listed in a ThresholdMetric composite."""
+        forecast, target = contingency_table(6, 2, 4, 88)
+        composite = metrics.ThresholdMetric(
+            metrics=[metrics.ProbabilityOfDetection, metrics.FrequencyBias],
+            forecast_threshold=0.5,
+            target_threshold=0.5,
+        )
+        names = [metric.name for metric in composite.maybe_expand_composite()]
+        assert names == ["ProbabilityOfDetection", "FrequencyBias"]
+        assert composite.is_composite()
+
+
+class TestContingencyCounts:
+    """Tests for the metrics that give the cells of the contingency table as counts."""
+
+    def test_counts_are_counts_not_shares_of_the_total(self):
+        """The cells are 6, 2, 4 and 88 pairs, where TruePositives would give 0.06."""
+        assert score_table(metrics.TruePositiveCount) == 6
+        assert score_table(metrics.FalseNegativeCount) == 2
+        assert score_table(metrics.FalsePositiveCount) == 4
+        assert score_table(metrics.TrueNegativeCount) == 88
+        assert score_table(metrics.TruePositives) == pytest.approx(0.06)
+
+    def test_counts_can_be_added_across_cases_before_scoring(self):
+        """Pooled counts give the pooled CSI, which averaging two CSIs does not."""
+        first = contingency_table(6, 2, 4, 88)
+        second = contingency_table(3, 5, 1, 91)
+        cells = (
+            metrics.TruePositiveCount,
+            metrics.FalseNegativeCount,
+            metrics.FalsePositiveCount,
+        )
+        hits, misses, false_alarms = (
+            sum(
+                single_value(
+                    cell(forecast_threshold=0.5, target_threshold=0.5).compute_metric(
+                        *case
+                    )
+                )
+                for case in (first, second)
+            )
+            for cell in cells
+        )
+        assert hits / (hits + misses + false_alarms) == pytest.approx(9 / 21)
+
+
+def one_event(at: tuple[int, int]) -> xr.DataArray:
+    """A 5 x 5 grid with one event point and one lead time."""
+    rows, cols = np.arange(5)[:, None], np.arange(5)[None, :]
+    data = np.where((rows == at[0]) & (cols == at[1]), 1.0, 0.0)[None]
+    return xr.DataArray(
+        data,
+        dims=("lead_time", "latitude", "longitude"),
+        coords={"lead_time": [10]},
+    )
+
+
+FSS_KWARGS = dict(forecast_threshold=0.5, target_threshold=0.5, window_size=3)
+
+
+class TestFractionsSkillScore:
+    """Tests for the Fractions Skill Score and the two sums behind it."""
+
+    def test_a_one_point_window_is_the_plain_overlap_score(self):
+        """Events at A and B in the forecast and A and C in the target."""
+        forecast, target = one_event((2, 2)), one_event((2, 3))
+        forecast[0, 2, 1], target[0, 2, 1] = 1.0, 1.0
+        metric = metrics.FractionsSkillScore(
+            forecast_threshold=0.5, target_threshold=0.5, window_size=1
+        )
+        # Error 2 and worst case 4.
+        assert single_value(metric.compute_metric(forecast, target)) == (
+            pytest.approx(0.5)
+        )
+
+    def test_a_storm_one_point_off_gets_credit(self):
+        """A 3 x 3 window: 6 points differ by 1/9, out of 18/81 in the worst case."""
+        forecast, target = one_event((2, 2)), one_event((2, 3))
+        score = metrics.FractionsSkillScore(**FSS_KWARGS)
+        error = metrics.FractionsSkillScoreError(**FSS_KWARGS)
+        worst = metrics.FractionsSkillScoreWorst(**FSS_KWARGS)
+        assert single_value(score.compute_metric(forecast, target)) == (
+            pytest.approx(1 - 6 / 18)
+        )
+        assert single_value(error.compute_metric(forecast, target)) == (
+            pytest.approx(6 / 81)
+        )
+        assert single_value(worst.compute_metric(forecast, target)) == (
+            pytest.approx(18 / 81)
+        )
+
+    def test_points_with_no_value_count_as_no_event(self):
+        """A row of NaN in both fields changes nothing."""
+        forecast, target = one_event((2, 2)), one_event((2, 2))
+        forecast[0, 0, :], target[0, 0, :] = np.nan, np.nan
+        metric = metrics.FractionsSkillScore(**FSS_KWARGS)
+        assert single_value(metric.compute_metric(forecast, target)) == (
+            pytest.approx(1.0)
+        )
+
+    def test_it_keeps_the_preserved_dimension(self):
+        """One score for each lead time."""
+        forecast = xr.concat([one_event((2, 2))] * 2, dim="lead_time")
+        target = xr.concat([one_event((2, 3))] * 2, dim="lead_time")
+        forecast["lead_time"], target["lead_time"] = [10, 20], [10, 20]
+        result = metrics.FractionsSkillScore(**FSS_KWARGS).compute_metric(
+            forecast, target
+        )
+        assert result.dims == ("lead_time",)
+        assert result.values == pytest.approx([1 - 6 / 18] * 2)
