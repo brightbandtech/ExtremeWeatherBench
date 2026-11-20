@@ -10,7 +10,7 @@ import itertools
 import logging
 import pathlib
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Union
 
 import dacite
 import yaml  # type: ignore[import]
@@ -160,3 +160,63 @@ def load_ewb_cases() -> list[IndividualCase]:
 
 
 load_cases = load_ewb_cases
+
+def load_individual_cases(
+    cases: Union[list[dict[str, Any]], list[IndividualCase]],
+) -> list[IndividualCase]:
+    """Load IndividualCase metadata from a dictionary.
+
+    Will pass through existing IndividualCase objects and convert dictionaries to IndividualCase objects.
+
+    Args:
+        cases: A list of cases as either dicts or IndividualCase objects.
+
+    Returns:
+        A list of IndividualCase objects.
+    """
+
+    # Iterate through the cases and convert dictionaries to IndividualCase objects if
+    # they are not already IndividualCase objects
+    case_list = [
+        case
+        if isinstance(case, IndividualCase)
+        else dacite.from_dict(
+            data_class=IndividualCase,
+            data=case,
+            config=dacite.Config(
+                type_hooks={regions.Region: regions.map_to_create_region},
+            ),
+        )
+        for case in cases
+    ]
+
+    return case_list
+    
+def load_ewb_events_yaml_into_case_list() -> list[IndividualCase]:
+    """Loads the EWB events yaml file into a list of IndividualCase objects."""
+    import extremeweatherbench.data
+
+    events_yaml_file = importlib.resources.files(extremeweatherbench.data).joinpath(
+        "events.yaml"
+    )
+    with importlib.resources.as_file(events_yaml_file) as file:
+        yaml_event_case = read_incoming_yaml(file)
+
+    return load_individual_cases(yaml_event_case)
+
+def read_incoming_yaml(input_pth: Union[str, pathlib.Path]):
+    """Read events yaml from data into a dictionary.
+
+    This function is a wrapper around yaml.safe_load that reads the yaml file directly.
+    It is useful for reading yaml files other than the EWB events.yaml file.
+
+    Args:
+        input_pth: A path to a yaml file containing the case metadata.
+
+    Returns:
+        A dictionary of case metadata.
+    """
+    input_pth = pathlib.Path(input_pth)
+    with open(input_pth, "rb") as f:
+        yaml_event_case = yaml.safe_load(f)
+    return yaml_event_case
