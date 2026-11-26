@@ -353,28 +353,9 @@ class ShapefileRegion(Region):
         Returns:
             The subset dataset.
         """
-        # Get region bounds adjusted to dataset's longitude convention
-        (
-            longitude_min,
-            latitude_min,
-            longitude_max,
-            latitude_max,
-        ) = self.get_adjusted_bounds(dataset)
-
-        # Note: ShapefileRegion.mask uses slice which doesn't support
-        # prime/antimeridian crossing with OR logic, but regionmask handles it
-        # Check if latitude is ascending or descending to handle slice correctly
-        lat_ascending = dataset.latitude[0] < dataset.latitude[-1]
-        if lat_ascending:
-            lat_slice = slice(latitude_min, latitude_max)
-        else:
-            lat_slice = slice(latitude_max, latitude_min)
-        dataset = dataset.sel(
-            latitude=lat_slice,
-            longitude=slice(longitude_min, longitude_max),
-            drop=drop,
-        )
-        # Subset dataset after cutting out a box to minimize memory pressure
+        # Cut out the bounding box first to minimize memory pressure. The base
+        # class handles boxes that cross the prime meridian or antimeridian.
+        dataset = super().mask(dataset)
         mask = regionmask.mask_geopandas(
             self.as_geopandas(), dataset.longitude, dataset.latitude
         )

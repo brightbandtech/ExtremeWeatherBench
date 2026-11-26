@@ -21,6 +21,15 @@ commits. Prefer this changelog when writing GitHub release notes.
   are stored as JSON strings in the netCDF files
   ([#437](https://github.com/brightbandtech/ExtremeWeatherBench/pull/437)).
 
+### Fixed
+
+- `ShapefileRegion.mask` now cuts out its bounding box with `Region.mask`,
+  so shapes that cross the prime meridian or antimeridian work on any
+  longitude convention. Before, a prime-meridian shape on a 0-360 grid
+  raised `ValueError` from an empty slice, and an antimeridian shape on a
+  0-360 grid kept only the 180 column
+  ([#415](https://github.com/brightbandtech/ExtremeWeatherBench/issues/415)).
+
 ## [1.1.1] - 2026-10-15
 
 ### Added

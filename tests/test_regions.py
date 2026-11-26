@@ -420,6 +420,40 @@ class TestRegionMask:
             assert masked_dataset.longitude.min() >= -120.0 - 1
             assert masked_dataset.longitude.max() <= -110.0 + 1
 
+    @pytest.mark.parametrize(
+        ("geometry", "lon_range"),
+        [
+            (shapely.box(-10, 40, 10, 50), (-10, 10)),
+            (
+                shapely.MultiPolygon(
+                    [shapely.box(170, 40, 180, 50), shapely.box(-180, 40, -170, 50)]
+                ),
+                (170, 190),
+            ),
+        ],
+        ids=["prime_meridian", "antimeridian"],
+    )
+    @pytest.mark.parametrize("dataset_name", ["sample_dataset", "sample_dataset_180"])
+    def test_shapefile_region_mask_crossing_meridian(
+        self, request, geometry, lon_range, dataset_name
+    ):
+        """Test regions.ShapefileRegion.mask() for shapes crossing 0 or 180."""
+        dataset = request.getfixturevalue(dataset_name)
+        mock_gdf = gpd.GeoDataFrame(geometry=[geometry], crs="EPSG:4326")
+
+        with mock.patch("geopandas.read_file", return_value=mock_gdf):
+            region = regions.ShapefileRegion.create_region(
+                shapefile_path="/path/to/shapefile.shp"
+            )
+
+            masked_dataset = region.mask(dataset, drop=True)
+
+        # 20 x 10 one-degree cells inside the polygon, in one contiguous block
+        assert masked_dataset.temperature.notnull().sum() == 200
+        assert masked_dataset.sizes["longitude"] == 20
+        assert masked_dataset.longitude.min() >= lon_range[0]
+        assert masked_dataset.longitude.max() <= lon_range[1]
+
     def test_region_mask_at_180_boundary(self, sample_dataset_180):
         """Test masking at the -180/180 boundary."""
         # Test a region that's right at the edge of -180
