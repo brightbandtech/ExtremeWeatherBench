@@ -1291,3 +1291,90 @@ class TestFillTrackGapsFromFields:
             wind_search_radius_gridpts=1,
         )
         assert len(result) == 1
+
+
+class TestNeighbouringStormAssociation:
+    """A second cyclone near the target must not be picked up as the target.
+
+    Setup: target low at (15N, 130E) at the first valid time; a neighbouring
+    low at (17N, 122E). The target track later moves to (15N, 124E), within
+    5 deg of the neighbour, 36 h after the first valid time.
+    """
+
+    T0 = pd.Timestamp("2024-11-11 00:00")
+    LAT = np.arange(0.0, 30.25, 0.25)
+    LON = np.arange(110.0, 145.25, 0.25)
+
+    def _slp(self):
+        lat2, lon2 = np.meshgrid(self.LAT, self.LON, indexing="ij")
+        slp = np.full(lat2.shape, 101200.0)
+        for la, lo in [(15.0, 130.0), (17.0, 122.0)]:
+            slp -= 2000.0 * np.exp(-((lat2 - la) ** 2 + (lon2 - lo) ** 2) / 2.0)
+        return slp
+
+    def _track(self):
+        return pd.DataFrame(
+            {
+                "valid_time": [self.T0, self.T0 + pd.Timedelta(hours=36)],
+                "latitude": [15.0, 15.0],
+                "longitude": [130.0, 124.0],
+            }
+        )
+
+    def test_first_timestep_uses_nearest_in_time_fix_only(self):
+        slp = self._slp()
+        peaks = tropical_cyclone._find_peaks_for_time_slice(
+            slp,
+            np.zeros_like(slp),
+            self.T0,
+            self._track(),
+            min_distance_between_peaks=4,
+            lat_coords=self.LAT,
+            lon_coords=self.LON,
+            use_contour_validation=False,
+            is_first_timestep=True,
+        )
+        assert len(peaks) == 1
+        assert self.LAT[peaks[0][0]] == pytest.approx(15.0)
+        assert self.LON[peaks[0][1]] == pytest.approx(130.0)
+
+    def test_closest_detection_to_target(self):
+        lats = np.array([17.0, 15.2])
+        lons = np.array([122.0, 129.8])
+        idx = tropical_cyclone._closest_detection_to_target(
+            [0, 1], lats, lons, np.datetime64(self.T0), self._track()
+        )
+        assert idx == 1
+
+    def test_closest_detection_falls_back_to_first(self):
+        lats = np.array([17.0, 15.2])
+        lons = np.array([122.0, 129.8])
+        assert (
+            tropical_cyclone._closest_detection_to_target(
+                [0, 1], lats, lons, np.datetime64(self.T0), None
+            )
+            == 0
+        )
+
+    def test_convert_keeps_detection_nearest_target(self):
+        valid = xr.DataArray([np.datetime64(self.T0)], dims=["valid_time"])
+        lead = xr.DataArray([np.timedelta64(0, "h")], dims=["lead_time"])
+        args = (
+            2,
+            np.array([0, 0]),
+            np.array([0, 0]),
+            np.array([17.0, 15.2]),
+            np.array([122.0, 129.8]),
+            np.array([99800.0, 99500.0]),
+            np.array([15.0, 25.0]),
+            lead,
+            valid,
+        )
+        ds = tropical_cyclone._convert_detections_to_dataset(
+            *args, target_track=self._track()
+        )
+        assert float(ds.latitude.values[0, 0]) == pytest.approx(15.2)
+        assert float(ds.surface_wind_speed.values[0, 0]) == pytest.approx(25.0)
+        # Without a target track the old behaviour (first detection) is kept
+        ds_old = tropical_cyclone._convert_detections_to_dataset(*args)
+        assert float(ds_old.latitude.values[0, 0]) == pytest.approx(17.0)

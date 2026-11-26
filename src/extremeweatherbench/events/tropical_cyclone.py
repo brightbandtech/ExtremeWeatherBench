@@ -260,6 +260,7 @@ def generate_tc_tracks_by_init_time(
         wind_vals,
         sea_level_pressure.lead_time,
         sea_level_pressure.valid_time,
+        target_track=tc_track_data_df,
     )
 
 
@@ -810,9 +811,19 @@ def _find_peaks_for_time_slice(
         (tc_track_data_df["valid_time"] - current_valid_time).dt.total_seconds() / 3600
     )
 
-    # For first timestep (genesis), allow buffer; otherwise exact
+    # For first timestep (genesis), allow a buffer of max_temporal_hours, but use
+    # only the track fix(es) nearest in time. Using every fix in the buffer makes
+    # the search area the union of circles along up to 96 h of track, which can
+    # contain a neighbouring storm's low; the forecast track would then start on
+    # the wrong storm. Otherwise exact.
     if is_first_timestep:
-        temporal_mask = time_diff <= max_temporal_hours
+        within_buffer = time_diff <= max_temporal_hours
+        if within_buffer.any():
+            temporal_mask = within_buffer & (
+                time_diff == time_diff[within_buffer].min()
+            )
+        else:
+            temporal_mask = within_buffer
     else:
         temporal_mask = time_diff == 0
 
@@ -1108,8 +1119,14 @@ def _convert_detections_to_dataset(
     wind_vals: npt.NDArray,
     lead_time_coord: xr.DataArray,
     valid_time_coord: xr.DataArray,
+    target_track: pd.DataFrame | None = None,
 ) -> xr.Dataset:
     """Convert detection arrays to xarray Dataset.
+
+    When several detections share a (lead_time, valid_time), the one closest
+    to the target track position at that valid time is kept (nearest-in-time
+    track fix when there is no exact match). Without ``target_track`` the
+    first detection is kept.
 
     Args:
         n_detections: Number of detections
@@ -1121,6 +1138,8 @@ def _convert_detections_to_dataset(
         wind_vals: Array of wind speed values in m/s
         lead_time_coord: Lead time coordinate
         valid_time_coord: Valid time coordinate
+        target_track: Optional target track with ``valid_time``, ``latitude``
+            and ``longitude`` columns, used to break ties between detections
 
     Returns:
         xarray Dataset with detected tropical cyclone tracks
@@ -1191,7 +1210,9 @@ def _convert_detections_to_dataset(
         lead_time_index,
         valid_time_index,
     ), detection_indices in unique_combinations.items():
-        det_idx = detection_indices[0]  # Take first detection only
+        det_idx = _closest_detection_to_target(
+            detection_indices, lats, lons, valid_times[valid_time_index], target_track
+        )
         slp_out[lead_time_index, valid_time_index] = float(slp_vals[det_idx])
         wind_out[lead_time_index, valid_time_index] = float(wind_vals[det_idx])
         lat_out[lead_time_index, valid_time_index] = float(lats[det_idx])
@@ -1214,3 +1235,46 @@ def _convert_detections_to_dataset(
         },
     )
     return ds
+
+
+def _closest_detection_to_target(
+    detection_indices: list[int],
+    lats: npt.NDArray,
+    lons: npt.NDArray,
+    valid_time: np.datetime64,
+    target_track: pd.DataFrame | None,
+) -> int:
+    """Pick the detection closest to the target track at ``valid_time``.
+
+    Uses the target fix at ``valid_time``, or the nearest-in-time fix when
+    there is no exact match. Falls back to the first detection when there is
+    only one detection or no usable target track.
+
+    Args:
+        detection_indices: Indices into ``lats``/``lons`` of the detections at
+            one (lead_time, valid_time)
+        lats: Latitudes of all detections in degrees
+        lons: Longitudes of all detections in degrees
+        valid_time: Valid time of these detections
+        target_track: Target track with ``valid_time``, ``latitude`` and
+            ``longitude`` columns, or None
+
+    Returns:
+        Index of the chosen detection
+    """
+    if len(detection_indices) == 1 or target_track is None or len(target_track) == 0:
+        return detection_indices[0]
+    time_diff = np.abs(
+        pd.to_datetime(target_track["valid_time"]).to_numpy()
+        - np.datetime64(valid_time)
+    )
+    nearest = target_track.iloc[int(np.argmin(time_diff))]
+    distances = [
+        calc.haversine_distance(
+            [lats[i], lons[i]],
+            [float(nearest["latitude"]), float(nearest["longitude"])],
+            units="deg",
+        )
+        for i in detection_indices
+    ]
+    return detection_indices[int(np.argmin(distances))]
